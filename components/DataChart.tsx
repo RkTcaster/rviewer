@@ -1,4 +1,4 @@
-"use client"; // <--- Muy importante: esto le dice a Next.js que es interactivo
+"use client"; 
 
 import { 
   BarChart, 
@@ -12,9 +12,8 @@ import {
 } from 'recharts';
 
 interface Props {
-  data: any[]; // Aquí llegarán los datos de tu CSV
+  data: any[]; // los datos de calleados
 }
-
 
 
 export function MyChart({ data }: Props) {
@@ -26,7 +25,7 @@ export function MyChart({ data }: Props) {
         <BarChart data={data}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis 
-            dataKey="team" // CAMBIA ESTO: por el nombre de una columna de tu CSV (ej: "fecha" o "producto")
+            dataKey="team" 
             stroke="#888888"
             fontSize={12}
           />
@@ -39,7 +38,7 @@ export function MyChart({ data }: Props) {
           />
           <Legend />
           <Bar 
-            dataKey="vlr_id" // CAMBIA ESTO: por el nombre de la columna que tiene los números (ej: "ventas" o "total")
+            dataKey="vlr_id" 
             fill="#3b82f6" 
             radius={[4, 4, 0, 0]} 
           />
