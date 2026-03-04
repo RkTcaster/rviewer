@@ -1,52 +1,111 @@
+// lib/data-service.ts
 import { supabase } from './supabase';
-import { Match, MapStat } from './types';
 
-export async function getMapStats(filters: { team: string; region?: string; tour?: string }) {
-  // 1. Construir la base de la query
-  let query = supabase
-    .from('draft')
-    .select('*')
-    .eq('bo', 3);
+// --- TYPES ---
+import { Draft, MapStat, Region, Tournament } from './types';
 
-  // 2. Filtrar por equipo (debe estar en columna 'team' O en 'rival')
-  query = query.or(`team.eq."${filters.team}",rival.eq."${filters.team}"`);
+// --- FILTERS  ---
 
-  // 3. Filtros opcionales
-  if (filters.region) query = query.eq('reg_id', filters.region);
-  if (filters.tour) query = query.eq('tour_id', filters.tour);
+export async function getRegions(): Promise<Region[]> {
+  const { data, error } = await supabase
+    .from('regions')
+    .select('reg_id, region')
+    .order('region');
 
-  const { data: matches, error } = await query;
+  if (error) return [];
+  return data; 
+}
+
+export async function getTeams(regId?: string): Promise<string[]> {
+  let query = supabase.from('tournament_played').select('teamA, reg_id');
+
+  if (regId && regId !== "" && regId !== "undefined") {
+    query = query.eq('reg_id', regId);
+  }
   
-  if (error) throw error;
-  if (!matches) return [];
+  const { data, error } = await query;
+  if (error) {
+    console.error("Error en getTeams:", error);
+    return [];
+  }
 
-  // 4. Lógica de agregación por mapa
+  const set = new Set(data?.map(item => item.teamA));
+  return Array.from(set).sort() as string[];
+}
+
+export async function getTours(teamName?: string, regId?: string): Promise<Tournament[]> {
+  if (!teamName) return [];
+
+  let query = supabase
+    .from('tournament_played')
+    .select('tour_id, event, reg_id')
+    .eq('teamA', teamName);
+
+  if (regId) query = query.eq('reg_id', regId);
+
+  const { data } = await query;
+  
+ 
+  const unique = data?.reduce((acc: Tournament[], current) => {
+    if (!acc.find(item => item.tour_id === current.tour_id)) acc.push(current);
+    return acc;
+  }, []);
+
+  return unique || [];
+}
+
+// --- Stats ---
+
+export async function getDraftStats(filters: { team: string; tour?: string; bo?: string; reg?: string }): Promise<MapStat[]> {
+  let query = supabase
+    .from('draft') // Tu tabla principal
+    .select('*')
+    .or(`team.eq."${filters.team}",rival.eq."${filters.team}"`);
+
+  if (filters.tour) {
+    const tourIds = filters.tour.split(','); // Convertimos "id1,id2" en ["id1", "id2"]
+    query = query.in('tour_id', tourIds);   // .in() busca coincidencias con cualquier elemento de la lista
+  }
+
+  if (filters.reg) query = query.eq('reg_id', filters.reg);
+  if (filters.bo && filters.bo !== "all") query = query.eq('bo', parseInt(filters.bo));
+
+  const { data: matches } = await query;
+  return procesarStats(matches as Draft[] || [], filters.team);
+}
+
+
+function procesarStats(matches: Draft[], targetTeam: string): MapStat[] {
   const stats: Record<string, MapStat> = {};
-
   const initMap = (map: string) => {
-    if (!map) return;
-    if (!stats[map]) {
+    if (map && !stats[map]) {
       stats[map] = { mapName: map, picks: 0, bans: 0, deciders: 0 };
     }
   };
 
-  (matches as Match[]).forEach((m) => {
-    const isTeam1 = m.team === filters.team;
+  matches.forEach((m) => {
+    const isTeam1 = m.team === targetTeam;
+    const boType = Number(m.bo);
 
     // --- PICKS ---
-    // Si nuestro equipo es Team 1, su pick es select_2. 
-    // Si es Team 2, su pick es el select_2 del Team 2.
-    const pick = isTeam1 ? m.team_1_select_2 : m.team_2_select_2;
-    if (pick) { initMap(pick); stats[pick].picks++; }
+    // BO3: solo select_2 | BO5: select_2 y select_3
+    const pick1 = isTeam1 ? m.team_1_select_2 : m.team_2_select_2;
+    if (pick1) { initMap(pick1); stats[pick1].picks++; }
+
+    if (boType === 5) {
+      const pick2 = isTeam1 ? m.team_1_select_3 : m.team_2_select_3;
+      if (pick2) { initMap(pick2); stats[pick2].picks++; }
+    }
 
     // --- BANS ---
-    // Según tu lógica: select_1 y select_3 de nuestro equipo
+    // BO3: select_1 y select_3 | BO5: solo select_1
     const ban1 = isTeam1 ? m.team_1_select_1 : m.team_2_select_1;
-    const ban2 = isTeam1 ? m.team_1_select_3 : m.team_2_select_3;
-    
-    [ban1, ban2].forEach(b => {
-      if (b) { initMap(b); stats[b].bans++; }
-    });
+    if (ban1) { initMap(ban1); stats[ban1].bans++; }
+
+    if (boType === 3) {
+      const ban2 = isTeam1 ? m.team_1_select_3 : m.team_2_select_3;
+      if (ban2) { initMap(ban2); stats[ban2].bans++; }
+    }
 
     // --- DECIDER ---
     if (m.decider) {
@@ -55,28 +114,6 @@ export async function getMapStats(filters: { team: string; region?: string; tour
     }
   });
 
+  // array and order
   return Object.values(stats).sort((a, b) => b.picks - a.picks);
-}
-
-// Para llenar los Selects de los filtros
-export async function getFilterOptions() {
-  const { data, error } = await supabase
-    .from('draft') // <--- Asegúrate que sea el nombre real
-    .select('team, rival, tour_id'); // Solo traemos lo necesario
-
-  if (error) return { teams: [], tours: [] };
-
-  const teamsSet = new Set<string>();
-  const toursSet = new Set<string>();
-
-  data.forEach(item => {
-    if (item.team) teamsSet.add(item.team);
-    if (item.rival) teamsSet.add(item.rival);
-    if (item.tour_id) toursSet.add(item.tour_id);
-  });
-
-  return {
-    teams: Array.from(teamsSet).sort(),
-    tours: Array.from(toursSet).sort(),
-  };
 }

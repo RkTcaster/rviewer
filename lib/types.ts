@@ -1,4 +1,5 @@
-export type Match = {
+// 1. Representa una fila de tu tabla principal 'draft'
+export type Draft = {
   team: string;
   rival: string;
   team_1_select_1: string; // Ban 1
@@ -14,9 +15,23 @@ export type Match = {
   event: string;
 };
 
+// 2. Para los resultados calculados de la tabla de mapas
 export type MapStat = {
   mapName: string;
   picks: number;
   bans: number;
   deciders: number;
+};
+
+// 3. Para la tabla 'regions'
+export type Region = {
+  reg_id: string;
+  region: string;
+};
+
+// 4. Para la tabla 'tournaments_played' o 'tournament'
+export type Tournament = {
+  tour_id: string;
+  event: string;
+  reg_id?: string;
 };
