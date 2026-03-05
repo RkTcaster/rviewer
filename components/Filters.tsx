@@ -36,14 +36,15 @@ export function Filters({ regions, teams, tours }: FiltersProps) {
   };
 
   return (
-    <div className="flex flex-wrap gap-4 mb-8 bg-white p-4 rounded-xl shadow-sm border">
-      {/* region */}
+    <div className="flex flex-wrap items-start gap-6 mb-8 bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+      
+      {/* REGIÓN */}
       <div className="flex flex-col gap-1">
-        <label className="text-[10px] font-bold text-gray-400 uppercase">Región</label>
-        <select
+        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Región</label>
+        <select 
           value={searchParams.get('reg') || ""}
           onChange={(e) => updateFilter('reg', e.target.value)}
-          className="border p-2 rounded bg-white min-w-[150px] text-sm"
+          className="border border-gray-300 p-2 rounded bg-white min-w-[140px] text-sm text-black focus:ring-2 focus:ring-blue-500 outline-none"
         >
           <option value="">Todas</option>
           {regions.map(r => (
@@ -52,40 +53,44 @@ export function Filters({ regions, teams, tours }: FiltersProps) {
         </select>
       </div>
 
-      {/* team */}
+      {/* EQUIPO */}
       <div className="flex flex-col gap-1">
-        <label className="text-[10px] font-bold text-gray-400 uppercase">Equipo</label>
-        <select
+        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Equipo</label>
+        <select 
           value={searchParams.get('team') || ""}
           onChange={(e) => updateFilter('team', e.target.value)}
-          className="border p-2 rounded bg-white min-w-[160px] text-sm"
+          className="border border-gray-300 p-2 rounded bg-white min-w-[160px] text-sm text-black focus:ring-2 focus:ring-blue-500 outline-none"
         >
           <option value="">Seleccionar...</option>
           {teams.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
       </div>
 
-      {/* tournament */}
-      <MultiSelect 
-        options={tours}
-        selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || []}
-        onChange={(values) => updateMultiFilter('tour', values)}
-        disabled={!searchParams.get('team')}
-      />
-
-      {/* Series type */}
+      {/* MULTISELECT TORNEO */}
       <div className="flex flex-col gap-1">
-        <label className="text-[10px] font-bold text-gray-400 uppercase">Serie</label>
-        <select
+        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Torneos</label>
+        <MultiSelect 
+          options={tours}
+          selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || []}
+          onChange={(values) => updateMultiFilter('tour', values)}
+          disabled={!searchParams.get('team')}
+        />
+      </div>
+
+      {/* SERIE */}
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Serie</label>
+        <select 
           value={searchParams.get('bo') || "all"}
           onChange={(e) => updateFilter('bo', e.target.value)}
-          className="border p-2 rounded bg-white min-w-[120px] text-sm"
+          className="border border-gray-300 p-2 rounded bg-white min-w-[120px] text-sm text-black focus:ring-2 focus:ring-blue-500 outline-none"
         >
           <option value="all">BO3 & BO5</option>
-          <option value="3">BO3</option>
-          <option value="5">BO5</option>
+          <option value="3">Solo BO3</option>
+          <option value="5">Solo BO5</option>
         </select>
       </div>
+
     </div>
   );
 }
