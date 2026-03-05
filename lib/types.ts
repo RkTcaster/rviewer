@@ -21,8 +21,10 @@ export type MapStat = {
   picks: number;
   bans: number;
   deciders: number;
-  rivalPicks: number; 
-  rivalBans: number;  
+  rivalPicks: number;
+  rivalBans: number;
+  wins: number;    
+  played: number;  
 };
 
 // 3. Para la tabla 'regions'
