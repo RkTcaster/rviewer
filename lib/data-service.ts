@@ -77,9 +77,17 @@ export async function getDraftStats(filters: { team: string; tour?: string; bo?:
 
 function procesarStats(matches: Draft[], targetTeam: string): MapStat[] {
   const stats: Record<string, MapStat> = {};
+
   const initMap = (map: string) => {
     if (map && !stats[map]) {
-      stats[map] = { mapName: map, picks: 0, bans: 0, deciders: 0 };
+      stats[map] = { 
+        mapName: map, 
+        picks: 0, 
+        bans: 0, 
+        deciders: 0, 
+        rivalPicks: 0, 
+        rivalBans: 0 
+      };
     }
   };
 
@@ -87,33 +95,47 @@ function procesarStats(matches: Draft[], targetTeam: string): MapStat[] {
     const isTeam1 = m.team === targetTeam;
     const boType = Number(m.bo);
 
-    // --- PICKS ---
-    // BO3: solo select_2 | BO5: select_2 y select_3
-    const pick1 = isTeam1 ? m.team_1_select_2 : m.team_2_select_2;
-    if (pick1) { initMap(pick1); stats[pick1].picks++; }
+    // --- 1. PICKS Y BANS DEL EQUIPO SELECCIONADO (Ya lo tenías) ---
+    const teamPick1 = isTeam1 ? m.team_1_select_2 : m.team_2_select_2;
+    if (teamPick1) { initMap(teamPick1); stats[teamPick1].picks++; }
+
+    const teamBan1 = isTeam1 ? m.team_1_select_1 : m.team_2_select_1;
+    if (teamBan1) { initMap(teamBan1); stats[teamBan1].bans++; }
 
     if (boType === 5) {
-      const pick2 = isTeam1 ? m.team_1_select_3 : m.team_2_select_3;
-      if (pick2) { initMap(pick2); stats[pick2].picks++; }
+      const teamPick2 = isTeam1 ? m.team_1_select_3 : m.team_2_select_3;
+      if (teamPick2) { initMap(teamPick2); stats[teamPick2].picks++; }
+    } else if (boType === 3) {
+      const teamBan2 = isTeam1 ? m.team_1_select_3 : m.team_2_select_3;
+      if (teamBan2) { initMap(teamBan2); stats[teamBan2].bans++; }
     }
 
-    // --- BANS ---
-    // BO3: select_1 y select_3 | BO5: solo select_1
-    const ban1 = isTeam1 ? m.team_1_select_1 : m.team_2_select_1;
-    if (ban1) { initMap(ban1); stats[ban1].bans++; }
+    // --- 2. PICKS Y BANS DEL RIVAL (NUEVA LÓGICA) ---
+    
+    // BANS RIVAL
+    const rivalBan1 = isTeam1 ? m.team_2_select_1 : m.team_1_select_1;
+    if (rivalBan1) { initMap(rivalBan1); stats[rivalBan1].rivalBans++; }
 
     if (boType === 3) {
-      const ban2 = isTeam1 ? m.team_1_select_3 : m.team_2_select_3;
-      if (ban2) { initMap(ban2); stats[ban2].bans++; }
+      const rivalBan2 = isTeam1 ? m.team_2_select_3 : m.team_1_select_3;
+      if (rivalBan2) { initMap(rivalBan2); stats[rivalBan2].rivalBans++; }
     }
 
-    // --- DECIDER ---
+    // PICKS RIVAL
+    const rivalPick1 = isTeam1 ? m.team_2_select_2 : m.team_1_select_2;
+    if (rivalPick1) { initMap(rivalPick1); stats[rivalPick1].rivalPicks++; }
+
+    if (boType === 5) {
+      const rivalPick2 = isTeam1 ? m.team_2_select_3 : m.team_1_select_3;
+      if (rivalPick2) { initMap(rivalPick2); stats[rivalPick2].rivalPicks++; }
+    }
+
+    // --- 3. DECIDER ---
     if (m.decider) {
       initMap(m.decider);
       stats[m.decider].deciders++;
     }
   });
 
-  // array and order
   return Object.values(stats).sort((a, b) => b.picks - a.picks);
 }
