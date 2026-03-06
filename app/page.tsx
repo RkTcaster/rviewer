@@ -1,25 +1,34 @@
 // app/page.tsx
 import { getMapStats, getRegions, getTours, getTeams } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
+import { KPICard } from '@/components/KPICard';
 
 export default async function Page({ searchParams }: { searchParams: Promise<any> }) {
   const params = await searchParams;
   const { reg, team, tour, bo } = params;
 
+  const result = team ? await getMapStats({ team, tour, bo, reg }) : null;
+  const stats = result?.mapStats || [];
+  const draftOrder = result?.draftOrder || { a: 0, b: 0 };
+  const pistols = result?.pistols || { wins: 0, total: 0 };
+  const antiEco = result?.antiEco || { wins: 0, total: 0 };
   const regions = await getRegions();
   const teams = await getTeams(reg);
   const tours = await getTours(team, reg);
-
-  const stats = team ? await getMapStats({ team, tour, bo, reg }) : [];
-
+  const pistolRate = pistols.total > 0 ? Math.round((pistols.wins / pistols.total) * 100) : 0;
+  const antiEcoRate = antiEco.total > 0 ? Math.round((antiEco.wins / antiEco.total) * 100) : 0;
+  const recovery = result?.recovery || { wins: 0, total: 0 };
+  const recoveryRate = recovery.total > 0 ? Math.round((recovery.wins / recovery.total) * 100) : 0;
 
   return (
     <main className="p-8 max-w-6xl mx-auto">
-      <h1 className="text-3xl font-black mb-8">VALORANT Stats</h1>
+      <h1 className="text-3xl font-black mb-8 text-gray-900">VALORANT Stats</h1>
 
       <Filters regions={regions} teams={teams} tours={tours} />
 
       {team ? (
+        <div className="space-y-8"> {/* Contenedor con espacio entre tabla y KPIs */}
+
         <div className="bg-white rounded-xl shadow overflow-hidden border border-gray-200">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -89,6 +98,37 @@ export default async function Page({ searchParams }: { searchParams: Promise<any
               </tbody>
             </table>
           </div>
+        </div>
+
+
+          {/* SECCIÓN DE KPIs */}
+          <div className="flex flex-wrap gap-4">
+            <KPICard 
+              title="Draft Order" 
+              label="A — B" 
+              value={`${draftOrder.a} — ${draftOrder.b}`} 
+            />
+                        
+            <KPICard 
+              title="Pistol Rounds" 
+              label={`${pistols.wins}W — ${pistols.total - pistols.wins}L`} 
+              value={`${pistolRate}%`} 
+            />
+
+            <KPICard 
+              title="Post Pistol Win into Win" 
+              label={`${antiEco.wins}W — ${antiEco.total - antiEco.wins}L`} 
+              value={`${antiEcoRate}%`} 
+            />
+            {/* Aquí podremos agregar más tarjetas luego */}
+
+                        <KPICard 
+              title="Post Pistol Loss into Win" 
+              label={`${recovery.wins}W — ${recovery.total - recovery.wins}L`} 
+              value={`${recoveryRate}%`} 
+            />
+          </div>
+
         </div>
       ) : (
         <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">

@@ -43,3 +43,14 @@ export type Tournament = {
   event: string;
   reg_id?: string;
 };
+
+export type DashboardData = {
+  mapStats: MapStat[];
+  draftOrder: {
+    a: number;
+    b: number;
+  };
+  pistols: { wins: number; total: number };   
+  antiEco: { wins: number; total: number };   
+  recovery: { wins: number; total: number };
+};

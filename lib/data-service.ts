@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { Draft, MapStat, Region, Tournament } from './types';
+import { DashboardData, Draft, MapStat, Region, Tournament } from './types';
 
 // --- FILTERS  ---
 
@@ -56,7 +56,7 @@ export async function getTours(teamName?: string, regId?: string): Promise<Tourn
 
 // --- Stats ---
 
-export async function getMapStats(filters: { team: string; tour?: string; bo?: string; reg?: string }): Promise<MapStat[]> {
+export async function getMapStats(filters: { team: string; tour?: string; bo?: string; reg?: string }): Promise<DashboardData> {
   // 1. Query a la tabla de DRAFTS (Picks/Bans)
   let draftQuery = supabase.from('draft').select('*')
     .or(`team.eq."${filters.team}",rival.eq."${filters.team}"`);
@@ -89,8 +89,15 @@ export async function getMapStats(filters: { team: string; tour?: string; bo?: s
   return procesarTodo(drafts || [], rounds || [], filters.team);
 }
 
-function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): MapStat[] {
+function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): DashboardData {
   const stats: Record<string, MapStat> = {};
+  // KPI cards 
+  let orderA = 0, orderB = 0;
+  let pistolWins = 0, pistolTotal = 0;
+  let antiEcoWins = 0, antiEcoTotal = 0;
+  let recoveryWins = 0, recoveryTotal = 0;
+
+  const pistolResults: Record<string, { r1: boolean | null; r13: boolean | null }> = {};
 
   const initMap = (map: string) => {
     if (map && !stats[map]) {
@@ -106,7 +113,8 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): MapStat
   drafts.forEach((m) => {
     const isTeam1 = m.team === targetTeam;
     const boType = Number(m.bo);
-
+    if (m.team === targetTeam) orderA++;
+    else if (m.rival === targetTeam) orderB++;
     // Picks Equipo
     const p1 = isTeam1 ? m.team_1_select_2 : m.team_2_select_2;
     if (p1) { initMap(p1); stats[p1].picks++; }
@@ -147,44 +155,62 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): MapStat
   const mapResults: Record<string, any> = {};
   const target = targetTeam.trim().toLowerCase();
 
+  // --- 2. PASO 1 RONDAS: Identificar resultados de Pistols (R1 y R13) ---
+  // Hacemos este recorrido primero para que el Paso 2 tenga toda la info de pistols
   rounds.forEach((r) => {
-    const mapName = r.map;
-    initMap(mapName);
     const id = r["vlr_id-map"];
+    if (!id) return;
+    if (!pistolResults[id]) pistolResults[id] = { r1: null, r13: null };
 
-    // 1. Identificar si nuestro equipo es el A o el B
-    // IMPORTANTE: Aseguramos que targetTeam no tenga espacios
     const tA = r.teamA?.trim().toLowerCase();
     const tB = r.teamB?.trim().toLowerCase();
-
     const isTeamA = tA === target;
     const isTeamB = tB === target;
 
-    if (!isTeamA && !isTeamB) return; // Por si acaso hay datos de otros equipos
+    if (!isTeamA && !isTeamB) return;
 
-    // 2. Normalizar el bando de teamA
-    const rawSide = r.side
-    let mySide = "";
+    const wonRound = isTeamA ? Number(r.rndA) === 1 : Number(r.rndB) === 1;
+    const roundNum = Number(r.round);
 
-    if (isTeamA) {
-      mySide = rawSide; // atk o def
-    } else {
-      // Si soy el B, mi bando es el contrario al que figura en la columna side
-      mySide = rawSide === 'atk' ? 'def' : 'atk';
-    }
-    if (isTeamA || isTeamB) {
-      console.log(`OK: Encontrado ${targetTeam} en ronda ${r.round} como Team ${isTeamA ? 'A' : 'B'}. Bando: ${r.side}`);
-    } else {
-      // Esto te dirá por qué no coinciden los nombres
-      if (mapName === 'Abyss') { // Solo para un mapa para no saturar
-        console.log(`ERROR NOMBRE: Buscando "${target}" | En DB: A:"${tA}" B:"${tB}"`);
+    if (roundNum === 1 || roundNum === 13) {
+      pistolTotal++;
+      if (wonRound) {
+        pistolWins++;
+        if (roundNum === 1) pistolResults[id].r1 = true;
+        if (roundNum === 13) pistolResults[id].r13 = true;
+      } else {
+        if (roundNum === 1) pistolResults[id].r1 = false;
+        if (roundNum === 13) pistolResults[id].r13 = false;
       }
     }
-    // ¿Ganamos la ronda? 
-    // Si soy A, gano si rndA es 1. Si soy B, gano si rndB es 1.
-    const wonRound = isTeamA ? Number(r.rndA) === 1 : Number(r.rndB) === 1;
+  });
 
-    // Acumular
+  // --- 3. PASO 2 RONDAS: Stats de Mapas, Anti-Eco y Recovery ---
+  rounds.forEach((r) => {
+    const mapName = r.map;
+    const id = r["vlr_id-map"];
+    if (!id) return;
+    initMap(mapName);
+
+    const tA = r.teamA?.trim().toLowerCase();
+    const tB = r.teamB?.trim().toLowerCase();
+    const isTeamA = tA === target;
+    const isTeamB = tB === target;
+
+    if (!isTeamA && !isTeamB) return;
+
+    const wonRound = isTeamA ? Number(r.rndA) === 1 : Number(r.rndB) === 1;
+    const roundNum = Number(r.round);
+    const rawSide = r.side?.trim().toLowerCase(); // atk o def
+
+    // A. Lógica de Bandos (Atk/Def)
+    let mySide = "";
+    if (isTeamA) {
+      mySide = rawSide;
+    } else {
+      mySide = rawSide === 'atk' ? 'def' : 'atk';
+    }
+
     if (mySide === 'atk') {
       stats[mapName].attTotal++;
       if (wonRound) stats[mapName].attWins++;
@@ -193,21 +219,53 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): MapStat
       if (wonRound) stats[mapName].defWins++;
     }
 
-    // Guardar para última ronda (Winrate del mapa)
+    // B. Lógica Anti-Eco y Recovery
+    // Solo miramos rondas 2 y 14
+    if (roundNum === 2) {
+      const p1Result = pistolResults[id]?.r1;
+      if (p1Result === true) { // Ganamos Pistol R1
+        antiEcoTotal++;
+        if (wonRound) antiEcoWins++;
+      } else if (p1Result === false) { // Perdimos Pistol R1
+        recoveryTotal++;
+        if (wonRound) recoveryWins++;
+      }
+    }
+
+    if (roundNum === 14) {
+      const p13Result = pistolResults[id]?.r13;
+      if (p13Result === true) { // Ganamos Pistol R13
+        antiEcoTotal++;
+        if (wonRound) antiEcoWins++;
+      } else if (p13Result === false) { // Perdimos Pistol R13
+        recoveryTotal++;
+        if (wonRound) recoveryWins++;
+      }
+    }
+
+    // C. Guardar última ronda para Winrate de mapa
     if (!mapResults[id] || Number(r.round) > Number(mapResults[id].round)) {
       mapResults[id] = r;
     }
   });
 
-  // 3. Procesar Ganador del Mapa
+  // --- 4. CALCULAR WINRATE DE MAPAS ---
   Object.values(mapResults).forEach((finalRound: any) => {
     const mapName = finalRound.map;
     const isTeamA = finalRound.teamA?.trim().toLowerCase() === target;
     const wonMap = isTeamA ? Number(finalRound.rndA) === 1 : Number(finalRound.rndB) === 1;
-
-    stats[mapName].played++;
-    if (wonMap) stats[mapName].wins++;
+    
+    if (stats[mapName]) {
+      stats[mapName].played++;
+      if (wonMap) stats[mapName].wins++;
+    }
   });
 
-  return Object.values(stats).sort((a, b) => b.picks - a.picks);
+  return {
+    mapStats: Object.values(stats).sort((a, b) => b.picks - a.picks),
+    draftOrder: { a: orderA, b: orderB },
+    pistols: { wins: pistolWins, total: pistolTotal },
+    antiEco: { wins: antiEcoWins, total: antiEcoTotal },
+    recovery: { wins: recoveryWins, total: recoveryTotal }
+  };
 }
