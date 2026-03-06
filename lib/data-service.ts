@@ -13,7 +13,7 @@ export async function getRegions(): Promise<Region[]> {
     .order('region');
 
   if (error) return [];
-  return data; 
+  return data;
 }
 
 export async function getTeams(regId?: string): Promise<string[]> {
@@ -22,7 +22,7 @@ export async function getTeams(regId?: string): Promise<string[]> {
   if (regId && regId !== "" && regId !== "undefined") {
     query = query.eq('reg_id', regId);
   }
-  
+
   const { data, error } = await query;
   if (error) {
     console.error("Error en getTeams:", error);
@@ -44,8 +44,8 @@ export async function getTours(teamName?: string, regId?: string): Promise<Tourn
   if (regId) query = query.eq('reg_id', regId);
 
   const { data } = await query;
-  
- 
+
+
   const unique = data?.reduce((acc: Tournament[], current) => {
     if (!acc.find(item => item.tour_id === current.tour_id)) acc.push(current);
     return acc;
@@ -60,11 +60,11 @@ export async function getMapStats(filters: { team: string; tour?: string; bo?: s
   // 1. Query a la tabla de DRAFTS (Picks/Bans)
   let draftQuery = supabase.from('draft').select('*')
     .or(`team.eq."${filters.team}",rival.eq."${filters.team}"`);
-  
+
   // 2. Query a la tabla de ROUNDS (Resultados)
   // Nota: Si en Supabase la columna tiene guión (vlr_id-map), 
   // a veces hay que usar comillas dobles o verificar cómo la nombró Supabase (ej: vlr_id_map)
-  let roundsQuery = supabase.from('round_info').select('teamA, teamB, rndA, rndB, round, map, "vlr_id-map"')
+  let roundsQuery = supabase.from('round_info').select('teamA, teamB, rndA, rndB, round, map, "vlr_id-map","side"')
     .or(`teamA.eq."${filters.team}",teamB.eq."${filters.team}"`);
 
   // Aplicar filtros de URL a ambas
@@ -94,9 +94,10 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): MapStat
 
   const initMap = (map: string) => {
     if (map && !stats[map]) {
-      stats[map] = { 
-        mapName: map, picks: 0, bans: 0, deciders: 0, 
-        rivalPicks: 0, rivalBans: 0, wins: 0, played: 0 
+      stats[map] = {
+        mapName: map, picks: 0, bans: 0, deciders: 0,
+        rivalPicks: 0, rivalBans: 0, wins: 0, played: 0,
+        attWins: 0, attTotal: 0, defWins: 0, defTotal: 0,
       };
     }
   };
@@ -144,20 +145,68 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): MapStat
 
   // --- PARTE 2: VICTORIAS (Nueva lógica de round_info) ---
   const mapResults: Record<string, any> = {};
-  rounds.forEach(r => {
+  const target = targetTeam.trim().toLowerCase();
+
+  rounds.forEach((r) => {
+    const mapName = r.map;
+    initMap(mapName);
     const id = r["vlr_id-map"];
-    if (!mapResults[id] || r.round > mapResults[id].round) {
+
+    // 1. Identificar si nuestro equipo es el A o el B
+    // IMPORTANTE: Aseguramos que targetTeam no tenga espacios
+    const tA = r.teamA?.trim().toLowerCase();
+    const tB = r.teamB?.trim().toLowerCase();
+
+    const isTeamA = tA === target;
+    const isTeamB = tB === target;
+
+    if (!isTeamA && !isTeamB) return; // Por si acaso hay datos de otros equipos
+
+    // 2. Normalizar el bando de teamA
+    const rawSide = r.side
+    let mySide = "";
+
+    if (isTeamA) {
+      mySide = rawSide; // atk o def
+    } else {
+      // Si soy el B, mi bando es el contrario al que figura en la columna side
+      mySide = rawSide === 'atk' ? 'def' : 'atk';
+    }
+    if (isTeamA || isTeamB) {
+      console.log(`OK: Encontrado ${targetTeam} en ronda ${r.round} como Team ${isTeamA ? 'A' : 'B'}. Bando: ${r.side}`);
+    } else {
+      // Esto te dirá por qué no coinciden los nombres
+      if (mapName === 'Abyss') { // Solo para un mapa para no saturar
+        console.log(`ERROR NOMBRE: Buscando "${target}" | En DB: A:"${tA}" B:"${tB}"`);
+      }
+    }
+    // ¿Ganamos la ronda? 
+    // Si soy A, gano si rndA es 1. Si soy B, gano si rndB es 1.
+    const wonRound = isTeamA ? Number(r.rndA) === 1 : Number(r.rndB) === 1;
+
+    // Acumular
+    if (mySide === 'atk') {
+      stats[mapName].attTotal++;
+      if (wonRound) stats[mapName].attWins++;
+    } else if (mySide === 'def') {
+      stats[mapName].defTotal++;
+      if (wonRound) stats[mapName].defWins++;
+    }
+
+    // Guardar para última ronda (Winrate del mapa)
+    if (!mapResults[id] || Number(r.round) > Number(mapResults[id].round)) {
       mapResults[id] = r;
     }
   });
 
-  Object.values(mapResults).forEach(finalRound => {
+  // 3. Procesar Ganador del Mapa
+  Object.values(mapResults).forEach((finalRound: any) => {
     const mapName = finalRound.map;
-    initMap(mapName);
+    const isTeamA = finalRound.teamA?.trim().toLowerCase() === target;
+    const wonMap = isTeamA ? Number(finalRound.rndA) === 1 : Number(finalRound.rndB) === 1;
+
     stats[mapName].played++;
-    const isTeamA = finalRound.teamA === targetTeam;
-    const won = isTeamA ? finalRound.rndA === 1 : finalRound.rndB === 1;
-    if (won) stats[mapName].wins++;
+    if (wonMap) stats[mapName].wins++;
   });
 
   return Object.values(stats).sort((a, b) => b.picks - a.picks);

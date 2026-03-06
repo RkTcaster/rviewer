@@ -12,6 +12,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<any
 
   const stats = team ? await getMapStats({ team, tour, bo, reg }) : [];
 
+
   return (
     <main className="p-8 max-w-6xl mx-auto">
       <h1 className="text-3xl font-black mb-8">VALORANT Stats</h1>
@@ -25,7 +26,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<any
               <thead className="bg-gray-900 text-white text-[11px] uppercase tracking-widest">
                 <tr>
                   <th className="p-4 border-b">Mapa</th>
-                  <th className="p-4 text-center border-b bg-gray-800">Winrate</th> {/* NUEVA COLUMNA EN HEADER */}
+                  <th className="p-4 text-center border-b bg-gray-800">Winrate</th>
+                  <th className="p-4 text-center border-b bg-amber-700/80">Atk Side</th>
+                  <th className="p-4 text-center border-b bg-blue-800/80">Def Side</th>
                   <th className="p-4 text-center border-b bg-green-900/80">Picks</th>
                   <th className="p-4 text-center border-b bg-red-900/80">Bans</th>
                   <th className="p-4 text-center border-b bg-blue-900/80">Decider</th>
@@ -36,19 +39,40 @@ export default async function Page({ searchParams }: { searchParams: Promise<any
               <tbody className="divide-y divide-gray-200">
                 {stats.map((s) => {
                   const winrate = s.played > 0 ? Math.round((s.wins / s.played) * 100) : 0;
+                  const atkRate = s.attTotal > 0 ? Math.round((s.attWins / s.attTotal) * 100) : null;
+                  const defRate = s.defTotal > 0 ? Math.round((s.defWins / s.defTotal) * 100) : null;
+
 
                   return (
                     <tr key={s.mapName} className="hover:bg-gray-50 transition-colors">
                       <td className="p-4 font-bold text-gray-900 bg-gray-50/30">{s.mapName}</td>
 
-                      {/* Celda: Winrate */}
-                      <td className="p-4 text-center border-x bg-white min-w-[100px]">
+                      {/* Winrate Mapa */}
+                      <td className="p-4 text-center border-x bg-white">
+                        <span className={`font-bold ${winrate >= 50 ? 'text-green-600' : 'text-red-600'}`}>{winrate}%</span>
+                        <div className="text-[10px] text-gray-400">({s.wins}W - {s.played - s.wins}L)</div>
+                      </td>
+
+                      {/* Attack Side */}
+                      <td className="p-4 text-center bg-amber-50/30 border-x border-gray-100">
                         <div className="flex flex-col">
-                          <span className={`font-bold ${winrate >= 50 ? 'text-green-600' : 'text-amber-600'}`}>
-                            {winrate}%
+                          <span className="font-bold text-amber-700">
+                            {atkRate !== null ? `${atkRate}%` : '-'}
                           </span>
                           <span className="text-[10px] text-gray-400">
-                            ({s.wins}W - {s.played - s.wins}L)
+                            {s.attTotal > 0 ? `(${s.attWins}W - ${s.attTotal - s.attWins}L)` : 'no played'}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Defense Side */}
+                      <td className="p-4 text-center bg-blue-50/30 border-r border-gray-100">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-blue-700">
+                            {defRate !== null ? `${defRate}%` : '-'}
+                          </span>
+                          <span className="text-[10px] text-gray-400">
+                            {s.defTotal > 0 ? `(${s.defWins}W - ${s.defTotal - s.defWins}L)` : 'no played'}
                           </span>
                         </div>
                       </td>
