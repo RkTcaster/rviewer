@@ -19,15 +19,17 @@ export default async function Page({ searchParams }: { searchParams: Promise<any
   const antiEcoRate = antiEco.total > 0 ? Math.round((antiEco.wins / antiEco.total) * 100) : 0;
   const recovery = result?.recovery || { wins: 0, total: 0 };
   const recoveryRate = recovery.total > 0 ? Math.round((recovery.wins / recovery.total) * 100) : 0;
+  const pab = result?.pab || {wins: 0, total: 0}
+  const pabRate = pab.total >0 ? Math.round((pab.wins/pab.total)*100) : 0;
 
   return (
-    <main className="p-8 max-w-6xl mx-auto">
+    <main className="p-8 max-w-7xl mx-auto">
       <h1 className="text-3xl font-black mb-8 text-gray-900">VALORANT Stats</h1>
 
       <Filters regions={regions} teams={teams} tours={tours} />
 
       {team ? (
-        <div className="space-y-8"> {/* Contenedor con espacio entre tabla y KPIs */}
+        <div className="space-y-8 mt-8"> {/* Contenedor con espacio entre tabla y KPIs */}
 
         <div className="bg-white rounded-xl shadow overflow-hidden border border-gray-200">
           <div className="overflow-x-auto">
@@ -102,7 +104,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<any
 
 
           {/* SECCIÓN DE KPIs */}
-          <div className="flex flex-wrap gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+
             <KPICard 
               title="Draft Order" 
               label="A — B" 
@@ -122,11 +125,17 @@ export default async function Page({ searchParams }: { searchParams: Promise<any
             />
             {/* Aquí podremos agregar más tarjetas luego */}
 
-                        <KPICard 
+            <KPICard 
               title="Post Pistol Loss into Win" 
               label={`${recovery.wins}W — ${recovery.total - recovery.wins}L`} 
               value={`${recoveryRate}%`} 
             />
+              <KPICard 
+              title="PAB (Bonus conversion)" 
+              label={`${pab.wins}W — ${pab.total - pab.wins}L`} 
+              value={`${pabRate}%`} 
+            />
+
           </div>
 
         </div>

@@ -91,13 +91,17 @@ export async function getMapStats(filters: { team: string; tour?: string; bo?: s
 
 function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): DashboardData {
   const stats: Record<string, MapStat> = {};
-  // KPI cards 
   let orderA = 0, orderB = 0;
   let pistolWins = 0, pistolTotal = 0;
   let antiEcoWins = 0, antiEcoTotal = 0;
   let recoveryWins = 0, recoveryTotal = 0;
+  let pabWins = 0, pabTotal = 0;
 
   const pistolResults: Record<string, { r1: boolean | null; r13: boolean | null }> = {};
+  const antiEcoResults: Record<string, { r2: boolean | null; r14: boolean | null }> = {};
+  const mapResults: Record<string, any> = {};
+
+  const target = targetTeam.trim().toLowerCase();
 
   const initMap = (map: string) => {
     if (map && !stats[map]) {
@@ -152,8 +156,6 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Dashboa
   });
 
   // --- PARTE 2: VICTORIAS (Nueva lógica de round_info) ---
-  const mapResults: Record<string, any> = {};
-  const target = targetTeam.trim().toLowerCase();
 
   // --- 2. PASO 1 RONDAS: Identificar resultados de Pistols (R1 y R13) ---
   // Hacemos este recorrido primero para que el Paso 2 tenga toda la info de pistols
@@ -161,6 +163,7 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Dashboa
     const id = r["vlr_id-map"];
     if (!id) return;
     if (!pistolResults[id]) pistolResults[id] = { r1: null, r13: null };
+    if (!antiEcoResults[id]) antiEcoResults[id] = { r2: null, r14: null };
 
     const tA = r.teamA?.trim().toLowerCase();
     const tB = r.teamB?.trim().toLowerCase();
@@ -172,44 +175,87 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Dashboa
     const wonRound = isTeamA ? Number(r.rndA) === 1 : Number(r.rndB) === 1;
     const roundNum = Number(r.round);
 
-    if (roundNum === 1 || roundNum === 13) {
-      pistolTotal++;
-      if (wonRound) {
-        pistolWins++;
-        if (roundNum === 1) pistolResults[id].r1 = true;
-        if (roundNum === 13) pistolResults[id].r13 = true;
-      } else {
-        if (roundNum === 1) pistolResults[id].r1 = false;
-        if (roundNum === 13) pistolResults[id].r13 = false;
-      }
-    }
+    if (roundNum === 1) pistolResults[id].r1 = wonRound;
+    if (roundNum === 13) pistolResults[id].r13 = wonRound;
+
+    // Identificar Anti-Ecos (R2 y R14)
+    if (roundNum === 2) antiEcoResults[id].r2 = wonRound;
+    if (roundNum === 14) antiEcoResults[id].r14 = wonRound;
+
+    // if (roundNum === 1 || roundNum === 13) {
+    //   pistolTotal++;
+    //   if (wonRound) {
+    //     pistolWins++;
+    //     if (roundNum === 1) pistolResults[id].r1 = true;
+    //     if (roundNum === 13) pistolResults[id].r13 = true;
+
+    //   } else {
+    //     if (roundNum === 1) pistolResults[id].r1 = false;
+    //     if (roundNum === 13) pistolResults[id].r13 = false;
+    //   }
+    // }
   });
 
-  // --- 3. PASO 2 RONDAS: Stats de Mapas, Anti-Eco y Recovery ---
-  rounds.forEach((r) => {
-    const mapName = r.map;
+    rounds.forEach((r) => {
     const id = r["vlr_id-map"];
+    const mapName = r.map;
     if (!id) return;
     initMap(mapName);
 
     const tA = r.teamA?.trim().toLowerCase();
-    const tB = r.teamB?.trim().toLowerCase();
     const isTeamA = tA === target;
-    const isTeamB = tB === target;
-
-    if (!isTeamA && !isTeamB) return;
-
     const wonRound = isTeamA ? Number(r.rndA) === 1 : Number(r.rndB) === 1;
     const roundNum = Number(r.round);
-    const rawSide = r.side?.trim().toLowerCase(); // atk o def
 
-    // A. Lógica de Bandos (Atk/Def)
-    let mySide = "";
-    if (isTeamA) {
-      mySide = rawSide;
-    } else {
-      mySide = rawSide === 'atk' ? 'def' : 'atk';
+    // A. Lógica de Pistols (KPI)
+    if (roundNum === 1 || roundNum === 13) {
+      pistolTotal++;
+      if (wonRound) pistolWins++;
     }
+
+    // B. Lógica Anti-Eco y Recovery
+    if (roundNum === 2) {
+      const p1Win = pistolResults[id].r1;
+      if (p1Win === true) {
+        antiEcoTotal++;
+        if (wonRound) antiEcoWins++;
+      } else if (p1Win === false) {
+        recoveryTotal++;
+        if (wonRound) recoveryWins++;
+      }
+    }
+    if (roundNum === 14) {
+      const p13Win = pistolResults[id].r13;
+      if (p13Win === true) {
+        antiEcoTotal++;
+        if (wonRound) antiEcoWins++;
+      } else if (p13Win === false) {
+        recoveryTotal++;
+        if (wonRound) recoveryWins++;
+      }
+    }
+
+    // C. Lógica PAB (Ganar Bonus tras ganar R1 y R2)
+    if (roundNum === 3) {
+      const p1Win = pistolResults[id].r1;
+      const r2Win = antiEcoResults[id].r2;
+      if (p1Win === true && r2Win === true) {
+        pabTotal++;
+        if (wonRound) pabWins++;
+      }
+    }
+    if (roundNum === 15) {
+      const p13Win = pistolResults[id].r13;
+      const r14Win = antiEcoResults[id].r14;
+      if (p13Win === true && r14Win === true) {
+        pabTotal++;
+        if (wonRound) pabWins++;
+      }
+    }
+
+    // D. Lógica de Bandos Atk/Def
+    const rawSide = r.side?.trim().toLowerCase();
+    let mySide = isTeamA ? rawSide : (rawSide === 'atk' ? 'def' : 'atk');
 
     if (mySide === 'atk') {
       stats[mapName].attTotal++;
@@ -219,31 +265,7 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Dashboa
       if (wonRound) stats[mapName].defWins++;
     }
 
-    // B. Lógica Anti-Eco y Recovery
-    // Solo miramos rondas 2 y 14
-    if (roundNum === 2) {
-      const p1Result = pistolResults[id]?.r1;
-      if (p1Result === true) { // Ganamos Pistol R1
-        antiEcoTotal++;
-        if (wonRound) antiEcoWins++;
-      } else if (p1Result === false) { // Perdimos Pistol R1
-        recoveryTotal++;
-        if (wonRound) recoveryWins++;
-      }
-    }
-
-    if (roundNum === 14) {
-      const p13Result = pistolResults[id]?.r13;
-      if (p13Result === true) { // Ganamos Pistol R13
-        antiEcoTotal++;
-        if (wonRound) antiEcoWins++;
-      } else if (p13Result === false) { // Perdimos Pistol R13
-        recoveryTotal++;
-        if (wonRound) recoveryWins++;
-      }
-    }
-
-    // C. Guardar última ronda para Winrate de mapa
+    // E. Guardar última ronda para Winrate
     if (!mapResults[id] || Number(r.round) > Number(mapResults[id].round)) {
       mapResults[id] = r;
     }
@@ -254,7 +276,6 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Dashboa
     const mapName = finalRound.map;
     const isTeamA = finalRound.teamA?.trim().toLowerCase() === target;
     const wonMap = isTeamA ? Number(finalRound.rndA) === 1 : Number(finalRound.rndB) === 1;
-    
     if (stats[mapName]) {
       stats[mapName].played++;
       if (wonMap) stats[mapName].wins++;
@@ -266,6 +287,7 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Dashboa
     draftOrder: { a: orderA, b: orderB },
     pistols: { wins: pistolWins, total: pistolTotal },
     antiEco: { wins: antiEcoWins, total: antiEcoTotal },
-    recovery: { wins: recoveryWins, total: recoveryTotal }
+    recovery: { wins: recoveryWins, total: recoveryTotal },
+    pab: { wins: pabWins, total: pabTotal }
   };
 }

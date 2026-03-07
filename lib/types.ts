@@ -53,4 +53,5 @@ export type DashboardData = {
   pistols: { wins: number; total: number };   
   antiEco: { wins: number; total: number };   
   recovery: { wins: number; total: number };
+  pab: {wins: number; total:number};
 };

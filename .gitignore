@@ -40,5 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-#scripts
-upload.mjs
+# data
+data/*.csv
