@@ -19,9 +19,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<any
   const antiEcoRate = antiEco.total > 0 ? Math.round((antiEco.wins / antiEco.total) * 100) : 0;
   const recovery = result?.recovery || { wins: 0, total: 0 };
   const recoveryRate = recovery.total > 0 ? Math.round((recovery.wins / recovery.total) * 100) : 0;
-  const pab = result?.pab || {wins: 0, total: 0}
-  const pabRate = pab.total >0 ? Math.round((pab.wins/pab.total)*100) : 0;
-
+  const pab = result?.pab || {atkWins:0, defWins:0, wins: 0, atkTotal:0, defTotal:0, total: 0}
+  const pabRateTotal = pab.total >0 ? Math.round((pab.wins/pab.total)*100) : 0;
+  const pabRateAtk = pab.total >0 ? Math.round((pab.atkWins/pab.atkTotal)*100) :0;
+  const pabRateDef = pab.total >0 ? Math.round((pab.defWins/pab.defTotal)*100) :0;
   return (
     <main className="p-8 max-w-7xl mx-auto">
       <h1 className="text-3xl font-black mb-8 text-gray-900">VALORANT Stats</h1>
@@ -104,7 +105,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<any
 
 
           {/* SECCIÓN DE KPIs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
 
             <KPICard 
               title="Draft Order" 
@@ -130,14 +131,30 @@ export default async function Page({ searchParams }: { searchParams: Promise<any
               label={`${recovery.wins}W — ${recovery.total - recovery.wins}L`} 
               value={`${recoveryRate}%`} 
             />
+
+
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3">
               <KPICard 
               title="PAB (Bonus conversion)" 
               label={`${pab.wins}W — ${pab.total - pab.wins}L`} 
-              value={`${pabRate}%`} 
+              value={`${pabRateTotal}%`} 
             />
 
-          </div>
+                          <KPICard 
+              title="PAB Attack" 
+              label={`${pab.atkWins}W — ${pab.atkTotal - pab.atkWins}L`} 
+              value={`${pabRateAtk}%`} 
+              variant='danger'
+            />
 
+                                      <KPICard 
+              title="PAB Def" 
+              label={`${pab.defWins}W — ${pab.defTotal - pab.defWins}L`} 
+              value={`${pabRateDef}%`} 
+              variant='success'
+            />
+          </div>
         </div>
       ) : (
         <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">

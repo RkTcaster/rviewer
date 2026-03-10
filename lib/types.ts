@@ -50,8 +50,8 @@ export type DashboardData = {
     a: number;
     b: number;
   };
-  pistols: { wins: number; total: number };   
-  antiEco: { wins: number; total: number };   
+  pistols: { wins: number; total: number };
+  antiEco: { wins: number; total: number };
   recovery: { wins: number; total: number };
-  pab: {wins: number; total:number};
+  pab: { atkWins: number; defWins: number; wins: number; atkTotal:number; defTotal:number, total: number };
 };

@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { DashboardData, Draft, MapStat, Region, Tournament } from './types';
+import { DashboardData, MapStat, Region, Tournament } from './types';
 
 // --- FILTERS  ---
 
@@ -92,10 +92,10 @@ export async function getMapStats(filters: { team: string; tour?: string; bo?: s
 function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): DashboardData {
   const stats: Record<string, MapStat> = {};
   let orderA = 0, orderB = 0;
-  let pistolWins = 0, pistolTotal = 0;
+  let pistolWinsAtk = 0, pistolsWinsDef = 0, pistolWins = 0, pistolTotal = 0;
   let antiEcoWins = 0, antiEcoTotal = 0;
   let recoveryWins = 0, recoveryTotal = 0;
-  let pabWins = 0, pabTotal = 0;
+  let pabWinsAtk = 0, pabWinsDef = 0, pabAtkTotal= 0, pabDefTotal = 0, pabTotal = 0;
 
   const pistolResults: Record<string, { r1: boolean | null; r13: boolean | null }> = {};
   const antiEcoResults: Record<string, { r2: boolean | null; r14: boolean | null }> = {};
@@ -182,21 +182,9 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Dashboa
     if (roundNum === 2) antiEcoResults[id].r2 = wonRound;
     if (roundNum === 14) antiEcoResults[id].r14 = wonRound;
 
-    // if (roundNum === 1 || roundNum === 13) {
-    //   pistolTotal++;
-    //   if (wonRound) {
-    //     pistolWins++;
-    //     if (roundNum === 1) pistolResults[id].r1 = true;
-    //     if (roundNum === 13) pistolResults[id].r13 = true;
-
-    //   } else {
-    //     if (roundNum === 1) pistolResults[id].r1 = false;
-    //     if (roundNum === 13) pistolResults[id].r13 = false;
-    //   }
-    // }
   });
 
-    rounds.forEach((r) => {
+  rounds.forEach((r) => {
     const id = r["vlr_id-map"];
     const mapName = r.map;
     if (!id) return;
@@ -206,6 +194,11 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Dashboa
     const isTeamA = tA === target;
     const wonRound = isTeamA ? Number(r.rndA) === 1 : Number(r.rndB) === 1;
     const roundNum = Number(r.round);
+
+    // Test para contar por lado 
+
+    const rawSide = r.side?.trim().toLowerCase();
+    let mySide = isTeamA ? rawSide : (rawSide === 'atk' ? 'def' : 'atk');
 
     // A. Lógica de Pistols (KPI)
     if (roundNum === 1 || roundNum === 13) {
@@ -236,26 +229,45 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Dashboa
     }
 
     // C. Lógica PAB (Ganar Bonus tras ganar R1 y R2)
-    if (roundNum === 3) {
-      const p1Win = pistolResults[id].r1;
-      const r2Win = antiEcoResults[id].r2;
-      if (p1Win === true && r2Win === true) {
-        pabTotal++;
-        if (wonRound) pabWins++;
+    if (mySide === 'atk') {
+      if (roundNum === 3) {
+        const p1Win = pistolResults[id].r1;
+        const r2Win = antiEcoResults[id].r2;
+        if (p1Win === true && r2Win === true) {
+          pabAtkTotal++;
+          if (wonRound) pabWinsAtk++;
+        }
       }
-    }
-    if (roundNum === 15) {
-      const p13Win = pistolResults[id].r13;
-      const r14Win = antiEcoResults[id].r14;
-      if (p13Win === true && r14Win === true) {
-        pabTotal++;
-        if (wonRound) pabWins++;
+      if (roundNum === 15) {
+        const p13Win = pistolResults[id].r13;
+        const r14Win = antiEcoResults[id].r14;
+        if (p13Win === true && r14Win === true) {
+          pabAtkTotal++;
+          if (wonRound) pabWinsAtk++;
+        }
+      }
+    } else if (mySide === 'def') {
+      if (roundNum === 3) {
+        const p1Win = pistolResults[id].r1;
+        const r2Win = antiEcoResults[id].r2;
+        if (p1Win === true && r2Win === true) {
+          pabDefTotal++;
+          if (wonRound) pabWinsDef++;
+        }
+      }
+      if (roundNum === 15) {
+        const p13Win = pistolResults[id].r13;
+        const r14Win = antiEcoResults[id].r14;
+        if (p13Win === true && r14Win === true) {
+          pabDefTotal++;
+          if (wonRound) pabWinsDef++;
+      }
       }
     }
 
-    // D. Lógica de Bandos Atk/Def
-    const rawSide = r.side?.trim().toLowerCase();
-    let mySide = isTeamA ? rawSide : (rawSide === 'atk' ? 'def' : 'atk');
+    // D. Lógica de Bandos Atk/Def SAQUE ESTO DE ACA Y LO PUSE ARRIBA 
+    // const rawSide = r.side?.trim().toLowerCase();
+    // let mySide = isTeamA ? rawSide : (rawSide === 'atk' ? 'def' : 'atk');
 
     if (mySide === 'atk') {
       stats[mapName].attTotal++;
@@ -288,6 +300,6 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Dashboa
     pistols: { wins: pistolWins, total: pistolTotal },
     antiEco: { wins: antiEcoWins, total: antiEcoTotal },
     recovery: { wins: recoveryWins, total: recoveryTotal },
-    pab: { wins: pabWins, total: pabTotal }
+    pab: { atkWins: pabWinsAtk, defWins: pabWinsDef,wins: pabWinsAtk + pabWinsDef, atkTotal:pabAtkTotal, defTotal:pabDefTotal, total: pabAtkTotal+pabDefTotal }
   };
 }
