@@ -22,9 +22,9 @@ export function KPICard({ title, label, value, variant = 'neutral' }: KPICardPro
       label: "text-emerald-500/70"
     },
     danger: {
-      text: "text-rose-500", // Rojo
+      text: "text-rose-300", // Rojo
       hover: "hover:border-rose-400",
-      label: "text-rose-500/70"
+      label: "text-rose-300/70"
     }
   };
 
