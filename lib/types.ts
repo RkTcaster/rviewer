@@ -54,4 +54,6 @@ export type DashboardData = {
   antiEco: { wins: number; total: number };
   recovery: { wins: number; total: number };
   pab: { atkWins: number; defWins: number; wins: number; atkTotal:number; defTotal:number, total: number };
+  lastMatchData: string | null;
+  
 };

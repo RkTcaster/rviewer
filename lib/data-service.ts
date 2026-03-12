@@ -56,47 +56,56 @@ export async function getTours(teamName?: string, regId?: string): Promise<Tourn
 
 // --- Stats ---
 
-export async function getMapStats(filters: { team: string; tour?: string; bo?: string; reg?: string }): Promise<DashboardData> {
-  // 1. Query a la tabla de DRAFTS (Picks/Bans)
-  let draftQuery = supabase.from('draft').select('*')
-    .or(`team.eq."${filters.team}",rival.eq."${filters.team}"`);
+export async function getMapStats(filters: { team: string; tour?: string; bo?: string; reg?: string; last?: string }): Promise<DashboardData> {
+  let idQuery = supabase
+    .from('draft')
+    .select('vlr_id, date')
+    .or(`team.eq."${filters.team}",rival.eq."${filters.team}"`)
+    .order('date', { ascending: false });
 
-  // 2. Query a la tabla de ROUNDS (Resultados)
-  // Nota: Si en Supabase la columna tiene guión (vlr_id-map), 
-  // a veces hay que usar comillas dobles o verificar cómo la nombró Supabase (ej: vlr_id_map)
-  let roundsQuery = supabase.from('round_info').select('teamA, teamB, rndA, rndB, round, map, "vlr_id-map","side"')
-    .or(`teamA.eq."${filters.team}",teamB.eq."${filters.team}"`);
+  // Aplicar filtros de torneo/región/bo a la búsqueda de IDs también
+  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
+  if (filters.reg) idQuery = idQuery.eq('reg_id', filters.reg);
+  if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
 
-  // Aplicar filtros de URL a ambas
-  if (filters.tour) {
-    const tours = filters.tour.split(',');
-    draftQuery = draftQuery.in('tour_id', tours);
-    roundsQuery = roundsQuery.in('tour_id', tours);
+  // Aplicar el LÍMITE (Last X)
+  if (filters.last && filters.last !== 'all') {
+    idQuery = idQuery.limit(parseInt(filters.last));
   }
-  if (filters.reg) {
-    draftQuery = draftQuery.eq('reg_id', filters.reg);
-    roundsQuery = roundsQuery.eq('reg_id', filters.reg);
-  }
-  if (filters.bo && filters.bo !== 'all') {
-    draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
-    roundsQuery = roundsQuery.eq('bo', parseInt(filters.bo));
-  }
+  const { data: idList, error: idError } = await idQuery;
+  if (idError || !idList || idList.length === 0) return {
+    mapStats: [],
+    draftOrder: { a: 0, b: 0 },
+    pistols: { wins: 0, total: 0 },
+    antiEco: { wins: 0, total: 0 },
+    recovery: { wins: 0, total: 0 },
+    pab: { atkWins: 0, defWins: 0, wins: 0, atkTotal: 0, defTotal: 0, total: 0 },
+    lastMatchData: null
+  };
 
-  // Ejecutamos ambas al mismo tiempo para ganar velocidad
+  const lastDate = idList[0].date
+  const recentIds = idList.map(item => item.vlr_id);
+
+
+  // 2. Ahora traemos los Drafts y Rondas filtrados por esos IDs específicos
+  let draftQuery = supabase.from('draft').select('*').in('vlr_id', recentIds);
+  let roundsQuery = supabase.from('round_info').select('*').in('vlr_id', recentIds);
+
   const [{ data: drafts }, { data: rounds }] = await Promise.all([draftQuery, roundsQuery]);
 
-  // Llamamos a la función procesadora
   return procesarTodo(drafts || [], rounds || [], filters.team);
 }
 
-function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): DashboardData {
+
+
+function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Omit<DashboardData, 'lastMatchDate'> {
   const stats: Record<string, MapStat> = {};
   let orderA = 0, orderB = 0;
   let pistolWinsAtk = 0, pistolsWinsDef = 0, pistolWins = 0, pistolTotal = 0;
   let antiEcoWins = 0, antiEcoTotal = 0;
   let recoveryWins = 0, recoveryTotal = 0;
-  let pabWinsAtk = 0, pabWinsDef = 0, pabAtkTotal= 0, pabDefTotal = 0, pabTotal = 0;
-
+  let pabWinsAtk = 0, pabWinsDef = 0, pabAtkTotal = 0, pabDefTotal = 0, pabTotal = 0;
+  let lastDate = drafts[0].date
   const pistolResults: Record<string, { r1: boolean | null; r13: boolean | null }> = {};
   const antiEcoResults: Record<string, { r2: boolean | null; r14: boolean | null }> = {};
   const mapResults: Record<string, any> = {};
@@ -261,7 +270,7 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Dashboa
         if (p13Win === true && r14Win === true) {
           pabDefTotal++;
           if (wonRound) pabWinsDef++;
-      }
+        }
       }
     }
 
@@ -300,6 +309,7 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Dashboa
     pistols: { wins: pistolWins, total: pistolTotal },
     antiEco: { wins: antiEcoWins, total: antiEcoTotal },
     recovery: { wins: recoveryWins, total: recoveryTotal },
-    pab: { atkWins: pabWinsAtk, defWins: pabWinsDef,wins: pabWinsAtk + pabWinsDef, atkTotal:pabAtkTotal, defTotal:pabDefTotal, total: pabAtkTotal+pabDefTotal }
+    pab: { atkWins: pabWinsAtk, defWins: pabWinsDef, wins: pabWinsAtk + pabWinsDef, atkTotal: pabAtkTotal, defTotal: pabDefTotal, total: pabAtkTotal + pabDefTotal },
+    lastMatchData: lastDate
   };
 }

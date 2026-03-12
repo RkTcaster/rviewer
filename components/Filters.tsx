@@ -37,11 +37,11 @@ export function Filters({ regions, teams, tours }: FiltersProps) {
 
   return (
     <div className="flex flex-wrap items-start gap-6 mb-8 bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-      
+
       {/* REGIÓN */}
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Región</label>
-        <select 
+        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Region</label>
+        <select
           value={searchParams.get('reg') || ""}
           onChange={(e) => updateFilter('reg', e.target.value)}
           className="border border-gray-300 p-2 rounded bg-white min-w-[140px] text-sm text-black focus:ring-2 focus:ring-blue-500 outline-none"
@@ -55,8 +55,8 @@ export function Filters({ regions, teams, tours }: FiltersProps) {
 
       {/* EQUIPO */}
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Equipo</label>
-        <select 
+        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Team</label>
+        <select
           value={searchParams.get('team') || ""}
           onChange={(e) => updateFilter('team', e.target.value)}
           className="border border-gray-300 p-2 rounded bg-white min-w-[160px] text-sm text-black focus:ring-2 focus:ring-blue-500 outline-none"
@@ -68,8 +68,8 @@ export function Filters({ regions, teams, tours }: FiltersProps) {
 
       {/* MULTISELECT TORNEO */}
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Torneos</label>
-        <MultiSelect 
+        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Tournament</label>
+        <MultiSelect
           options={tours}
           selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || []}
           onChange={(values) => updateMultiFilter('tour', values)}
@@ -80,7 +80,7 @@ export function Filters({ regions, teams, tours }: FiltersProps) {
       {/* SERIE */}
       <div className="flex flex-col gap-1">
         <label className="text-[11px] font-bold text-black uppercase tracking-wider">Serie</label>
-        <select 
+        <select
           value={searchParams.get('bo') || "all"}
           onChange={(e) => updateFilter('bo', e.target.value)}
           className="border border-gray-300 p-2 rounded bg-white min-w-[120px] text-sm text-black focus:ring-2 focus:ring-blue-500 outline-none"
@@ -88,6 +88,22 @@ export function Filters({ regions, teams, tours }: FiltersProps) {
           <option value="all">BO3 & BO5</option>
           <option value="3">Solo BO3</option>
           <option value="5">Solo BO5</option>
+        </select>
+      </div>
+
+      {/* SELECTOR: ÚLTIMAS PARTIDAS */}
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Last X matches</label>
+        <select
+          value={searchParams.get('last') || "all"}
+          onChange={(e) => updateFilter('last', e.target.value)}
+          className="border border-gray-300 p-2 rounded bg-white min-w-[120px] text-sm text-black focus:ring-2 focus:ring-blue-500 outline-none"
+        >
+          <option value="all">All matches</option>
+          <option value="1">Last Match</option>
+          <option value="3">Last 3</option>
+          <option value="5">Last 5</option>
+          <option value="10">Last 10</option>
         </select>
       </div>
 
