@@ -29,11 +29,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ r
 
 
   return (
-    <main className="p-8 max-w-7xl mx-auto">
+    <main className="p-8 max-w-7xl mx-auto min-h-screen bg-[#0f1115] text-gray-100">
       <div><h1 className="text-4xl font-bold mb-8 text-stale-100">VCT Team stats</h1>
         {result?.lastMatchData && (
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
-            Last registered match: {new Date(result?.lastMatchData).toLocaleDateString('es-AR', {
+            Last team match date: {new Date(result?.lastMatchData).toLocaleDateString('es-AR', {
               day: 'numeric',
               month: 'long',
               year: 'numeric'
@@ -46,23 +46,23 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ r
       {team ? (
         <div className="space-y-8 mt-8"> {/* Contenedor con espacio entre tabla y KPIs */}
 
-          <div className="bg-white rounded-xl shadow overflow-hidden border border-gray-200">
+          <div className="bg-[#1a1d23] rounded-xl shadow-2xl overflow-hidden border border-gray-800">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
-                <thead className="bg-gray-900 text-white text-[11px] uppercase tracking-widest">
+                <thead className="bg-[#0f1115] text-gray-400 text-[11px] uppercase tracking-widest">
                   <tr>
-                    <th className="p-4 border-b">Mapa</th>
-                    <th className="p-4 text-center border-b bg-gray-800">Winrate</th>
-                    <th className="p-4 text-center border-b bg-amber-700/80">Atk Side</th>
-                    <th className="p-4 text-center border-b bg-blue-800/80">Def Side</th>
-                    <th className="p-4 text-center border-b bg-green-900/80">Picks</th>
-                    <th className="p-4 text-center border-b bg-red-900/80">Bans</th>
-                    <th className="p-4 text-center border-b bg-blue-900/80">Decider</th>
-                    <th className="p-4 text-center border-b bg-gray-800">Picks Rival</th>
-                    <th className="p-4 text-center border-b bg-gray-800">Bans Rival</th>
+                    <th className="p-4 border-b border-gray-800">Mapa</th>
+                    <th className="p-4 text-center border-b border-gray-800 bg-gray-900/80">Winrate</th>
+                    <th className="p-4 text-center border-b border-gray-800 bg-rose-900/80">Atk Side</th>
+                    <th className="p-4 text-center border-b border-gray-800 bg-green-800/80">Def Side</th>
+                    <th className="p-4 text-center border-b border-gray-800 bg-green-900/30 text-green-400">Picks</th>
+                    <th className="p-4 text-center border-b border-gray-800 bg-red-900/30 text-red-400">Bans</th>
+                    <th className="p-4 text-center border-b border-gray-800 bg-blue-900/30 text-blue-400">Decider</th>
+                    <th className="p-4 text-center border-b border-gray-800 bg-gray-900/80">Picks Rival</th>
+                    <th className="p-4 text-center border-b border-gray-800 bg-gray-900/80">Bans Rival</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-gray-800">
                   {stats.map((s) => {
                     const winrate = s.played > 0 ? Math.round((s.wins / s.played) * 100) : 0;
                     const atkRate = s.attTotal > 0 ? Math.round((s.attWins / s.attTotal) * 100) : null;
@@ -70,31 +70,31 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ r
 
 
                     return (
-                      <tr key={s.mapName} className="hover:bg-gray-50 transition-colors">
-                        <td className="p-4 font-bold text-gray-900 bg-gray-50/30">{s.mapName}</td>
+                      <tr key={s.mapName} className="hover:bg-[#252a33] transition-colors">
+                        <td className="p-4 font-bold text-white bg-[#1a1d23]">{s.mapName}</td>
 
                         {/* Winrate Mapa */}
-                        <td className="p-4 text-center border-x bg-white">
-                          <span className={`font-bold ${winrate >= 50 ? 'text-green-600' : 'text-red-600'}`}>{winrate}%</span>
+                        <td className="p-4 text-center border-x border-gray-800 bg-[#1a1d23]">
+                          <span className={`font-bold ${winrate >= 50 ? 'text-green-600' : 'text-red-400'}`}>{winrate}%</span>
                           <div className="text-[10px] text-gray-400">({s.wins}W - {s.played - s.wins}L)</div>
                         </td>
 
                         {/* Attack Side */}
-                        <td className="p-4 text-center bg-amber-50/30 border-x border-gray-100">
+                        <td className="p-4 text-center border-x border-gray-800 bg-[#1a1d23]">
                           <div className="flex flex-col">
-                            <span className="font-bold text-amber-700">
+                            <span className="font-bold text-grey-500">
                               {atkRate !== null ? `${atkRate}%` : '-'}
                             </span>
-                            <span className="text-[10px] text-gray-400">
+                            <span className="text-[10px] text-gray-300">
                               {s.attTotal > 0 ? `(${s.attWins}W - ${s.attTotal - s.attWins}L)` : 'no played'}
                             </span>
                           </div>
                         </td>
 
                         {/* Defense Side */}
-                        <td className="p-4 text-center bg-blue-50/30 border-r border-gray-100">
+                        <td className="p-4 text-center border-x border-gray-800 bg-[#1a1d23]">
                           <div className="flex flex-col">
-                            <span className="font-bold text-blue-700">
+                            <span className="font-bold text-grey-500">
                               {defRate !== null ? `${defRate}%` : '-'}
                             </span>
                             <span className="text-[10px] text-gray-400">
@@ -104,11 +104,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ r
                         </td>
 
                         {/* Resto de columnas */}
-                        <td className="p-4 text-center text-green-700 font-bold bg-green-50/30">{s.picks}</td>
-                        <td className="p-4 text-center text-red-700 font-bold bg-red-50/30">{s.bans}</td>
-                        <td className="p-4 text-center text-blue-700 font-bold bg-blue-50/30">{s.deciders}</td>
-                        <td className="p-4 text-center text-gray-600">{s.rivalPicks}</td>
-                        <td className="p-4 text-center text-gray-600">{s.rivalBans}</td>
+                        <td className="p-4 text-center text-green-400 font-bold bg-green-900/10">{s.picks}</td>
+                        <td className="p-4 text-center text-red-400 font-bold bg-red-900/10">{s.bans}</td>
+                        <td className="p-4 text-center text-blue-400 font-bold bg-blue-900/10">{s.deciders}</td>
+                        <td className="p-4 text-center text-gray-300">{s.rivalPicks}</td>
+                        <td className="p-4 text-center text-gray-300">{s.rivalBans}</td>
                       </tr>
                     );
                   })}

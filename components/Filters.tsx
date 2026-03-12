@@ -2,6 +2,8 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Region, Tournament } from '@/lib/types';
 import { MultiSelect } from "./MultiSelect";
+import { SearchableSelect } from "./SearchableSelect";
+import { SearchableMultiSelect } from "./SearchableMultiSelect";
 
 interface FiltersProps {
   regions: Region[];
@@ -36,15 +38,15 @@ export function Filters({ regions, teams, tours }: FiltersProps) {
   };
 
   return (
-    <div className="flex flex-wrap items-start gap-6 mb-8 bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+  <div className="flex flex-wrap items-start gap-6 mb-8 bg-[#1a1d23] p-5 rounded-xl border border-gray-800 shadow-xl">
 
       {/* REGIÓN */}
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Region</label>
+        <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Region</label>
         <select
           value={searchParams.get('reg') || ""}
           onChange={(e) => updateFilter('reg', e.target.value)}
-          className="border border-gray-300 p-2 rounded bg-white min-w-[140px] text-sm text-black focus:ring-2 focus:ring-blue-500 outline-none"
+          className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
         >
           <option value="">Todas</option>
           {regions.map(r => (
@@ -54,36 +56,30 @@ export function Filters({ regions, teams, tours }: FiltersProps) {
       </div>
 
       {/* EQUIPO */}
-      <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Team</label>
-        <select
-          value={searchParams.get('team') || ""}
-          onChange={(e) => updateFilter('team', e.target.value)}
-          className="border border-gray-300 p-2 rounded bg-white min-w-[160px] text-sm text-black focus:ring-2 focus:ring-blue-500 outline-none"
-        >
-          <option value="">Seleccionar...</option>
-          {teams.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-      </div>
+    <SearchableSelect 
+      label="Team"
+      options={teams}
+      selected={searchParams.get('team') || ""}
+      onChange={(val) => updateFilter('team', val)}
+      placeholder="Choose a team"
+    />
 
       {/* MULTISELECT TORNEO */}
-      <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Tournament</label>
-        <MultiSelect
-          options={tours}
-          selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || []}
-          onChange={(values) => updateMultiFilter('tour', values)}
-          disabled={!searchParams.get('team')}
-        />
-      </div>
+    <SearchableMultiSelect 
+      label="Tournament"
+      options={tours}
+      selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || []}
+      onChange={(values) => updateMultiFilter('tour', values)}
+      disabled={!searchParams.get('team')}
+    />
 
       {/* SERIE */}
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Serie</label>
+        <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Serie</label>
         <select
           value={searchParams.get('bo') || "all"}
           onChange={(e) => updateFilter('bo', e.target.value)}
-          className="border border-gray-300 p-2 rounded bg-white min-w-[120px] text-sm text-black focus:ring-2 focus:ring-blue-500 outline-none"
+          className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
         >
           <option value="all">BO3 & BO5</option>
           <option value="3">Solo BO3</option>
@@ -93,11 +89,11 @@ export function Filters({ regions, teams, tours }: FiltersProps) {
 
       {/* SELECTOR: ÚLTIMAS PARTIDAS */}
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-bold text-black uppercase tracking-wider">Last X matches</label>
+        <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Last X matches</label>
         <select
           value={searchParams.get('last') || "all"}
           onChange={(e) => updateFilter('last', e.target.value)}
-          className="border border-gray-300 p-2 rounded bg-white min-w-[120px] text-sm text-black focus:ring-2 focus:ring-blue-500 outline-none"
+          className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
         >
           <option value="all">All matches</option>
           <option value="1">Last Match</option>
