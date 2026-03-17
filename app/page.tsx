@@ -1,180 +1,79 @@
 // app/page.tsx
 import { getMapStats, getRegions, getTours, getTeams } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
-import { KPICard } from '@/components/KPICard';
+import { Sidebar } from '@/components/Sidebar';
+import { MapsSection } from '@/components/sections/MapsSection';
+import { EconomySection } from '@/components/sections/EconomySection';
+import { ChartsSection } from '@/components/sections/ChartsSection';
+import { DraftSection } from '@/components/sections/DraftSection';
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ reg?: string; team?: string; tour?: string; bo?: string; last?: string; lastMatchData:string }> }) {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ reg?: string; team?: string; tour?: string; bo?: string; last?: string; section?: string }>;
+}) {
   const params = await searchParams;
-  const { reg, team, tour, bo, last, } = params;
+  const { reg, team, tour, bo, last, section = 'maps' } = params;
+
   const result = team
-    ? await getMapStats({ team, tour, bo, reg, last,   })
+    ? await getMapStats({ team, tour, bo, reg, last })
     : null;
- 
+
   const stats = result?.mapStats || [];
   const draftOrder = result?.draftOrder || { a: 0, b: 0 };
   const pistols = result?.pistols || { wins: 0, total: 0 };
   const antiEco = result?.antiEco || { wins: 0, total: 0 };
+  const recovery = result?.recovery || { wins: 0, total: 0 };
+  const pab = result?.pab || { atkWins: 0, defWins: 0, wins: 0, atkTotal: 0, defTotal: 0, total: 0 };
+
   const regions = await getRegions();
   const teams = await getTeams(reg);
   const tours = await getTours(team, reg);
-  const pistolRate = pistols.total > 0 ? Math.round((pistols.wins / pistols.total) * 100) : 0;
-  const antiEcoRate = antiEco.total > 0 ? Math.round((antiEco.wins / antiEco.total) * 100) : 0;
-  const recovery = result?.recovery || { wins: 0, total: 0 };
-  const recoveryRate = recovery.total > 0 ? Math.round((recovery.wins / recovery.total) * 100) : 0;
-  const pab = result?.pab || { atkWins: 0, defWins: 0, wins: 0, atkTotal: 0, defTotal: 0, total: 0 }
-  const pabRateTotal = pab.total > 0 ? Math.round((pab.wins / pab.total) * 100) : 0;
-  const pabRateAtk = pab.total > 0 ? Math.round((pab.atkWins / pab.atkTotal) * 100) : 0;
-  const pabRateDef = pab.total > 0 ? Math.round((pab.defWins / pab.defTotal) * 100) : 0;
 
-
+  function renderSection() {
+    switch (section) {
+      case 'economy':
+        return <EconomySection pistols={pistols} antiEco={antiEco} recovery={recovery} pab={pab} />;
+      case 'charts':
+        return <ChartsSection stats={stats} />;
+      case 'draft':
+        return <DraftSection draftOrder={draftOrder} stats={stats} />;
+      default:
+        return <MapsSection stats={stats} />;
+    }
+  }
 
   return (
-    <main className="p-8 max-w-7xl mx-auto min-h-screen bg-[#0f1115] text-gray-100">
-      <div><h1 className="text-4xl font-bold mb-8 text-stale-100">VCT Team stats</h1>
-        {result?.lastMatchData && (
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
-            Last team match date: {new Date(result?.lastMatchData).toLocaleDateString('es-AR', {
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric'
-            })}
-          </p>
-        )}
-      </div>
-      <Filters regions={regions} teams={teams} tours={tours} />
+    <div className="flex min-h-screen bg-[#0f1115] text-gray-100">
+      <Sidebar />
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="p-8 pb-0">
+          <h1 className="text-4xl font-bold text-gray-100">VCT Team stats</h1>
+          {result?.lastMatchData && (
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
+              Last team match date:{' '}
+              {new Date(result.lastMatchData).toLocaleDateString('es-AR', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })}
+            </p>
+          )}
+          <div className="mt-4">
+            <Filters regions={regions} teams={teams} tours={tours} />
+          </div>
+        </header>
 
-      {team ? (
-        <div className="space-y-8 mt-8"> {/* Contenedor con espacio entre tabla y KPIs */}
-
-          <div className="bg-[#1a1d23] rounded-xl shadow-2xl overflow-hidden border border-gray-800">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-[#0f1115] text-gray-400 text-[11px] uppercase tracking-widest">
-                  <tr>
-                    <th className="p-4 border-b border-gray-800">Mapa</th>
-                    <th className="p-4 text-center border-b border-gray-800 bg-gray-900/80">Winrate</th>
-                    <th className="p-4 text-center border-b border-gray-800 bg-rose-900/80">Atk Side</th>
-                    <th className="p-4 text-center border-b border-gray-800 bg-green-800/80">Def Side</th>
-                    <th className="p-4 text-center border-b border-gray-800 bg-green-900/30 text-green-400">Picks</th>
-                    <th className="p-4 text-center border-b border-gray-800 bg-red-900/30 text-red-400">Bans</th>
-                    <th className="p-4 text-center border-b border-gray-800 bg-blue-900/30 text-blue-400">Decider</th>
-                    <th className="p-4 text-center border-b border-gray-800 bg-gray-900/80">Picks Rival</th>
-                    <th className="p-4 text-center border-b border-gray-800 bg-gray-900/80">Bans Rival</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-800">
-                  {stats.map((s) => {
-                    const winrate = s.played > 0 ? Math.round((s.wins / s.played) * 100) : 0;
-                    const atkRate = s.attTotal > 0 ? Math.round((s.attWins / s.attTotal) * 100) : null;
-                    const defRate = s.defTotal > 0 ? Math.round((s.defWins / s.defTotal) * 100) : null;
-
-
-                    return (
-                      <tr key={s.mapName} className="hover:bg-[#252a33] transition-colors">
-                        <td className="p-4 font-bold text-white bg-[#1a1d23]">{s.mapName}</td>
-
-                        {/* Winrate Mapa */}
-                        <td className="p-4 text-center border-x border-gray-800 bg-[#1a1d23]">
-                          <span className={`font-bold ${winrate >= 50 ? 'text-green-600' : 'text-red-400'}`}>{winrate}%</span>
-                          <div className="text-[10px] text-gray-400">({s.wins}W - {s.played - s.wins}L)</div>
-                        </td>
-
-                        {/* Attack Side */}
-                        <td className="p-4 text-center border-x border-gray-800 bg-[#1a1d23]">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-grey-500">
-                              {atkRate !== null ? `${atkRate}%` : '-'}
-                            </span>
-                            <span className="text-[10px] text-gray-300">
-                              {s.attTotal > 0 ? `(${s.attWins}W - ${s.attTotal - s.attWins}L)` : 'no played'}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Defense Side */}
-                        <td className="p-4 text-center border-x border-gray-800 bg-[#1a1d23]">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-grey-500">
-                              {defRate !== null ? `${defRate}%` : '-'}
-                            </span>
-                            <span className="text-[10px] text-gray-400">
-                              {s.defTotal > 0 ? `(${s.defWins}W - ${s.defTotal - s.defWins}L)` : 'no played'}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Resto de columnas */}
-                        <td className="p-4 text-center text-green-400 font-bold bg-green-900/10">{s.picks}</td>
-                        <td className="p-4 text-center text-red-400 font-bold bg-red-900/10">{s.bans}</td>
-                        <td className="p-4 text-center text-blue-400 font-bold bg-blue-900/10">{s.deciders}</td>
-                        <td className="p-4 text-center text-gray-300">{s.rivalPicks}</td>
-                        <td className="p-4 text-center text-gray-300">{s.rivalBans}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+        <main className="p-8 pt-6">
+          {!team ? (
+            <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
+              Choose a team to see the data...
             </div>
-          </div>
-
-
-          {/* SECCIÓN DE KPIs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-
-            <KPICard
-              title="Draft Order"
-              label="A — B"
-              value={`${draftOrder.a} — ${draftOrder.b}`}
-            />
-
-            <KPICard
-              title="Pistol Rounds"
-              label={`${pistols.wins}W — ${pistols.total - pistols.wins}L`}
-              value={`${pistolRate}%`}
-            />
-
-            <KPICard
-              title="Post Pistol Win into Win"
-              label={`${antiEco.wins}W — ${antiEco.total - antiEco.wins}L`}
-              value={`${antiEcoRate}%`}
-            />
-            {/* Aquí podremos agregar más tarjetas luego */}
-
-            <KPICard
-              title="Post Pistol Loss into Win"
-              label={`${recovery.wins}W — ${recovery.total - recovery.wins}L`}
-              value={`${recoveryRate}%`}
-            />
-
-
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3">
-            <KPICard
-              title="PAB (Bonus conversion)"
-              label={`${pab.wins}W — ${pab.total - pab.wins}L`}
-              value={`${pabRateTotal}%`}
-            />
-
-            <KPICard
-              title="PAB Attack"
-              label={`${pab.atkWins}W — ${pab.atkTotal - pab.atkWins}L`}
-              value={`${pabRateAtk}%`}
-              variant='danger'
-            />
-
-            <KPICard
-              title="PAB Def"
-              label={`${pab.defWins}W — ${pab.defTotal - pab.defWins}L`}
-              value={`${pabRateDef}%`}
-              variant='success'
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
-          Selecciona al menos un equipo para ver datos
-        </div>
-      )}
-    </main>
+          ) : (
+            renderSection()
+          )}
+        </main>
+      </div>
+    </div>
   );
 }

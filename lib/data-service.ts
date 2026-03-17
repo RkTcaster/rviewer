@@ -59,7 +59,7 @@ export async function getTours(teamName?: string, regId?: string): Promise<Tourn
 export async function getMapStats(filters: { team: string; tour?: string; bo?: string; reg?: string; last?: string }): Promise<DashboardData> {
   let idQuery = supabase
     .from('draft')
-    .select('vlr_id, date')
+    .select('series_id, date')
     .or(`team.eq."${filters.team}",rival.eq."${filters.team}"`)
     .order('date', { ascending: false });
 
@@ -84,12 +84,12 @@ export async function getMapStats(filters: { team: string; tour?: string; bo?: s
   };
 
   const lastDate = idList[0].date
-  const recentIds = idList.map(item => item.vlr_id);
+  const recentIds = idList.map(item => item.series_id);
 
 
   // 2. Ahora traemos los Drafts y Rondas filtrados por esos IDs específicos
-  let draftQuery = supabase.from('draft').select('*').in('vlr_id', recentIds);
-  let roundsQuery = supabase.from('round_info').select('*').in('vlr_id', recentIds);
+  let draftQuery = supabase.from('draft').select('*').in('series_id', recentIds);
+  let roundsQuery = supabase.from('round_info').select('*').in('series_id', recentIds);
 
   const [{ data: drafts }, { data: rounds }] = await Promise.all([draftQuery, roundsQuery]);
 
@@ -169,7 +169,7 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Omit<Da
   // --- 2. PASO 1 RONDAS: Identificar resultados de Pistols (R1 y R13) ---
   // Hacemos este recorrido primero para que el Paso 2 tenga toda la info de pistols
   rounds.forEach((r) => {
-    const id = r["vlr_id-map"];
+    const id = r["map_id"];
     if (!id) return;
     if (!pistolResults[id]) pistolResults[id] = { r1: null, r13: null };
     if (!antiEcoResults[id]) antiEcoResults[id] = { r2: null, r14: null };
@@ -194,7 +194,7 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Omit<Da
   });
 
   rounds.forEach((r) => {
-    const id = r["vlr_id-map"];
+    const id = r["map_id"];
     const mapName = r.map;
     if (!id) return;
     initMap(mapName);
