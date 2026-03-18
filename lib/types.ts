@@ -44,6 +44,18 @@ export type Tournament = {
   reg_id?: string;
 };
 
+export type TeamRankStats = {
+  mapWins: number; mapPlayed: number;
+  attWins: number; attTotal: number;
+  defWins: number; defTotal: number;
+  pistolWins: number; pistolTotal: number;
+  antiEcoWins: number; antiEcoTotal: number;
+  recoveryWins: number; recoveryTotal: number;
+  pabWins: number; pabTotal: number;
+  pabAtkWins: number; pabAtkTotal: number;
+  pabDefWins: number; pabDefTotal: number;
+};
+
 export type DashboardData = {
   mapStats: MapStat[];
   draftOrder: {

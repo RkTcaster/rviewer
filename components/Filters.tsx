@@ -15,7 +15,8 @@ interface FiltersProps {
 export function Filters({ regions, teams, tours, tours2 = [] }: FiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isCompare = searchParams.get('section') === 'compare';
+  const section = searchParams.get('section');
+  const isCompare = section === 'compare-maps' || section === 'compare-stats';
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());

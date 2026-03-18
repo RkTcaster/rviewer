@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { DashboardData, MapStat, Region, Tournament } from './types';
+import { DashboardData, MapStat, Region, TeamRankStats, Tournament } from './types';
 
 // --- FILTERS  ---
 
@@ -52,6 +52,145 @@ export async function getTours(teamName?: string, regId?: string): Promise<Tourn
   }, []);
 
   return unique || [];
+}
+
+export async function getTournamentRankings(
+  filters: { tour?: string; reg?: string; bo?: string }
+): Promise<Record<string, TeamRankStats>> {
+  let idQuery = supabase.from('draft').select('series_id');
+  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
+  if (filters.reg) idQuery = idQuery.eq('reg_id', filters.reg);
+  if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
+
+  const { data: idList } = await idQuery;
+  if (!idList || idList.length === 0) return {};
+
+  const seriesIds = [...new Set(idList.map(x => x.series_id))];
+  const { data: rounds } = await supabase.from('round_info').select('*').in('series_id', seriesIds);
+  if (!rounds) return {};
+
+  const teamStats: Record<string, TeamRankStats> = {};
+  const mapLastRound: Record<string, any> = {};
+
+  // Per-map key rounds for antiEco/recovery/PAB calculation
+  type MapKeyRounds = {
+    teamA: string; teamB: string;
+    r1?: boolean; r2?: boolean; r3?: boolean; r3side?: string;
+    r13?: boolean; r14?: boolean; r15?: boolean; r15side?: string;
+  };
+  const mapKeyRounds: Record<string, MapKeyRounds> = {};
+
+  const init = (team: string) => {
+    if (!teamStats[team]) teamStats[team] = {
+      mapWins: 0, mapPlayed: 0,
+      attWins: 0, attTotal: 0,
+      defWins: 0, defTotal: 0,
+      pistolWins: 0, pistolTotal: 0,
+      antiEcoWins: 0, antiEcoTotal: 0,
+      recoveryWins: 0, recoveryTotal: 0,
+      pabWins: 0, pabTotal: 0,
+      pabAtkWins: 0, pabAtkTotal: 0,
+      pabDefWins: 0, pabDefTotal: 0,
+    };
+  };
+
+  // Single pass: atk/def, pistols, key rounds
+  rounds.forEach((r) => {
+    const id = r.map_id;
+    if (!id) return;
+    const tA = r.teamA?.trim();
+    const tB = r.teamB?.trim();
+    if (!tA || !tB) return;
+    init(tA); init(tB);
+
+    const roundNum = Number(r.round);
+    const wonA = Number(r.rndA) === 1;
+    const rawSide = r.side?.trim().toLowerCase();
+    const sideB = rawSide === 'atk' ? 'def' : 'atk';
+
+    if (!mapLastRound[id] || roundNum > Number(mapLastRound[id].round)) mapLastRound[id] = r;
+    if (!mapKeyRounds[id]) mapKeyRounds[id] = { teamA: tA, teamB: tB };
+
+    // Atk/Def rounds
+    if (rawSide === 'atk') { teamStats[tA].attTotal++; if (wonA) teamStats[tA].attWins++; }
+    else if (rawSide === 'def') { teamStats[tA].defTotal++; if (wonA) teamStats[tA].defWins++; }
+    if (sideB === 'atk') { teamStats[tB].attTotal++; if (!wonA) teamStats[tB].attWins++; }
+    else if (sideB === 'def') { teamStats[tB].defTotal++; if (!wonA) teamStats[tB].defWins++; }
+
+    // Pistols
+    if (roundNum === 1 || roundNum === 13) {
+      teamStats[tA].pistolTotal++;
+      teamStats[tB].pistolTotal++;
+      if (wonA) teamStats[tA].pistolWins++;
+      else teamStats[tB].pistolWins++;
+    }
+
+    // Store key rounds for 2nd pass
+    const kr = mapKeyRounds[id];
+    if (roundNum === 1)  { kr.r1 = wonA; }
+    if (roundNum === 2)  { kr.r2 = wonA; }
+    if (roundNum === 3)  { kr.r3 = wonA; kr.r3side = rawSide; }
+    if (roundNum === 13) { kr.r13 = wonA; }
+    if (roundNum === 14) { kr.r14 = wonA; }
+    if (roundNum === 15) { kr.r15 = wonA; kr.r15side = rawSide; }
+  });
+
+  // Map winners
+  Object.values(mapLastRound).forEach((finalRound: any) => {
+    const tA = finalRound.teamA?.trim();
+    const tB = finalRound.teamB?.trim();
+    if (!tA || !tB) return;
+    init(tA); init(tB);
+    teamStats[tA].mapPlayed++;
+    teamStats[tB].mapPlayed++;
+    if (Number(finalRound.rndA) === 1) teamStats[tA].mapWins++;
+    else teamStats[tB].mapWins++;
+  });
+
+  // Second pass: antiEco / recovery / PAB per half
+  function processHalf(
+    tA: string, tB: string,
+    pistolA: boolean | undefined,
+    r2A: boolean | undefined,
+    r3A: boolean | undefined,
+    r3SideA: string | undefined
+  ) {
+    if (pistolA === undefined) return;
+
+    if (r2A !== undefined) {
+      const r2B = !r2A;
+      // TeamA
+      if (pistolA) { teamStats[tA].antiEcoTotal++; if (r2A) teamStats[tA].antiEcoWins++; }
+      else         { teamStats[tA].recoveryTotal++; if (r2A) teamStats[tA].recoveryWins++; }
+      // TeamB
+      if (!pistolA) { teamStats[tB].antiEcoTotal++; if (r2B) teamStats[tB].antiEcoWins++; }
+      else          { teamStats[tB].recoveryTotal++; if (r2B) teamStats[tB].recoveryWins++; }
+    }
+
+    if (r2A !== undefined && r3A !== undefined) {
+      const r3B = !r3A;
+      const r3SideB = r3SideA === 'atk' ? 'def' : r3SideA === 'def' ? 'atk' : undefined;
+      // PAB teamA: won pistol AND anti-eco
+      if (pistolA && r2A) {
+        teamStats[tA].pabTotal++; if (r3A) teamStats[tA].pabWins++;
+        if (r3SideA === 'atk') { teamStats[tA].pabAtkTotal++; if (r3A) teamStats[tA].pabAtkWins++; }
+        else if (r3SideA === 'def') { teamStats[tA].pabDefTotal++; if (r3A) teamStats[tA].pabDefWins++; }
+      }
+      // PAB teamB: teamB won pistol (!pistolA) AND anti-eco (!r2A)
+      if (!pistolA && !r2A) {
+        teamStats[tB].pabTotal++; if (r3B) teamStats[tB].pabWins++;
+        if (r3SideB === 'atk') { teamStats[tB].pabAtkTotal++; if (r3B) teamStats[tB].pabAtkWins++; }
+        else if (r3SideB === 'def') { teamStats[tB].pabDefTotal++; if (r3B) teamStats[tB].pabDefWins++; }
+      }
+    }
+  }
+
+  Object.values(mapKeyRounds).forEach(({ teamA, teamB, r1, r2, r3, r3side, r13, r14, r15, r15side }) => {
+    processHalf(teamA, teamB, r1, r2, r3, r3side);
+    processHalf(teamA, teamB, r13, r14, r15, r15side);
+  });
+
+  return teamStats;
 }
 
 // --- Stats ---

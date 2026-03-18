@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -7,6 +7,7 @@ import { EconomySection } from '@/components/sections/EconomySection';
 import { ChartsSection } from '@/components/sections/ChartsSection';
 import { DraftSection } from '@/components/sections/DraftSection';
 import { CompareSection } from '@/components/sections/CompareSection';
+import { CompareStatsSection } from '@/components/sections/CompareStatsSection';
 
 export default async function Page({
   searchParams,
@@ -16,13 +17,19 @@ export default async function Page({
   const params = await searchParams;
   const { reg, team, tour, bo, last, section = 'maps', team2, tour2 } = params;
 
+  const isCompare = section === 'compare-maps' || section === 'compare-stats';
+
   const result = team
     ? await getMapStats({ team, tour, bo, reg, last })
     : null;
 
-  const resultB = (section === 'compare' && team2)
+  const resultB = (isCompare && team2)
     ? await getMapStats({ team: team2, tour: tour2, bo, reg, last })
     : null;
+
+  const rankings = (section === 'compare-stats')
+    ? await getTournamentRankings({ tour, reg, bo })
+    : {};
 
   const stats = result?.mapStats || [];
   const draftOrder = result?.draftOrder || { a: 0, b: 0 };
@@ -34,7 +41,7 @@ export default async function Page({
   const regions = await getRegions();
   const teams = await getTeams(reg);
   const tours = await getTours(team, reg);
-  const tours2 = section === 'compare' ? await getTours(team2, reg) : [];
+  const tours2 = isCompare ? await getTours(team2, reg) : [];
 
   function renderSection() {
     switch (section) {
@@ -44,13 +51,31 @@ export default async function Page({
         return <ChartsSection stats={stats} />;
       case 'draft':
         return <DraftSection draftOrder={draftOrder} stats={stats} />;
-      case 'compare':
+      case 'compare-maps':
         return (
           <CompareSection
             statsA={stats}
             statsB={resultB?.mapStats || []}
             teamAName={team || ''}
             teamBName={team2 || ''}
+          />
+        );
+      case 'compare-stats':
+        return (
+          <CompareStatsSection
+            statsA={stats}
+            statsB={resultB?.mapStats || []}
+            pistolsA={pistols}
+            pistolsB={resultB?.pistols || { wins: 0, total: 0 }}
+            antiEcoA={antiEco}
+            antiEcoB={resultB?.antiEco || { wins: 0, total: 0 }}
+            recoveryA={recovery}
+            recoveryB={resultB?.recovery || { wins: 0, total: 0 }}
+            pabA={pab}
+            pabB={resultB?.pab || { atkWins: 0, defWins: 0, wins: 0, atkTotal: 0, defTotal: 0, total: 0 }}
+            teamAName={team || ''}
+            teamBName={team2 || ''}
+            rankings={rankings}
           />
         );
       default:
