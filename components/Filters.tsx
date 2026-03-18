@@ -9,20 +9,21 @@ interface FiltersProps {
   regions: Region[];
   teams: string[];
   tours: Tournament[];
+  tours2?: Tournament[];
 }
 
-
-
-export function Filters({ regions, teams, tours }: FiltersProps) {
+export function Filters({ regions, teams, tours, tours2 = [] }: FiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isCompare = searchParams.get('section') === 'compare';
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set(key, value); else params.delete(key);
 
-    if (key === 'reg') { params.delete('team'); params.delete('tour'); }
+    if (key === 'reg') { params.delete('team'); params.delete('tour'); params.delete('team2'); params.delete('tour2'); }
     if (key === 'team') { params.delete('tour'); }
+    if (key === 'team2') { params.delete('tour2'); }
 
     router.push(`?${params.toString()}`);
   };
@@ -102,6 +103,29 @@ export function Filters({ regions, teams, tours }: FiltersProps) {
           <option value="10">Last 10</option>
         </select>
       </div>
+
+      {/* SEPARADOR + TEAM B (solo en modo compare) */}
+      {isCompare && (
+        <>
+          <div className="self-stretch border-l border-gray-700 mx-1" />
+
+          <SearchableSelect
+            label="Team B"
+            options={teams}
+            selected={searchParams.get('team2') || ''}
+            onChange={(val) => updateFilter('team2', val)}
+            placeholder="Choose Team B"
+          />
+
+          <SearchableMultiSelect
+            label="Tournament (B)"
+            options={tours2}
+            selected={searchParams.get('tour2')?.split(',').filter(x => x !== '') || []}
+            onChange={(values) => updateMultiFilter('tour2', values)}
+            disabled={!searchParams.get('team2')}
+          />
+        </>
+      )}
 
     </div>
   );

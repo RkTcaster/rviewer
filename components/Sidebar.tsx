@@ -1,13 +1,14 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { LayoutGrid, TrendingUp, BarChart2, Shuffle } from 'lucide-react';
+import { LayoutGrid, TrendingUp, BarChart2, Shuffle, GitCompareArrows } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'maps', label: 'Maps', icon: LayoutGrid },
   { id: 'economy', label: 'Economy', icon: TrendingUp },
   { id: 'charts', label: 'Charts', icon: BarChart2 },
   { id: 'draft', label: 'Draft', icon: Shuffle },
+  { id: 'compare', label: 'Compare', icon: GitCompareArrows },
 ];
 
 export function Sidebar() {

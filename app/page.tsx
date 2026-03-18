@@ -6,17 +6,22 @@ import { MapsSection } from '@/components/sections/MapsSection';
 import { EconomySection } from '@/components/sections/EconomySection';
 import { ChartsSection } from '@/components/sections/ChartsSection';
 import { DraftSection } from '@/components/sections/DraftSection';
+import { CompareSection } from '@/components/sections/CompareSection';
 
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ reg?: string; team?: string; tour?: string; bo?: string; last?: string; section?: string }>;
+  searchParams: Promise<{ reg?: string; team?: string; tour?: string; bo?: string; last?: string; section?: string; team2?: string; tour2?: string }>;
 }) {
   const params = await searchParams;
-  const { reg, team, tour, bo, last, section = 'maps' } = params;
+  const { reg, team, tour, bo, last, section = 'maps', team2, tour2 } = params;
 
   const result = team
     ? await getMapStats({ team, tour, bo, reg, last })
+    : null;
+
+  const resultB = (section === 'compare' && team2)
+    ? await getMapStats({ team: team2, tour: tour2, bo, reg, last })
     : null;
 
   const stats = result?.mapStats || [];
@@ -29,6 +34,7 @@ export default async function Page({
   const regions = await getRegions();
   const teams = await getTeams(reg);
   const tours = await getTours(team, reg);
+  const tours2 = section === 'compare' ? await getTours(team2, reg) : [];
 
   function renderSection() {
     switch (section) {
@@ -38,6 +44,15 @@ export default async function Page({
         return <ChartsSection stats={stats} />;
       case 'draft':
         return <DraftSection draftOrder={draftOrder} stats={stats} />;
+      case 'compare':
+        return (
+          <CompareSection
+            statsA={stats}
+            statsB={resultB?.mapStats || []}
+            teamAName={team || ''}
+            teamBName={team2 || ''}
+          />
+        );
       default:
         return <MapsSection stats={stats} />;
     }
@@ -60,7 +75,7 @@ export default async function Page({
             </p>
           )}
           <div className="mt-4">
-            <Filters regions={regions} teams={teams} tours={tours} />
+            <Filters regions={regions} teams={teams} tours={tours} tours2={tours2} />
           </div>
         </header>
 
