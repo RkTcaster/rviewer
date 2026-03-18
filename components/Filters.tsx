@@ -10,13 +10,15 @@ interface FiltersProps {
   teams: string[];
   tours: Tournament[];
   tours2?: Tournament[];
+  mode?: 'team' | 'overall';
 }
 
-export function Filters({ regions, teams, tours, tours2 = [] }: FiltersProps) {
+export function Filters({ regions, teams, tours, tours2 = [], mode = 'team' }: FiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const section = searchParams.get('section');
   const isCompare = section === 'compare-maps' || section === 'compare-stats';
+  const isOverall = mode === 'overall';
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -57,23 +59,25 @@ export function Filters({ regions, teams, tours, tours2 = [] }: FiltersProps) {
         </select>
       </div>
 
-      {/* EQUIPO */}
-    <SearchableSelect 
-      label="Team"
-      options={teams}
-      selected={searchParams.get('team') || ""}
-      onChange={(val) => updateFilter('team', val)}
-      placeholder="Choose a team"
-    />
+      {/* EQUIPO (solo modo team) */}
+      {!isOverall && (
+        <SearchableSelect
+          label="Team"
+          options={teams}
+          selected={searchParams.get('team') || ""}
+          onChange={(val) => updateFilter('team', val)}
+          placeholder="Choose a team"
+        />
+      )}
 
       {/* MULTISELECT TORNEO */}
-    <SearchableMultiSelect 
-      label="Tournament"
-      options={tours}
-      selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || []}
-      onChange={(values) => updateMultiFilter('tour', values)}
-      disabled={!searchParams.get('team')}
-    />
+      <SearchableMultiSelect
+        label="Tournament"
+        options={tours}
+        selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || []}
+        onChange={(values) => updateMultiFilter('tour', values)}
+        disabled={!isOverall && !searchParams.get('team')}
+      />
 
       {/* SERIE */}
       <div className="flex flex-col gap-1">
@@ -89,21 +93,23 @@ export function Filters({ regions, teams, tours, tours2 = [] }: FiltersProps) {
         </select>
       </div>
 
-      {/* SELECTOR: ÚLTIMAS PARTIDAS */}
-      <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Last X matches</label>
-        <select
-          value={searchParams.get('last') || "all"}
-          onChange={(e) => updateFilter('last', e.target.value)}
-          className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
-        >
-          <option value="all">All matches</option>
-          <option value="1">Last Match</option>
-          <option value="3">Last 3</option>
-          <option value="5">Last 5</option>
-          <option value="10">Last 10</option>
-        </select>
-      </div>
+      {/* SELECTOR: ÚLTIMAS PARTIDAS (solo modo team) */}
+      {!isOverall && (
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Last X matches</label>
+          <select
+            value={searchParams.get('last') || "all"}
+            onChange={(e) => updateFilter('last', e.target.value)}
+            className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
+          >
+            <option value="all">All matches</option>
+            <option value="1">Last Match</option>
+            <option value="3">Last 3</option>
+            <option value="5">Last 5</option>
+            <option value="10">Last 10</option>
+          </select>
+        </div>
+      )}
 
       {/* SEPARADOR + TEAM B (solo en modo compare) */}
       {isCompare && (

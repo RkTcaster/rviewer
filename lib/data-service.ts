@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { DashboardData, MapStat, Region, TeamRankStats, Tournament } from './types';
+import { DashboardData, MapStat, OverallMapStat, Region, TeamRankStats, Tournament } from './types';
 
 // --- FILTERS  ---
 
@@ -191,6 +191,53 @@ export async function getTournamentRankings(
   });
 
   return teamStats;
+}
+
+export async function getAllTours(regId?: string): Promise<Tournament[]> {
+  let query = supabase.from('tournament_played').select('tour_id, event, reg_id');
+  if (regId && regId !== '') query = query.eq('reg_id', regId);
+  const { data } = await query;
+  const unique = data?.reduce((acc: Tournament[], cur) => {
+    if (!acc.find(t => t.tour_id === cur.tour_id)) acc.push(cur);
+    return acc;
+  }, []);
+  return unique || [];
+}
+
+export async function getOverallMapPicks(
+  filters: { reg?: string; tour?: string; bo?: string }
+): Promise<OverallMapStat[]> {
+  let query = supabase.from('draft').select('*');
+  if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
+  if (filters.reg) query = query.eq('reg_id', filters.reg);
+  if (filters.bo && filters.bo !== 'all') query = query.eq('bo', parseInt(filters.bo));
+
+  const { data: drafts } = await query;
+  if (!drafts) return [];
+
+  const stats: Record<string, OverallMapStat> = {};
+  const init = (map: string) => {
+    if (map && !stats[map]) stats[map] = { mapName: map, picks: 0, bans: 0, deciders: 0 };
+  };
+
+  drafts.forEach((m) => {
+    const bo = Number(m.bo);
+    if (m.team_1_select_2) { init(m.team_1_select_2); stats[m.team_1_select_2].picks++; }
+    if (m.team_2_select_2) { init(m.team_2_select_2); stats[m.team_2_select_2].picks++; }
+    if (bo === 5) {
+      if (m.team_1_select_3) { init(m.team_1_select_3); stats[m.team_1_select_3].picks++; }
+      if (m.team_2_select_3) { init(m.team_2_select_3); stats[m.team_2_select_3].picks++; }
+    }
+    if (m.team_1_select_1) { init(m.team_1_select_1); stats[m.team_1_select_1].bans++; }
+    if (m.team_2_select_1) { init(m.team_2_select_1); stats[m.team_2_select_1].bans++; }
+    if (bo === 3) {
+      if (m.team_1_select_3) { init(m.team_1_select_3); stats[m.team_1_select_3].bans++; }
+      if (m.team_2_select_3) { init(m.team_2_select_3); stats[m.team_2_select_3].bans++; }
+    }
+    if (m.decider) { init(m.decider); stats[m.decider].deciders++; }
+  });
+
+  return Object.values(stats).sort((a, b) => b.picks - a.picks);
 }
 
 // --- Stats ---

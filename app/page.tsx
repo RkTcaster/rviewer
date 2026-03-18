@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -8,6 +8,8 @@ import { ChartsSection } from '@/components/sections/ChartsSection';
 import { DraftSection } from '@/components/sections/DraftSection';
 import { CompareSection } from '@/components/sections/CompareSection';
 import { CompareStatsSection } from '@/components/sections/CompareStatsSection';
+import { MapPicksSection } from '@/components/sections/MapPicksSection';
+import { AgentPicksSection } from '@/components/sections/AgentPicksSection';
 
 export default async function Page({
   searchParams,
@@ -17,9 +19,11 @@ export default async function Page({
   const params = await searchParams;
   const { reg, team, tour, bo, last, section = 'maps', team2, tour2 } = params;
 
+  const isOverall = section === 'map-picks' || section === 'agent-picks';
   const isCompare = section === 'compare-maps' || section === 'compare-stats';
 
-  const result = team
+  // Team data (only for team sections)
+  const result = (!isOverall && team)
     ? await getMapStats({ team, tour, bo, reg, last })
     : null;
 
@@ -31,6 +35,11 @@ export default async function Page({
     ? await getTournamentRankings({ tour, reg, bo })
     : {};
 
+  // Overall data (only for overall sections)
+  const overallMapStats = (section === 'map-picks')
+    ? await getOverallMapPicks({ reg, tour, bo })
+    : [];
+
   const stats = result?.mapStats || [];
   const draftOrder = result?.draftOrder || { a: 0, b: 0 };
   const pistols = result?.pistols || { wins: 0, total: 0 };
@@ -40,11 +49,16 @@ export default async function Page({
 
   const regions = await getRegions();
   const teams = await getTeams(reg);
-  const tours = await getTours(team, reg);
+  // Tours source differs: overall uses all tours, team uses team-specific tours
+  const tours = isOverall ? await getAllTours(reg) : await getTours(team, reg);
   const tours2 = isCompare ? await getTours(team2, reg) : [];
 
   function renderSection() {
     switch (section) {
+      case 'map-picks':
+        return <MapPicksSection stats={overallMapStats} />;
+      case 'agent-picks':
+        return <AgentPicksSection />;
       case 'economy':
         return <EconomySection pistols={pistols} antiEco={antiEco} recovery={recovery} pab={pab} />;
       case 'charts':
@@ -100,12 +114,20 @@ export default async function Page({
             </p>
           )}
           <div className="mt-4">
-            <Filters regions={regions} teams={teams} tours={tours} tours2={tours2} />
+            <Filters
+              regions={regions}
+              teams={teams}
+              tours={tours}
+              tours2={tours2}
+              mode={isOverall ? 'overall' : 'team'}
+            />
           </div>
         </header>
 
         <main className="p-8 pt-6">
-          {!team ? (
+          {isOverall ? (
+            renderSection()
+          ) : !team ? (
             <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
               Choose a team to see the data...
             </div>
