@@ -133,7 +133,7 @@ export function AgentPicksSection({ stats }: Props) {
               {filtered.map((entry, i) => (
                 <Cell key={i} fill={entry.pickRate >= 50 ? '#22c55e' : entry.pickRate >= 25 ? '#f59e0b' : '#6b7280'} />
               ))}
-              <LabelList dataKey="pickRate" position="right" formatter={(v: number) => `${v}%`} style={{ fill: '#9ca3af', fontSize: 11 }} />
+              <LabelList dataKey="pickRate" position="right" formatter={(v: unknown) => `${v}%`} style={{ fill: '#9ca3af', fontSize: 11 }} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
