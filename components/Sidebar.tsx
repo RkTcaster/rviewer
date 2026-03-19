@@ -8,7 +8,7 @@ const NAV_SECTIONS = [
     title: 'Overall',
     items: [
       { id: 'map-picks',   label: 'Map Picks',   icon: Map },
-      { id: 'agent-picks', label: 'Agent Picks',  icon: Users },
+      { id: 'agent-picks',   label: 'Agent Picks',   icon: Users },
     ],
   },
   {
@@ -64,7 +64,7 @@ export function Sidebar() {
                     onClick={() => navigate(id)}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all text-left
                       ${active
-                        ? 'bg-[#1a1d23] text-white border-l-2 border-blue-500 pl-[10px]'
+                        ? 'bg-[#1a1d23] text-white border-l-2 border-blue-500 pl-[10px] shadow-[inset_0_0_12px_rgba(59,130,246,0.08)]'
                         : 'text-gray-400 hover:text-gray-200 hover:bg-[#1a1d23]/60'
                       }`}
                   >

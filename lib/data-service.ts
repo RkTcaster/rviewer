@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { DashboardData, MapStat, OverallMapStat, Region, TeamRankStats, Tournament } from './types';
+import { AgentPickStat, CompositionStat, DashboardData, MapStat, OverallMapStat, Region, TeamRankStats, Tournament } from './types';
 
 // --- FILTERS  ---
 
@@ -12,8 +12,11 @@ export async function getRegions(): Promise<Region[]> {
     .select('reg_id, region')
     .order('region');
 
-  if (error) return [];
-  return data;
+  if (error) {
+    console.error('[getRegions] Supabase error:', error);
+    return [];
+  }
+  return data ?? [];
 }
 
 export async function getTeams(regId?: string): Promise<string[]> {
@@ -238,6 +241,104 @@ export async function getOverallMapPicks(
   });
 
   return Object.values(stats).sort((a, b) => b.picks - a.picks);
+}
+
+export async function getAgentPickStats(
+  filters: { reg?: string; tour?: string; bo?: string }
+): Promise<AgentPickStat[]> {
+  // If bo filter is set, pre-fetch valid series_ids from draft
+  let seriesIds: string[] | null = null;
+  if (filters.bo && filters.bo !== 'all') {
+    let draftQuery = supabase.from('draft').select('series_id').eq('bo', parseInt(filters.bo));
+    if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
+    if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
+    const { data: draftData } = await draftQuery;
+    if (!draftData || draftData.length === 0) return [];
+    seriesIds = [...new Set(draftData.map((d: any) => d.series_id))];
+  }
+
+  function applyFilters(q: any) {
+    if (filters.tour) q = q.in('tour_id', filters.tour.split(','));
+    if (filters.reg)  q = q.eq('reg_id', filters.reg);
+    if (seriesIds)    q = q.in('series_id', seriesIds);
+    return q;
+  }
+
+  // Two parallel queries: map counts (light) + agent picks (full)
+  const [{ data: mapRows }, { data: agentRows }] = await Promise.all([
+    applyFilters(supabase.from('player_stats').select('map, map_id').limit(50000)),
+    applyFilters(supabase.from('player_stats').select('map, agent').limit(50000)),
+  ]);
+
+  if (!mapRows || mapRows.length === 0) return [];
+
+  // Count unique map instances per map name (map_id is globally unique)
+  const uniqueMapIds: Record<string, Set<string>> = {};
+  for (const row of mapRows) {
+    if (!row.map || !row.map_id) continue;
+    if (!uniqueMapIds[row.map]) uniqueMapIds[row.map] = new Set();
+    uniqueMapIds[row.map].add(row.map_id);
+  }
+
+  // Count agent plays per (map, agent)
+  const agentCounts: Record<string, number> = {};
+  for (const row of agentRows ?? []) {
+    if (!row.map || !row.agent) continue;
+    const key = `${row.map}__${row.agent}`;
+    agentCounts[key] = (agentCounts[key] || 0) + 1;
+  }
+
+  const results: AgentPickStat[] = [];
+  for (const [key, count] of Object.entries(agentCounts)) {
+    const [mapName, agent] = key.split('__');
+    const totalMaps = uniqueMapIds[mapName]?.size ?? 0;
+    const pickRate = totalMaps > 0 ? Math.round((count / (totalMaps * 2)) * 100) : 0;
+    results.push({ agent, map: mapName, timesPlayed: count, pickRate, totalMaps });
+  }
+
+  return results.sort((a, b) => {
+    const mapCmp = a.map.localeCompare(b.map);
+    return mapCmp !== 0 ? mapCmp : b.pickRate - a.pickRate;
+  });
+}
+
+export async function getOverallCompositions(
+  filters: { team?: string; reg?: string; tour?: string; bo?: string; last?: string }
+): Promise<CompositionStat[]> {
+  let query = supabase
+    .from('player_stats')
+    .select('team, map, series_id, map_id, agent, reg_id, tour_id');
+
+  if (filters.team) query = query.eq('team', filters.team);
+  if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
+  if (filters.reg)  query = query.eq('reg_id', filters.reg);
+
+  const { data: rows } = await query;
+  if (!rows || rows.length === 0) return [];
+
+  // Group rows by (team, map, series_id, map_id) → collect agents
+  const grouped: Record<string, string[]> = {};
+  for (const row of rows) {
+    const key = `${row.team}__${row.map}__${row.series_id}__${row.map_id}`;
+    if (!grouped[key]) grouped[key] = [];
+    if (row.agent) grouped[key].push(row.agent);
+  }
+
+  // Build (map, composition) counts
+  const countMap: Record<string, CompositionStat> = {};
+  for (const [key, agents] of Object.entries(grouped)) {
+    if (agents.length === 0) continue;
+    const mapName = key.split('__')[1];
+    const composition = agents.slice().sort().join(', ');
+    const countKey = `${mapName}__${composition}`;
+    if (!countMap[countKey]) countMap[countKey] = { map: mapName, composition, played: 0 };
+    countMap[countKey].played++;
+  }
+
+  return Object.values(countMap).sort((a, b) => {
+    const mapCmp = a.map.localeCompare(b.map);
+    return mapCmp !== 0 ? mapCmp : b.played - a.played;
+  });
 }
 
 // --- Stats ---

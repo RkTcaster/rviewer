@@ -63,6 +63,20 @@ export type TeamRankStats = {
   pabDefWins: number; pabDefTotal: number;
 };
 
+export type CompositionStat = {
+  map: string;
+  composition: string;
+  played: number;
+};
+
+export type AgentPickStat = {
+  agent: string;
+  map: string;
+  timesPlayed: number;
+  pickRate: number;
+  totalMaps: number;
+};
+
 export type DashboardData = {
   mapStats: MapStat[];
   draftOrder: {

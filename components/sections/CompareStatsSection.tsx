@@ -202,12 +202,6 @@ export function CompareStatsSection({
       valB: pct(antiEcoB.wins, antiEcoB.total),     winsB: antiEcoB.wins,   totalB: antiEcoB.total,
     },
     {
-      label: 'Post Pistol Into Loss', key: 'recovery',
-      valA: pct(recoveryA.wins, recoveryA.total),   winsA: recoveryA.wins,  totalA: recoveryA.total,
-      valB: pct(recoveryB.wins, recoveryB.total),   winsB: recoveryB.wins,  totalB: recoveryB.total,
-      lowerIsBetter: true,
-    },
-    {
       label: 'Bonus Conversion (PAB)', key: 'pab',
       valA: pct(pabA.wins, pabA.total),             winsA: pabA.wins,       totalA: pabA.total,
       valB: pct(pabB.wins, pabB.total),             winsB: pabB.wins,       totalB: pabB.total,

@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -40,6 +40,14 @@ export default async function Page({
     ? await getOverallMapPicks({ reg, tour, bo })
     : [];
 
+  const compositionsData = (section === 'maps' && team)
+    ? await getOverallCompositions({ team, reg, tour, bo, last })
+    : [];
+
+  const agentPickStats = (section === 'agent-picks')
+    ? await getAgentPickStats({ reg, tour, bo })
+    : [];
+
   const stats = result?.mapStats || [];
   const draftOrder = result?.draftOrder || { a: 0, b: 0 };
   const pistols = result?.pistols || { wins: 0, total: 0 };
@@ -58,7 +66,7 @@ export default async function Page({
       case 'map-picks':
         return <MapPicksSection stats={overallMapStats} />;
       case 'agent-picks':
-        return <AgentPicksSection />;
+        return <AgentPicksSection stats={agentPickStats} />;
       case 'economy':
         return <EconomySection pistols={pistols} antiEco={antiEco} recovery={recovery} pab={pab} />;
       case 'charts':
@@ -93,7 +101,7 @@ export default async function Page({
           />
         );
       default:
-        return <MapsSection stats={stats} />;
+        return <MapsSection stats={stats} compositions={compositionsData} />;
     }
   }
 
@@ -103,6 +111,11 @@ export default async function Page({
       <div className="flex-1 flex flex-col min-w-0">
         <header className="p-8 pb-0">
           <h1 className="text-4xl font-bold text-gray-100">VCT Team stats</h1>
+          {reg && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">
+              {regions.find(r => r.reg_id === reg)?.region ?? reg}
+            </span>
+          )}
           {result?.lastMatchData && (
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
               Last team match date:{' '}
