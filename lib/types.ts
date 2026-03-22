@@ -77,6 +77,7 @@ export type CompositionStat = {
   map: string;
   composition: string;
   played: number;
+  teams?: { team: string; played: number }[];
 };
 
 export type AgentPickStat = {

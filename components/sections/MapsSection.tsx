@@ -10,9 +10,10 @@ type SortDir = 'asc' | 'desc';
 interface Props {
   stats: MapStat[];
   compositions: CompositionStat[];
+  agentImages: Record<string, string>;
 }
 
-export function MapsSection({ stats, compositions }: Props) {
+export function MapsSection({ stats, compositions, agentImages }: Props) {
   const compsByMap = compositions.reduce<Record<string, CompositionStat[]>>((acc, c) => {
     if (!acc[c.map]) acc[c.map] = [];
     acc[c.map].push(c);
@@ -127,11 +128,21 @@ export function MapsSection({ stats, compositions }: Props) {
                   <td className="p-4 bg-purple-900/10 min-w-[260px]">
                     {(compsByMap[s.mapName] ?? []).length === 0
                       ? <span className="text-gray-600 text-xs italic">Map not played</span>
-                      : (compsByMap[s.mapName] ?? []).map((c) => (
-                          <div key={c.composition} className="text-gray-300 font-mono text-xs leading-5">
-                            {c.composition} <span className="text-purple-400">({c.played})</span>
-                          </div>
-                        ))
+                      : (compsByMap[s.mapName] ?? []).map((c) => {
+                          const agents = c.composition.split(', ');
+                          const allHaveIcons = agents.every(a => agentImages[a]);
+                          return (
+                            <div key={c.composition} className="flex items-center gap-1 leading-5">
+                              {allHaveIcons
+                                ? agents.map((agent, i) => (
+                                    <img key={i} src={agentImages[agent]} alt={agent} title={agent} className="w-[25px] h-[25px] rounded" />
+                                  ))
+                                : <span className="text-gray-300 font-mono text-xs">{c.composition}</span>
+                              }
+                              <span className="text-purple-400 text-xs">({c.played})</span>
+                            </div>
+                          );
+                        })
                     }
                   </td>
                 </tr>

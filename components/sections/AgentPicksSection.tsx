@@ -135,6 +135,8 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
   }, [compositions, selectedMap]);
 
   const chartHeight = Math.max(300, filtered.length * 36);
+  const maxPickRate = Math.max(10, ...filtered.map(d => d.pickRate));
+  const xDomain: [number, number] = [0, maxPickRate];
 
   if (stats.length === 0) {
     return (
@@ -180,7 +182,7 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#2d3139" />
               <XAxis
                 type="number"
-                domain={[0, 100]}
+                domain={xDomain}
                 tickFormatter={(v) => `${v}%`}
                 stroke="#6b7280"
                 fontSize={11}
@@ -227,17 +229,41 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
                         <img src={mapImages[map]} alt={map} className="w-[100px] h-[55px] object-cover rounded opacity-80" />
                       )}
                       <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wide text-center leading-tight">{map}</span>
+                      {/* Stats below map image only when a map is selected */}
+                      {selectedMap && mapFullStats[map] && (() => {
+                        const s = mapFullStats[map];
+                        const atk = s.attTotal > 0 ? Math.round(s.attWins / s.attTotal * 100) : 0;
+                        const def = s.defTotal > 0 ? Math.round(s.defWins / s.defTotal * 100) : 0;
+                        return (
+                          <div className="flex flex-col items-center gap-0.5 w-full mt-1">
+                            <span className="text-[11px] font-bold text-green-400">ATK {atk}%</span>
+                            <span className="text-[11px] font-bold text-red-400">DEF {def}%</span>
+                            <span className="text-[10px] text-gray-400">P {s.picks} · B {s.bans}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
-                    {/* Compositions + stats column */}
-                    <div className="flex flex-col gap-1.5 justify-center">
+                    {/* Compositions column */}
+                    <div className="flex flex-col gap-1.5 justify-center flex-1 min-w-0">
                       {comps.map((c, i) => (
-                        <div key={i} className="flex items-center gap-1.5">
+                        <div key={i} className="flex items-center gap-1.5 flex-wrap">
                           <CompositionIcons composition={c.composition} agentImages={agentImages} />
                           <span className="text-gray-500 text-xs shrink-0">({c.played})</span>
+                          {selectedMap && c.teams && c.teams.length > 0 && (
+                            <span className="text-[10px] text-gray-400 leading-tight">
+                              {c.teams.map((t, j) => (
+                                <span key={j}>
+                                  {j > 0 && <span className="text-gray-600">, </span>}
+                                  {t.team} <span className="text-gray-600">({t.played})</span>
+                                </span>
+                              ))}
+                            </span>
+                          )}
                         </div>
                       ))}
                     </div>
-                    {mapFullStats[map] && (() => {
+                    {/* Stats column (all-maps view only) */}
+                    {!selectedMap && mapFullStats[map] && (() => {
                       const s = mapFullStats[map];
                       const atk = s.attTotal > 0 ? Math.round(s.attWins / s.attTotal * 100) : 0;
                       const def = s.defTotal > 0 ? Math.round(s.defWins / s.defTotal * 100) : 0;

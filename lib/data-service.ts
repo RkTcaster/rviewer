@@ -262,7 +262,7 @@ export async function getOverallMapPicks(
 }
 
 export async function getAgentPickStats(
-  filters: { reg?: string; tour?: string; bo?: string }
+  filters: { reg?: string; tour?: string; bo?: string; team?: string }
 ): Promise<AgentPickStat[]> {
   // If bo filter is set, pre-fetch valid series_ids from draft
   let seriesIds: string[] | null = null;
@@ -280,6 +280,38 @@ export async function getAgentPickStats(
     if (filters.reg)  q = q.eq('reg_id', filters.reg);
     if (seriesIds)    q = q.in('series_id', seriesIds);
     return q;
+  }
+
+  // Team branch: single query from player_stats, totalMaps from map_id (denominator = totalMaps, not *2)
+  if (filters.team) {
+    const rows = await fetchAllPages<{ map: string; map_id: string; agent: string }>((from, to) =>
+      applyFilters(supabase.from('player_stats').select('map, map_id, agent')).eq('team', filters.team!).range(from, to)
+    );
+    if (!rows || rows.length === 0) return [];
+
+    const uniqueMapIds: Record<string, Set<string>> = {};
+    const agentCounts: Record<string, number> = {};
+    for (const row of rows) {
+      if (!row.map || !row.map_id) continue;
+      if (!uniqueMapIds[row.map]) uniqueMapIds[row.map] = new Set();
+      uniqueMapIds[row.map].add(row.map_id);
+      if (row.agent) {
+        const key = `${row.map}__${row.agent}`;
+        agentCounts[key] = (agentCounts[key] || 0) + 1;
+      }
+    }
+
+    const results: AgentPickStat[] = [];
+    for (const [key, count] of Object.entries(agentCounts)) {
+      const [mapName, agent] = key.split('__');
+      const totalMaps = uniqueMapIds[mapName]?.size ?? 0;
+      const pickRate = totalMaps > 0 ? Math.round((count / totalMaps) * 100) : 0;
+      results.push({ agent, map: mapName, timesPlayed: count, pickRate, totalMaps });
+    }
+    return results.sort((a, b) => {
+      const mapCmp = a.map.localeCompare(b.map);
+      return mapCmp !== 0 ? mapCmp : b.pickRate - a.pickRate;
+    });
   }
 
   // Two parallel queries: map counts from maps_id table + agent picks
@@ -346,18 +378,24 @@ export async function getOverallCompositions(
     if (row.agent) grouped[key].push(row.agent);
   }
 
-  // Build (map, composition) counts
-  const countMap: Record<string, CompositionStat> = {};
+  // Build (map, composition) counts + teams
+  const countMap: Record<string, CompositionStat & { teamCounts: Record<string, number> }> = {};
   for (const [key, agents] of Object.entries(grouped)) {
     if (agents.length === 0) continue;
-    const mapName = key.split('__')[1];
+    const [team, mapName] = key.split('__');
     const composition = agents.slice().sort().join(', ');
     const countKey = `${mapName}__${composition}`;
-    if (!countMap[countKey]) countMap[countKey] = { map: mapName, composition, played: 0 };
+    if (!countMap[countKey]) countMap[countKey] = { map: mapName, composition, played: 0, teamCounts: {} };
     countMap[countKey].played++;
+    countMap[countKey].teamCounts[team] = (countMap[countKey].teamCounts[team] || 0) + 1;
   }
 
-  return Object.values(countMap).sort((a, b) => {
+  return Object.values(countMap).map(({ teamCounts, ...rest }) => ({
+    ...rest,
+    teams: Object.entries(teamCounts)
+      .map(([team, played]) => ({ team, played }))
+      .sort((a, b) => b.played - a.played),
+  })).sort((a, b) => {
     const mapCmp = a.map.localeCompare(b.map);
     return mapCmp !== 0 ? mapCmp : b.played - a.played;
   });

@@ -23,7 +23,7 @@ function WrCell({ wins, played }: { wins: number; played: number }) {
   return (
     <div className="flex flex-col items-center">
       <span className={`font-bold ${w >= 50 ? 'text-green-500' : 'text-red-400'}`}>{w}%</span>
-      <span className="text-[10px] text-gray-400">({wins}W - {played - wins}L)</span>
+      <span className="text-[11.5px] text-gray-400">({wins}W - {played - wins}L)</span>
     </div>
   );
 }
@@ -34,7 +34,7 @@ function SideCell({ wins, total }: { wins: number; total: number }) {
   return (
     <div className="flex flex-col items-center">
       <span className="font-bold">{r}%</span>
-      <span className="text-[10px] text-gray-400">({wins}W - {total - wins}L)</span>
+      <span className="text-[11.5px] text-gray-400">({wins}W - {total - wins}L)</span>
     </div>
   );
 }
@@ -60,8 +60,8 @@ export function CompareSection({ statsA, statsB, teamAName, teamBName }: Props) 
       ) : (
         <div className="bg-[#1a1d23] rounded-xl shadow-2xl overflow-hidden border border-gray-800">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-[12px]">
-              <thead className="bg-[#0f1115] text-gray-400 text-[10px] uppercase tracking-widest">
+            <table className="w-full text-left border-collapse text-[13.8px]">
+              <thead className="bg-[#0f1115] text-gray-400 text-[11.5px] uppercase tracking-widest">
                 {/* Team name labels */}
                 <tr>
                   <th colSpan={6} className="py-2 text-center text-blue-300 border-b border-gray-700 font-bold tracking-wider">
@@ -78,11 +78,11 @@ export function CompareSection({ statsA, statsB, teamAName, teamBName }: Props) 
                   <th className={`${th} bg-blue-900/30 text-blue-400`}>Decider</th>
                   <th className={`${th} bg-green-900/30 text-green-400`}>
                     <div>Picks</div>
-                    <div className="text-[9px] text-gray-500 normal-case font-normal">Pick · Rival</div>
+                    <div className="text-[10.5px] text-gray-500 normal-case font-normal">Pick · Rival</div>
                   </th>
                   <th className={`${th} bg-red-900/30 text-red-400`}>
                     <div>Bans</div>
-                    <div className="text-[9px] text-gray-500 normal-case font-normal">Ban · Rival</div>
+                    <div className="text-[10.5px] text-gray-500 normal-case font-normal">Ban · Rival</div>
                   </th>
                   <th className={`${th} bg-rose-900/80`}>Atk Side</th>
                   <th className={`${th} bg-green-800/80`}>Def Side</th>
@@ -97,11 +97,11 @@ export function CompareSection({ statsA, statsB, teamAName, teamBName }: Props) 
                   <th className={`${th} bg-rose-900/80`}>Atk Side</th>
                   <th className={`${th} bg-red-900/30 text-red-400`}>
                     <div>Bans</div>
-                    <div className="text-[9px] text-gray-500 normal-case font-normal">Ban · Rival</div>
+                    <div className="text-[10.5px] text-gray-500 normal-case font-normal">Ban · Rival</div>
                   </th>
                   <th className={`${th} bg-green-900/30 text-green-400`}>
                     <div>Picks</div>
-                    <div className="text-[9px] text-gray-500 normal-case font-normal">Pick · Rival</div>
+                    <div className="text-[10.5px] text-gray-500 normal-case font-normal">Pick · Rival</div>
                   </th>
                   <th className={`${th} bg-blue-900/30 text-blue-400`}>Decider</th>
                 </tr>
@@ -118,11 +118,11 @@ export function CompareSection({ statsA, statsB, teamAName, teamBName }: Props) 
                       </td>
                       <td className="p-3 text-center bg-green-900/10">
                         <div className="font-bold text-green-400">{sa.picks}</div>
-                        <div className="text-[10px] text-gray-500">{sa.rivalPicks}</div>
+                        <div className="text-[11.5px] text-gray-500">{sa.rivalPicks}</div>
                       </td>
                       <td className="p-3 text-center bg-red-900/10">
                         <div className="font-bold text-red-400">{sa.bans}</div>
-                        <div className="text-[10px] text-gray-500">{sa.rivalBans}</div>
+                        <div className="text-[11.5px] text-gray-500">{sa.rivalBans}</div>
                       </td>
                       <td className="p-3 text-center bg-[#1a1d23]">
                         <SideCell wins={sa.attWins} total={sa.attTotal} />
@@ -149,11 +149,11 @@ export function CompareSection({ statsA, statsB, teamAName, teamBName }: Props) 
                       </td>
                       <td className="p-3 text-center bg-red-900/10">
                         <div className="font-bold text-red-400">{sb.bans}</div>
-                        <div className="text-[10px] text-gray-500">{sb.rivalBans}</div>
+                        <div className="text-[11.5px] text-gray-500">{sb.rivalBans}</div>
                       </td>
                       <td className="p-3 text-center bg-green-900/10">
                         <div className="font-bold text-green-400">{sb.picks}</div>
-                        <div className="text-[10px] text-gray-500">{sb.rivalPicks}</div>
+                        <div className="text-[11.5px] text-gray-500">{sb.rivalPicks}</div>
                       </td>
                       <td className="p-3 text-center text-blue-400 font-bold bg-blue-900/10">
                         {sb.deciders || <span className="text-gray-600">-</span>}

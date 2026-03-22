@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound } from 'lucide-react';
+import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp } from 'lucide-react';
 
 const NAV_SECTIONS = [
   {
@@ -9,6 +9,7 @@ const NAV_SECTIONS = [
     items: [
       { id: 'map-picks',   label: 'Map Picks',   icon: Map },
       { id: 'agent-picks',   label: 'Agent Picks',   icon: Users },
+      { id: 'meta-shift',    label: 'Meta Shift',    icon: TrendingUp },
     ],
   },
   {
@@ -31,13 +32,14 @@ export function Sidebar() {
     const params = new URLSearchParams(searchParams.toString());
     params.set('section', section);
 
-    const goingOverall = section === 'map-picks' || section === 'agent-picks';
+    const goingOverall = section === 'map-picks' || section === 'agent-picks' || section === 'meta-shift';
     if (goingOverall) {
       params.delete('team');
       params.delete('tour');
       params.delete('last');
       params.delete('team2');
       params.delete('tour2');
+      params.delete('reg2');
     }
 
     router.push(`?${params.toString()}`);

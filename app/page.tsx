@@ -11,20 +11,22 @@ import { CompareStatsSection } from '@/components/sections/CompareStatsSection';
 import { MapPicksSection } from '@/components/sections/MapPicksSection';
 import { AgentPicksSection } from '@/components/sections/AgentPicksSection';
 import { PlayerStatsSection } from '@/components/sections/PlayerStatsSection';
+import { MetaShiftSection } from '@/components/sections/MetaShiftSection';
 
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ reg?: string; team?: string; tour?: string; bo?: string; last?: string; section?: string; team2?: string; tour2?: string }>;
+  searchParams: Promise<{ reg?: string; team?: string; tour?: string; bo?: string; last?: string; section?: string; team2?: string; tour2?: string; reg2?: string }>;
 }) {
   const params = await searchParams;
-  const { reg, team, tour, bo, last, section = 'maps', team2, tour2 } = params;
+  const { reg, team, tour, bo, last, section = 'maps', team2, tour2, reg2 } = params;
 
   const isOverall = section === 'map-picks' || section === 'agent-picks';
   const isCompare = section === 'compare-maps' || section === 'compare-stats';
+  const isMetaShift = section === 'meta-shift';
 
   // Team data (only for team sections)
-  const result = (!isOverall && team)
+  const result = (!isOverall && !isMetaShift && team)
     ? await getMapStats({ team, tour, bo, reg, last })
     : null;
 
@@ -57,13 +59,21 @@ export default async function Page({
     ? await getMapImages()
     : {};
 
-  const agentImages = (section === 'agent-picks')
+  const agentImages = (section === 'agent-picks' || section === 'maps' || isMetaShift)
     ? await getAgentImages()
     : {};
 
   const mapFullStats = (section === 'agent-picks')
     ? await getOverallMapFullStats({ reg, tour, bo })
     : {};
+
+  const agentPickStatsLeft = isMetaShift
+    ? await getAgentPickStats({ reg, tour, bo, team: team || undefined })
+    : [];
+
+  const agentPickStatsRight = isMetaShift
+    ? await getAgentPickStats({ reg: reg2, tour: tour2, bo, team: team2 || undefined })
+    : [];
 
   const playerStats = (section === 'player-stats' && team)
     ? await getPlayerStats({ team, reg, tour, bo })
@@ -82,9 +92,14 @@ export default async function Page({
 
   const regions = await getRegions();
   const teams = await getTeams(reg);
-  // Tours source differs: overall uses all tours, team uses team-specific tours
-  const tours = isOverall ? await getAllTours(reg) : await getTours(team, reg);
-  const tours2 = isCompare ? await getTours(team2, reg) : [];
+  const teams2 = isMetaShift ? await getTeams(reg2) : [];
+  // Tours source differs by context
+  const tours = (isOverall || isMetaShift) ? await getAllTours(reg) : await getTours(team, reg);
+  const tours2 = isCompare
+    ? await getTours(team2, reg)
+    : isMetaShift
+      ? (team2 ? await getTours(team2, reg2) : await getAllTours(reg2))
+      : [];
 
   function renderSection() {
     switch (section) {
@@ -92,6 +107,8 @@ export default async function Page({
         return <MapPicksSection stats={overallMapStats} />;
       case 'agent-picks':
         return <AgentPicksSection stats={agentPickStats} compositions={agentCompositions} mapImages={mapImages} agentImages={agentImages} mapFullStats={mapFullStats} />;
+      case 'meta-shift':
+        return <MetaShiftSection statsLeft={agentPickStatsLeft} statsRight={agentPickStatsRight} agentImages={agentImages} />;
       case 'player-stats':
         return <PlayerStatsSection stats={playerStats} tournamentAvg={tournamentPlayerAvg} />;
       case 'economy':
@@ -128,7 +145,7 @@ export default async function Page({
           />
         );
       default:
-        return <MapsSection stats={stats} compositions={compositionsData} />;
+        return <MapsSection stats={stats} compositions={compositionsData} agentImages={agentImages} />;
     }
   }
 
@@ -159,13 +176,14 @@ export default async function Page({
               teams={teams}
               tours={tours}
               tours2={tours2}
-              mode={isOverall ? 'overall' : 'team'}
+              teams2={teams2}
+              mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : 'team'}
             />
           </div>
         </header>
 
         <main className="p-8 pt-6">
-          {isOverall ? (
+          {(isOverall || isMetaShift) ? (
             renderSection()
           ) : !team ? (
             <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
