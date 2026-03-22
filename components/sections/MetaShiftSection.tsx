@@ -126,7 +126,7 @@ export function MetaShiftSection({ statsLeft, statsRight, agentImages }: Props) 
             <LabelList
               dataKey="delta"
               position="right"
-              formatter={(v: number) => v > 0 ? `+${v}%` : `${v}%`}
+              formatter={(v: unknown) => { const n = v as number; return n > 0 ? `+${n}%` : `${n}%`; }}
               style={{ fill: '#9ca3af', fontSize: 11 }}
             />
           </Bar>
