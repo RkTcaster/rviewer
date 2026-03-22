@@ -566,6 +566,14 @@ export async function getTournamentPlayerAvg(
   };
 }
 
+export async function getMapImages(): Promise<Record<string, string>> {
+  const { data } = await supabase.from('maps_name_ids').select('map, image_path');
+  if (!data) return {};
+  return Object.fromEntries(
+    data.filter((r: { map: string; image_path: string | null }) => r.image_path).map((r: { map: string; image_path: string }) => [r.map, r.image_path])
+  );
+}
+
 // --- Stats ---
 
 export async function getMapStats(filters: { team: string; tour?: string; bo?: string; reg?: string; last?: string }): Promise<DashboardData> {
