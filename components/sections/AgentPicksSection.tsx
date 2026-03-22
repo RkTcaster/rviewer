@@ -2,13 +2,42 @@
 
 import { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
-import { AgentPickStat, CompositionStat } from '@/lib/types';
+import { AgentPickStat, CompositionStat, OverallMapFullStat } from '@/lib/types';
 import { KPICard } from '@/components/KPICard';
 
 interface Props {
   stats: AgentPickStat[];
   compositions: CompositionStat[];
   mapImages: Record<string, string>;
+  agentImages: Record<string, string>;
+  mapFullStats: Record<string, OverallMapFullStat>;
+}
+
+function AgentYTick({ x, y, payload, agentImages }: any) {
+  const src = agentImages?.[payload.value];
+  return (
+    <g transform={`translate(${x},${y})`}>
+      {src
+        ? <image x={-28} y={-12} width={24} height={24} href={src} />
+        : <text x={-4} y={4} textAnchor="end" fill="#9ca3af" fontSize={12}>{payload.value}</text>
+      }
+    </g>
+  );
+}
+
+function CompositionIcons({ composition, agentImages }: { composition: string; agentImages: Record<string, string> }) {
+  const agents = composition.split(', ');
+  const allHaveIcons = agents.every(a => agentImages[a]);
+  if (allHaveIcons) {
+    return (
+      <div className="flex gap-0.5 flex-wrap">
+        {agents.map((agent, i) => (
+          <img key={i} src={agentImages[agent]} alt={agent} title={agent} className="w-[25px] h-[25px] rounded" />
+        ))}
+      </div>
+    );
+  }
+  return <span className="text-gray-300 text-xs leading-snug">{composition}</span>;
 }
 
 function CustomTooltip({ active, payload }: any) {
@@ -23,17 +52,25 @@ function CustomTooltip({ active, payload }: any) {
   );
 }
 
-export function AgentPicksSection({ stats, compositions, mapImages }: Props) {
+export function AgentPicksSection({ stats, compositions, mapImages, agentImages, mapFullStats }: Props) {
   const [selectedMap, setSelectedMap] = useState<string>('');
 
   const maps = useMemo(() => [...new Set(stats.map(s => s.map))].sort(), [stats]);
 
   const filtered = useMemo(() => {
     if (selectedMap) {
-      return stats
+      const mapFiltered = stats
         .filter(s => s.map === selectedMap)
         .slice()
         .sort((a, b) => b.pickRate - a.pickRate);
+      const existingAgents = new Set(mapFiltered.map(s => s.agent));
+      const totalMaps = mapFiltered[0]?.totalMaps ?? 0;
+      for (const agent of Object.keys(agentImages)) {
+        if (!existingAgents.has(agent)) {
+          mapFiltered.push({ agent, map: selectedMap, timesPlayed: 0, pickRate: 0, totalMaps });
+        }
+      }
+      return mapFiltered.sort((a, b) => b.pickRate - a.pickRate);
     }
 
     const mapTotals: Record<string, number> = {};
@@ -47,6 +84,9 @@ export function AgentPicksSection({ stats, compositions, mapImages }: Props) {
       if (!byAgent[s.agent]) byAgent[s.agent] = { timesPlayed: 0 };
       byAgent[s.agent].timesPlayed += s.timesPlayed;
     }
+    for (const agent of Object.keys(agentImages)) {
+      if (!byAgent[agent]) byAgent[agent] = { timesPlayed: 0 };
+    }
 
     return Object.entries(byAgent)
       .map(([agent, { timesPlayed }]) => ({
@@ -57,7 +97,7 @@ export function AgentPicksSection({ stats, compositions, mapImages }: Props) {
         totalMaps: 0,
       }))
       .sort((a, b) => b.pickRate - a.pickRate);
-  }, [stats, selectedMap]);
+  }, [stats, selectedMap, agentImages]);
 
   const mapCount = useMemo(() => {
     if (selectedMap) {
@@ -135,7 +175,7 @@ export function AgentPicksSection({ stats, compositions, mapImages }: Props) {
             <BarChart
               data={filtered}
               layout="vertical"
-              margin={{ top: 0, right: 40, left: 80, bottom: 0 }}
+              margin={{ top: 0, right: 40, left: 24, bottom: 0 }}
             >
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#2d3139" />
               <XAxis
@@ -150,9 +190,9 @@ export function AgentPicksSection({ stats, compositions, mapImages }: Props) {
                 type="category"
                 dataKey="agent"
                 stroke="#9ca3af"
-                fontSize={12}
                 tickLine={false}
-                width={75}
+                width={32}
+                tick={<AgentYTick agentImages={agentImages} />}
               />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
               <Bar dataKey="pickRate" radius={[0, 4, 4, 0]} maxBarSize={22}>
@@ -167,59 +207,53 @@ export function AgentPicksSection({ stats, compositions, mapImages }: Props) {
 
         {/* Compositions panel — right half */}
         <div className="flex-1 min-w-0 bg-[#1a1d23] rounded-xl border border-gray-800 p-6">
-          {selectedMap && mapImages[selectedMap] && (
-            <img src={mapImages[selectedMap]} alt={selectedMap} className="w-full h-28 object-cover rounded-lg mb-4 opacity-90" />
-          )}
+          {(() => {
+            // Normalize to grouped format in both cases
+            const groups: { map: string; comps: CompositionStat[] }[] = selectedMap
+              ? [{ map: selectedMap, comps: compositionPanel as CompositionStat[] }]
+              : compositionPanel as { map: string; comps: CompositionStat[] }[];
 
-          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">
-            {selectedMap ? `Top 10 compositions — ${selectedMap}` : 'Most played compositions'}
-          </h3>
+            if (groups.length === 0 || groups.every(g => g.comps.length === 0)) {
+              return <p className="text-gray-600 text-sm">No data available</p>;
+            }
 
-          {selectedMap ? (
-            // Top 10 for a single map
-            <ol className="flex flex-col gap-2">
-              {(compositionPanel as CompositionStat[]).map((c, i) => (
-                <li key={i} className="flex items-start gap-3">
-                  <span className="text-gray-600 text-xs w-4 shrink-0 mt-0.5">{i + 1}.</span>
-                  <span className="text-gray-200 text-sm leading-snug flex-1">
-                    {c.composition}
-                    <span className="ml-2 text-gray-500 text-xs">({c.played})</span>
-                  </span>
-                </li>
-              ))}
-              {(compositionPanel as CompositionStat[]).length === 0 && (
-                <p className="text-gray-600 text-sm">No data available</p>
-              )}
-            </ol>
-          ) : (
-            // Per-map, top 2 each
-            <div className="flex flex-col gap-5">
-              {(compositionPanel as { map: string; comps: CompositionStat[] }[]).map(({ map, comps }) => (
-                <div key={map}>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    {mapImages[map] && (
-                      <img src={mapImages[map]} alt={map} className="w-16 h-9 object-cover rounded opacity-80" />
-                    )}
-                    <p className="text-xs font-bold text-blue-400 uppercase tracking-wider">{map}</p>
+            return (
+              <div className="flex flex-col gap-4">
+                {groups.map(({ map, comps }) => (
+                  <div key={map} className="flex gap-3">
+                    {/* Map column */}
+                    <div className="flex flex-col items-center gap-1 w-[100px] shrink-0">
+                      {mapImages[map] && (
+                        <img src={mapImages[map]} alt={map} className="w-[100px] h-[55px] object-cover rounded opacity-80" />
+                      )}
+                      <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wide text-center leading-tight">{map}</span>
+                    </div>
+                    {/* Compositions + stats column */}
+                    <div className="flex flex-col gap-1.5 justify-center">
+                      {comps.map((c, i) => (
+                        <div key={i} className="flex items-center gap-1.5">
+                          <CompositionIcons composition={c.composition} agentImages={agentImages} />
+                          <span className="text-gray-500 text-xs shrink-0">({c.played})</span>
+                        </div>
+                      ))}
+                    </div>
+                    {mapFullStats[map] && (() => {
+                      const s = mapFullStats[map];
+                      const atk = s.attTotal > 0 ? Math.round(s.attWins / s.attTotal * 100) : 0;
+                      const def = s.defTotal > 0 ? Math.round(s.defWins / s.defTotal * 100) : 0;
+                      return (
+                        <div className="flex flex-col justify-center gap-1 shrink-0">
+                          <span className="text-[12.5px] font-bold text-green-400">ATK {atk}%</span>
+                          <span className="text-[12.5px] font-bold text-red-400">DEF {def}%</span>
+                          <span className="text-[12.5px] text-gray-400">Picks {s.picks} · Bans {s.bans}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
-                  <ol className="flex flex-col gap-1">
-                    {comps.map((c, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <span className="text-gray-600 text-xs w-4 shrink-0 mt-0.5">{i + 1}.</span>
-                        <span className="text-gray-300 text-xs leading-snug flex-1">
-                          {c.composition}
-                          <span className="ml-1.5 text-gray-500">({c.played})</span>
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              ))}
-              {(compositionPanel as any[]).length === 0 && (
-                <p className="text-gray-600 text-sm">No data available</p>
-              )}
-            </div>
-          )}
+                ))}
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>

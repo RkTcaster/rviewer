@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getMapImages } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getMapImages, getAgentImages, getOverallMapFullStats } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -57,6 +57,14 @@ export default async function Page({
     ? await getMapImages()
     : {};
 
+  const agentImages = (section === 'agent-picks')
+    ? await getAgentImages()
+    : {};
+
+  const mapFullStats = (section === 'agent-picks')
+    ? await getOverallMapFullStats({ reg, tour, bo })
+    : {};
+
   const playerStats = (section === 'player-stats' && team)
     ? await getPlayerStats({ team, reg, tour, bo })
     : [];
@@ -83,7 +91,7 @@ export default async function Page({
       case 'map-picks':
         return <MapPicksSection stats={overallMapStats} />;
       case 'agent-picks':
-        return <AgentPicksSection stats={agentPickStats} compositions={agentCompositions} mapImages={mapImages} />;
+        return <AgentPicksSection stats={agentPickStats} compositions={agentCompositions} mapImages={mapImages} agentImages={agentImages} mapFullStats={mapFullStats} />;
       case 'player-stats':
         return <PlayerStatsSection stats={playerStats} tournamentAvg={tournamentPlayerAvg} />;
       case 'economy':

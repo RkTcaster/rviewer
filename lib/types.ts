@@ -51,6 +51,16 @@ export type OverallMapStat = {
   deciders: number;
 };
 
+export type OverallMapFullStat = {
+  mapName: string;
+  picks: number;
+  bans: number;
+  attWins: number;
+  attTotal: number;
+  defWins: number;
+  defTotal: number;
+};
+
 export type TeamRankStats = {
   mapWins: number; mapPlayed: number;
   attWins: number; attTotal: number;

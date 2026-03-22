@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { AgentPickStat, CompositionStat, DashboardData, MapStat, OverallMapStat, PlayerStat, Region, TeamRankStats, Tournament, TournamentPlayerAvg } from './types';
+import { AgentPickStat, CompositionStat, DashboardData, MapStat, OverallMapFullStat, OverallMapStat, PlayerStat, Region, TeamRankStats, Tournament, TournamentPlayerAvg } from './types';
 
 // --- HELPERS ---
 
@@ -564,6 +564,80 @@ export async function getTournamentPlayerAvg(
     hsAtk:     mean(players.map(a => a.sHsT    / a.maps)),
     hsDef:     mean(players.map(a => a.sHsCT   / a.maps)),
   };
+}
+
+export async function getOverallMapFullStats(
+  filters: { reg?: string; tour?: string; bo?: string }
+): Promise<Record<string, OverallMapFullStat>> {
+  let draftQuery = supabase.from('draft').select('*');
+  if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
+  if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
+  if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
+
+  const { data: drafts } = await draftQuery;
+  if (!drafts || drafts.length === 0) return {};
+
+  const seriesIds = [...new Set(drafts.map((d: any) => d.series_id).filter(Boolean))] as string[];
+
+  // map_id → map name
+  const mapIdRows = await fetchAllPages<{ map_id: string; map: string }>((from, to) =>
+    supabase.from('maps_id').select('map_id, map').in('series_id', seriesIds).range(from, to)
+  );
+  const mapIdToName: Record<string, string> = {};
+  for (const r of mapIdRows) { if (r.map_id && r.map) mapIdToName[r.map_id] = r.map; }
+
+  // rounds for atk/def WR
+  const rounds = await fetchAllPages<any>((from, to) =>
+    supabase.from('round_info').select('map_id, rndA, side').in('series_id', seriesIds).range(from, to)
+  );
+
+  const stats: Record<string, OverallMapFullStat> = {};
+  const init = (map: string) => {
+    if (!stats[map]) stats[map] = { mapName: map, picks: 0, bans: 0, attWins: 0, attTotal: 0, defWins: 0, defTotal: 0 };
+  };
+
+  // picks/bans
+  for (const m of drafts) {
+    const bo = Number(m.bo);
+    if (m.team_1_select_2) { init(m.team_1_select_2); stats[m.team_1_select_2].picks++; }
+    if (m.team_2_select_2) { init(m.team_2_select_2); stats[m.team_2_select_2].picks++; }
+    if (bo === 5) {
+      if (m.team_1_select_3) { init(m.team_1_select_3); stats[m.team_1_select_3].picks++; }
+      if (m.team_2_select_3) { init(m.team_2_select_3); stats[m.team_2_select_3].picks++; }
+    }
+    if (m.team_1_select_1) { init(m.team_1_select_1); stats[m.team_1_select_1].bans++; }
+    if (m.team_2_select_1) { init(m.team_2_select_1); stats[m.team_2_select_1].bans++; }
+    if (bo === 3) {
+      if (m.team_1_select_3) { init(m.team_1_select_3); stats[m.team_1_select_3].bans++; }
+      if (m.team_2_select_3) { init(m.team_2_select_3); stats[m.team_2_select_3].bans++; }
+    }
+  }
+
+  // atk/def WR per round
+  for (const r of rounds) {
+    const mapName = mapIdToName[r.map_id];
+    if (!mapName) continue;
+    init(mapName);
+    const wonA = Number(r.rndA) === 1;
+    const side = r.side?.trim().toLowerCase();
+    stats[mapName].attTotal++;
+    stats[mapName].defTotal++;
+    if (side === 'atk') {
+      if (wonA) stats[mapName].attWins++; else stats[mapName].defWins++;
+    } else if (side === 'def') {
+      if (wonA) stats[mapName].defWins++; else stats[mapName].attWins++;
+    }
+  }
+
+  return stats;
+}
+
+export async function getAgentImages(): Promise<Record<string, string>> {
+  const { data } = await supabase.from('agent_info').select('agent_name, agent_path');
+  if (!data) return {};
+  return Object.fromEntries(
+    data.filter((r: any) => r.agent_path).map((r: any) => [r.agent_name, r.agent_path])
+  );
 }
 
 export async function getMapImages(): Promise<Record<string, string>> {
