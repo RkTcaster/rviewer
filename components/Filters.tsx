@@ -45,18 +45,15 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
   };
 
   if (isMetaShift) {
-    const boSelect = (
+    const dateInput = (key: string, label: string, color: string) => (
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Serie</label>
-        <select
-          value={searchParams.get('bo') || 'all'}
-          onChange={(e) => updateFilter('bo', e.target.value)}
-          className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
-        >
-          <option value="all">BO3 & BO5</option>
-          <option value="3">Solo BO3</option>
-          <option value="5">Solo BO5</option>
-        </select>
+        <label className={`text-[11px] font-bold uppercase tracking-wider ${color}`}>{label}</label>
+        <input
+          type="date"
+          value={searchParams.get(key) || ''}
+          onChange={(e) => updateFilter(key, e.target.value)}
+          className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600 [color-scheme:dark]"
+        />
       </div>
     );
 
@@ -89,6 +86,8 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
             onChange={(values) => updateMultiFilter('tour', values)}
             disabled={false}
           />
+          {dateInput('dateFrom', 'From A', 'text-blue-400')}
+          {dateInput('dateTo', 'To A', 'text-blue-400')}
         </div>
 
         <div className="self-stretch border-l border-gray-700 mx-1" />
@@ -120,10 +119,9 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
             onChange={(values) => updateMultiFilter('tour2', values)}
             disabled={false}
           />
+          {dateInput('dateFrom2', 'From B', 'text-orange-400')}
+          {dateInput('dateTo2', 'To B', 'text-orange-400')}
         </div>
-
-        <div className="self-stretch border-l border-gray-700 mx-1" />
-        {boSelect}
       </div>
     );
   }

@@ -16,10 +16,10 @@ import { MetaShiftSection } from '@/components/sections/MetaShiftSection';
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ reg?: string; team?: string; tour?: string; bo?: string; last?: string; section?: string; team2?: string; tour2?: string; reg2?: string }>;
+  searchParams: Promise<{ reg?: string; team?: string; tour?: string; bo?: string; last?: string; section?: string; team2?: string; tour2?: string; reg2?: string; dateFrom?: string; dateTo?: string; dateFrom2?: string; dateTo2?: string }>;
 }) {
   const params = await searchParams;
-  const { reg, team, tour, bo, last, section = 'maps', team2, tour2, reg2 } = params;
+  const { reg, team, tour, bo, last, section = 'maps', team2, tour2, reg2, dateFrom, dateTo, dateFrom2, dateTo2 } = params;
 
   const isOverall = section === 'map-picks' || section === 'agent-picks';
   const isCompare = section === 'compare-maps' || section === 'compare-stats';
@@ -68,11 +68,11 @@ export default async function Page({
     : {};
 
   const agentPickStatsLeft = isMetaShift
-    ? await getAgentPickStats({ reg, tour, bo, team: team || undefined })
+    ? await getAgentPickStats({ reg, tour, team: team || undefined, dateFrom, dateTo })
     : [];
 
   const agentPickStatsRight = isMetaShift
-    ? await getAgentPickStats({ reg: reg2, tour: tour2, bo, team: team2 || undefined })
+    ? await getAgentPickStats({ reg: reg2, tour: tour2, team: team2 || undefined, dateFrom: dateFrom2, dateTo: dateTo2 })
     : [];
 
   const playerStats = (section === 'player-stats' && team)

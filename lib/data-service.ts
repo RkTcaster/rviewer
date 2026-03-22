@@ -262,14 +262,16 @@ export async function getOverallMapPicks(
 }
 
 export async function getAgentPickStats(
-  filters: { reg?: string; tour?: string; bo?: string; team?: string }
+  filters: { reg?: string; tour?: string; team?: string; dateFrom?: string; dateTo?: string }
 ): Promise<AgentPickStat[]> {
-  // If bo filter is set, pre-fetch valid series_ids from draft
+  // Pre-fetch series_ids from draft when date filters are active
   let seriesIds: string[] | null = null;
-  if (filters.bo && filters.bo !== 'all') {
-    let draftQuery = supabase.from('draft').select('series_id').eq('bo', parseInt(filters.bo));
-    if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
-    if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
+  if (filters.dateFrom || filters.dateTo) {
+    let draftQuery = supabase.from('draft').select('series_id');
+    if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
+    if (filters.reg)      draftQuery = draftQuery.eq('reg_id', filters.reg);
+    if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
+    if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
     const { data: draftData } = await draftQuery;
     if (!draftData || draftData.length === 0) return [];
     seriesIds = [...new Set(draftData.map((d: any) => d.series_id))];

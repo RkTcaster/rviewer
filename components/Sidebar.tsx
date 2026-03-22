@@ -40,6 +40,10 @@ export function Sidebar() {
       params.delete('team2');
       params.delete('tour2');
       params.delete('reg2');
+      params.delete('dateFrom');
+      params.delete('dateTo');
+      params.delete('dateFrom2');
+      params.delete('dateTo2');
     }
 
     router.push(`?${params.toString()}`);
