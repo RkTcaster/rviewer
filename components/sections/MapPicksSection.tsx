@@ -1,60 +1,57 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { useMemo } from 'react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ReferenceLine, ResponsiveContainer, Cell, LabelList,
+} from 'recharts';
 import { OverallMapStat } from '@/lib/types';
 
 interface Props {
   stats: OverallMapStat[];
 }
 
-type SortKey = 'mapName' | 'picks' | 'bans' | 'deciders' | 'appearances';
-type SortDir = 'asc' | 'desc';
+const PICKS_COLOR = '#4ade80';    // green-400
+const DECIDERS_COLOR = '#60a5fa'; // blue-400
+const BANS_COLOR = '#f87171';     // red-400
 
-function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
-  if (!active) return <ChevronsUpDown size={12} className="inline ml-1 opacity-30" />;
-  return dir === 'asc'
-    ? <ChevronUp size={12} className="inline ml-1 text-blue-400" />
-    : <ChevronDown size={12} className="inline ml-1 text-blue-400" />;
-}
-
-function pct(value: number, total: number) {
-  return total > 0 ? Math.round((value / total) * 100) : 0;
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const picks = payload.find((p: any) => p.dataKey === 'picks')?.value ?? 0;
+  const deciders = payload.find((p: any) => p.dataKey === 'deciders')?.value ?? 0;
+  const bans = payload.find((p: any) => p.dataKey === 'bansNeg')?.value ?? 0;
+  return (
+    <div className="bg-[#1a1d23] border border-gray-700 rounded-lg p-3 text-sm shadow-xl">
+      <div className="font-bold text-white mb-2">{label}</div>
+      <div className="flex items-center gap-2 text-green-400">
+        <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
+        Picks: <span className="font-bold ml-1">{picks}</span>
+      </div>
+      <div className="flex items-center gap-2 text-blue-400">
+        <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />
+        Deciders: <span className="font-bold ml-1">{deciders}</span>
+      </div>
+      <div className="flex items-center gap-2 text-red-400">
+        <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
+        Bans: <span className="font-bold ml-1">{Math.abs(bans)}</span>
+      </div>
+    </div>
+  );
 }
 
 export function MapPicksSection({ stats }: Props) {
-  const [sortKey, setSortKey] = useState<SortKey>('picks');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
-
-  function handleSort(key: SortKey) {
-    if (key === sortKey) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortKey(key); setSortDir('desc'); }
-  }
-
-  const totalPicks = stats.reduce((s, m) => s + m.picks, 0);
-  const totalBans = stats.reduce((s, m) => s + m.bans, 0);
-
-  const sorted = useMemo(() => stats.slice().sort((a, b) => {
-    const appA = a.picks + a.deciders;
-    const appB = b.picks + b.deciders;
-    let cmp = sortKey === 'mapName'
-      ? a.mapName.localeCompare(b.mapName)
-      : sortKey === 'appearances'
-      ? appA - appB
-      : a[sortKey] - b[sortKey];
-    return sortDir === 'asc' ? cmp : -cmp;
-  }), [stats, sortKey, sortDir]);
-
-  function Th({ col, className, children }: { col: SortKey; className?: string; children: React.ReactNode }) {
-    return (
-      <th
-        onClick={() => handleSort(col)}
-        className={`p-4 text-center border-b border-gray-800 cursor-pointer select-none hover:bg-white/5 ${className ?? ''}`}
-      >
-        {children}<SortIcon active={sortKey === col} dir={sortDir} />
-      </th>
-    );
-  }
+  const data = useMemo(() =>
+    stats
+      .slice()
+      .sort((a, b) => (b.picks + b.deciders) - (a.picks + a.deciders))
+      .map(s => ({
+        mapName: s.mapName,
+        picks: s.picks,
+        deciders: s.deciders,
+        bansNeg: -s.bans,
+      })),
+    [stats]
+  );
 
   if (stats.length === 0) {
     return (
@@ -64,48 +61,81 @@ export function MapPicksSection({ stats }: Props) {
     );
   }
 
+  const maxPos = Math.max(...data.map(d => d.picks + d.deciders));
+  const maxNeg = Math.max(...data.map(d => Math.abs(d.bansNeg)));
+  const yMax = Math.ceil(Math.max(maxPos, maxNeg) * 1.15);
+
   return (
-    <div className="bg-[#1a1d23] rounded-xl shadow-2xl overflow-hidden border border-gray-800">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-[#0f1115] text-gray-400 text-[11px] uppercase tracking-widest">
-            <tr>
-              <th
-                onClick={() => handleSort('mapName')}
-                className="p-4 border-b border-gray-800 cursor-pointer select-none hover:bg-white/5"
-              >
-                Map<SortIcon active={sortKey === 'mapName'} dir={sortDir} />
-              </th>
-              <Th col="picks" className="bg-green-900/30 text-green-400">Picks</Th>
-              <Th col="bans" className="bg-red-900/30 text-red-400">Bans</Th>
-              <Th col="deciders" className="bg-blue-900/30 text-blue-400">Deciders</Th>
-              <Th col="appearances" className="bg-gray-900/80">Appearances</Th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-800">
-            {sorted.map((s) => {
-              const appearances = s.picks + s.deciders;
-              return (
-                <tr key={s.mapName} className="hover:bg-[#252a33] transition-colors">
-                  <td className="p-4 font-bold text-white">{s.mapName}</td>
-                  <td className="p-4 text-center bg-green-900/10">
-                    <div className="font-bold text-green-400">{s.picks}</div>
-                    <div className="text-[10px] text-gray-500">{pct(s.picks, totalPicks)}% of picks</div>
-                  </td>
-                  <td className="p-4 text-center bg-red-900/10">
-                    <div className="font-bold text-red-400">{s.bans}</div>
-                    <div className="text-[10px] text-gray-500">{pct(s.bans, totalBans)}% of bans</div>
-                  </td>
-                  <td className="p-4 text-center text-blue-400 font-bold bg-blue-900/10">
-                    {s.deciders || <span className="text-gray-600">-</span>}
-                  </td>
-                  <td className="p-4 text-center text-gray-300 font-bold">{appearances}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+    <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 p-6">
+      <div className="flex gap-6 mb-6 text-xs text-gray-400">
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm inline-block" style={{ background: PICKS_COLOR }} />
+          Picks
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm inline-block" style={{ background: DECIDERS_COLOR }} />
+          Deciders
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm inline-block" style={{ background: BANS_COLOR }} />
+          Bans
+        </span>
       </div>
+
+      <ResponsiveContainer width="100%" height={420}>
+        <BarChart
+          data={data}
+          margin={{ top: 20, right: 20, left: 0, bottom: 8 }}
+          barCategoryGap="30%"
+          stackOffset="sign"
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="#2d3139" vertical={false} />
+          <XAxis
+            dataKey="mapName"
+            tick={{ fill: '#9ca3af', fontSize: 12 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            domain={[-yMax, yMax]}
+            tickFormatter={v => String(Math.abs(v))}
+            tick={{ fill: '#6b7280', fontSize: 11 }}
+            axisLine={false}
+            tickLine={false}
+            width={28}
+          />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+          <ReferenceLine y={0} stroke="#374151" strokeWidth={1.5} />
+
+          {/* Positive stack: picks + deciders */}
+          <Bar dataKey="picks" stackId="a" fill={PICKS_COLOR} radius={[0, 0, 0, 0]} isAnimationActive={false}>
+            <LabelList
+              dataKey="picks"
+              position="inside"
+              formatter={(v: unknown) => (Number(v) > 0 ? Number(v) : '')}
+              style={{ fill: '#052e16', fontSize: 11, fontWeight: 700 }}
+            />
+          </Bar>
+          <Bar dataKey="deciders" stackId="a" fill={DECIDERS_COLOR} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+            <LabelList
+              dataKey="deciders"
+              position="top"
+              formatter={(v: unknown) => (Number(v) > 0 ? Number(v) : '')}
+              style={{ fill: '#93c5fd', fontSize: 11, fontWeight: 700 }}
+            />
+          </Bar>
+
+          {/* Negative stack: bans */}
+          <Bar dataKey="bansNeg" stackId="a" fill={BANS_COLOR} radius={[0, 0, 4, 4]} isAnimationActive={false}>
+            <LabelList
+              dataKey="bansNeg"
+              position="inside"
+              formatter={(v: unknown) => (Number(v) < 0 ? Math.abs(Number(v)) : '')}
+              style={{ fill: '#000000', fontSize: 11, fontWeight: 700 }}
+            />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   );
 }

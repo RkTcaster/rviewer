@@ -77,6 +77,35 @@ export type AgentPickStat = {
   totalMaps: number;
 };
 
+export type PlayerStat = {
+  player: string;
+  agent: string;
+  maps: number;
+  kills: number;
+  deaths: number;
+  // K/D
+  kd: number; kdAtk: number; kdDef: number;
+  // Per-map averages
+  rating: number; ratingAtk: number; ratingDef: number;
+  acs: number; acsAtk: number; acsDef: number;
+  avgKills: number; avgKillsAtk: number; avgKillsDef: number;
+  avgDeaths: number; avgDeathsAtk: number; avgDeathsDef: number;
+  assists: number; assistsAtk: number; assistsDef: number;
+  adr: number; adrAtk: number; adrDef: number;
+  hs: number; hsAtk: number; hsDef: number;
+  fk: number; fkAtk: number; fkDef: number;
+  fd: number; fdAtk: number; fdDef: number;
+  fkfd: number; fkfdAtk: number; fkfdDef: number;
+};
+
+export type TournamentPlayerAvg = {
+  kd: number; kdAtk: number; kdDef: number;
+  rating: number; ratingAtk: number; ratingDef: number;
+  acs: number; acsAtk: number; acsDef: number;
+  adr: number; adrAtk: number; adrDef: number;
+  hs: number; hsAtk: number; hsDef: number;
+};
+
 export type DashboardData = {
   mapStats: MapStat[];
   draftOrder: {

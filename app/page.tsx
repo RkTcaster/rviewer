@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -10,6 +10,7 @@ import { CompareSection } from '@/components/sections/CompareSection';
 import { CompareStatsSection } from '@/components/sections/CompareStatsSection';
 import { MapPicksSection } from '@/components/sections/MapPicksSection';
 import { AgentPicksSection } from '@/components/sections/AgentPicksSection';
+import { PlayerStatsSection } from '@/components/sections/PlayerStatsSection';
 
 export default async function Page({
   searchParams,
@@ -48,6 +49,14 @@ export default async function Page({
     ? await getAgentPickStats({ reg, tour, bo })
     : [];
 
+  const playerStats = (section === 'player-stats' && team)
+    ? await getPlayerStats({ team, reg, tour, bo })
+    : [];
+
+  const tournamentPlayerAvg = (section === 'player-stats')
+    ? await getTournamentPlayerAvg({ reg, tour, bo })
+    : null;
+
   const stats = result?.mapStats || [];
   const draftOrder = result?.draftOrder || { a: 0, b: 0 };
   const pistols = result?.pistols || { wins: 0, total: 0 };
@@ -67,6 +76,8 @@ export default async function Page({
         return <MapPicksSection stats={overallMapStats} />;
       case 'agent-picks':
         return <AgentPicksSection stats={agentPickStats} />;
+      case 'player-stats':
+        return <PlayerStatsSection stats={playerStats} tournamentAvg={tournamentPlayerAvg} />;
       case 'economy':
         return <EconomySection pistols={pistols} antiEco={antiEco} recovery={recovery} pab={pab} />;
       case 'charts':

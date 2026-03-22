@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { LayoutGrid, GitCompareArrows, Scale, Map, Users } from 'lucide-react';
+import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound } from 'lucide-react';
 
 const NAV_SECTIONS = [
   {
@@ -17,6 +17,7 @@ const NAV_SECTIONS = [
       { id: 'maps',          label: 'Maps',          icon: LayoutGrid },
       { id: 'compare-maps',  label: 'Compare Maps',  icon: GitCompareArrows },
       { id: 'compare-stats', label: 'Compare Stats', icon: Scale },
+      { id: 'player-stats',  label: 'Player Stats',  icon: UserRound },
     ],
   },
 ];

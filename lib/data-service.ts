@@ -2,7 +2,25 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { AgentPickStat, CompositionStat, DashboardData, MapStat, OverallMapStat, Region, TeamRankStats, Tournament } from './types';
+import { AgentPickStat, CompositionStat, DashboardData, MapStat, OverallMapStat, PlayerStat, Region, TeamRankStats, Tournament, TournamentPlayerAvg } from './types';
+
+// --- HELPERS ---
+
+async function fetchAllPages<T>(
+  buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+  pageSize = 1000
+): Promise<T[]> {
+  const all: T[] = [];
+  let from = 0;
+  while (true) {
+    const { data } = await buildQuery(from, from + pageSize - 1);
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
 
 // --- FILTERS  ---
 
@@ -264,15 +282,19 @@ export async function getAgentPickStats(
     return q;
   }
 
-  // Two parallel queries: map counts (light) + agent picks (full)
-  const [{ data: mapRows }, { data: agentRows }] = await Promise.all([
-    applyFilters(supabase.from('player_stats').select('map, map_id').limit(50000)),
-    applyFilters(supabase.from('player_stats').select('map, agent').limit(50000)),
+  // Two parallel queries: map counts from maps_id table + agent picks
+  const [mapRows, agentRows] = await Promise.all([
+    fetchAllPages<{ map_id: string; map: string }>((from, to) =>
+      applyFilters(supabase.from('maps_id').select('map_id, map')).range(from, to)
+    ),
+    fetchAllPages<{ map: string; agent: string }>((from, to) =>
+      applyFilters(supabase.from('player_stats').select('map, agent')).range(from, to)
+    ),
   ]);
 
   if (!mapRows || mapRows.length === 0) return [];
 
-  // Count unique map instances per map name (map_id is globally unique)
+  // Count unique map instances per map name from maps_id table
   const uniqueMapIds: Record<string, Set<string>> = {};
   for (const row of mapRows) {
     if (!row.map || !row.map_id) continue;
@@ -339,6 +361,209 @@ export async function getOverallCompositions(
     const mapCmp = a.map.localeCompare(b.map);
     return mapCmp !== 0 ? mapCmp : b.played - a.played;
   });
+}
+
+export async function getPlayerStats(
+  filters: { team: string; reg?: string; tour?: string; bo?: string }
+): Promise<PlayerStat[]> {
+  // If bo filter, pre-fetch valid series_ids from draft
+  let seriesIds: string[] | null = null;
+  if (filters.bo && filters.bo !== 'all') {
+    let draftQuery = supabase.from('draft').select('series_id').eq('bo', parseInt(filters.bo));
+    if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
+    if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
+    const { data: draftData } = await draftQuery;
+    if (!draftData || draftData.length === 0) return [];
+    seriesIds = [...new Set(draftData.map((d: any) => d.series_id))];
+  }
+
+  let query = supabase
+    .from('player_stats')
+    .select('player, agent, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, assistsBoth, assistsT, assistsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT')
+    .eq('team', filters.team);
+
+  if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
+  if (filters.reg)  query = query.eq('reg_id', filters.reg);
+  if (seriesIds)    query = query.in('series_id', seriesIds);
+
+  const rows = await fetchAllPages((from, to) => query.range(from, to));
+  if (!rows || rows.length === 0) return [];
+
+  type Acc = {
+    kills: number; deaths: number; killsT: number; deadT: number; killsCT: number; deadCT: number;
+    sRating: number; sRatingT: number; sRatingCT: number;
+    sAcs: number; sAcsT: number; sAcsCT: number;
+    sAssists: number; sAssistsT: number; sAssistsCT: number;
+    sAdr: number; sAdrT: number; sAdrCT: number;
+    sHs: number; sHsT: number; sHsCT: number;
+    sFk: number; sFkT: number; sFkCT: number;
+    sFd: number; sFdT: number; sFdCT: number;
+    agentCounts: Record<string, number>; maps: number;
+  };
+  const zero = (): Acc => ({
+    kills: 0, deaths: 0, killsT: 0, deadT: 0, killsCT: 0, deadCT: 0,
+    sRating: 0, sRatingT: 0, sRatingCT: 0,
+    sAcs: 0, sAcsT: 0, sAcsCT: 0,
+    sAssists: 0, sAssistsT: 0, sAssistsCT: 0,
+    sAdr: 0, sAdrT: 0, sAdrCT: 0,
+    sHs: 0, sHsT: 0, sHsCT: 0,
+    sFk: 0, sFkT: 0, sFkCT: 0,
+    sFd: 0, sFdT: 0, sFdCT: 0,
+    agentCounts: {}, maps: 0,
+  });
+  const playerMap: Record<string, Acc> = {};
+
+  for (const row of rows) {
+    const p = row.player;
+    if (!p) continue;
+    if (!playerMap[p]) playerMap[p] = zero();
+    const a = playerMap[p];
+    a.kills     += Number(row.killsBoth)     || 0;
+    a.deaths    += Number(row.deadBoth)      || 0;
+    a.killsT    += Number(row.killsT)        || 0;
+    a.deadT     += Number(row.deadT)         || 0;
+    a.killsCT   += Number(row.killsCT)       || 0;
+    a.deadCT    += Number(row.deadCT)        || 0;
+    a.sRating   += Number(row.ratingBoth)    || 0;
+    a.sRatingT  += Number(row.ratingT)       || 0;
+    a.sRatingCT += Number(row['rating-ct'])  || 0;
+    a.sAcs      += Number(row.acsBoth)       || 0;
+    a.sAcsT     += Number(row.acsT)          || 0;
+    a.sAcsCT    += Number(row.acsCT)         || 0;
+    a.sAssists  += Number(row.assistsBoth)   || 0;
+    a.sAssistsT += Number(row.assistsT)      || 0;
+    a.sAssistsCT+= Number(row.assistsCT)     || 0;
+    a.sAdr      += Number(row.adrBoth)       || 0;
+    a.sAdrT     += Number(row.adrT)          || 0;
+    a.sAdrCT    += Number(row.adrCT)         || 0;
+    a.sHs       += Number(row.hsBoth)        || 0;
+    a.sHsT      += Number(row.hsT)           || 0;
+    a.sHsCT     += Number(row.hsCT)          || 0;
+    a.sFk       += Number(row.fkBoth)        || 0;
+    a.sFkT      += Number(row.fkT)           || 0;
+    a.sFkCT     += Number(row.fkCT)          || 0;
+    a.sFd       += Number(row.fdBoth)        || 0;
+    a.sFdT      += Number(row.fdT)           || 0;
+    a.sFdCT     += Number(row.fdCT)          || 0;
+    a.maps++;
+    if (row.agent) a.agentCounts[row.agent] = (a.agentCounts[row.agent] || 0) + 1;
+  }
+
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return Object.entries(playerMap).map(([player, a]) => {
+    const { kills, deaths, killsT, deadT, killsCT, deadCT, maps } = a;
+    const kd    = deaths === 0 ? kills   : r2(kills   / deaths);
+    const kdAtk = deadT  === 0 ? killsT  : r2(killsT  / deadT);
+    const kdDef = deadCT === 0 ? killsCT : r2(killsCT / deadCT);
+    const agent = Object.entries(a.agentCounts).sort((x, y) => y[1] - x[1])[0]?.[0] ?? '';
+    return {
+      player, agent, maps, kills, deaths, kd, kdAtk, kdDef,
+      rating: r2(a.sRating / maps),    ratingAtk: r2(a.sRatingT / maps),   ratingDef: r2(a.sRatingCT / maps),
+      acs:    r2(a.sAcs    / maps),    acsAtk:    r2(a.sAcsT    / maps),   acsDef:    r2(a.sAcsCT   / maps),
+      avgKills:    r2(kills  / maps),  avgKillsAtk:  r2(killsT  / maps),   avgKillsDef:  r2(killsCT / maps),
+      avgDeaths:   r2(deaths / maps),  avgDeathsAtk: r2(deadT   / maps),   avgDeathsDef: r2(deadCT  / maps),
+      assists: r2(a.sAssists / maps),  assistsAtk: r2(a.sAssistsT / maps), assistsDef: r2(a.sAssistsCT / maps),
+      adr:    r2(a.sAdr    / maps),    adrAtk:    r2(a.sAdrT    / maps),   adrDef:    r2(a.sAdrCT   / maps),
+      hs:     r2(a.sHs     / maps),    hsAtk:     r2(a.sHsT     / maps),   hsDef:     r2(a.sHsCT    / maps),
+      fk:     r2(a.sFk     / maps),    fkAtk:     r2(a.sFkT     / maps),   fkDef:     r2(a.sFkCT    / maps),
+      fd:     r2(a.sFd     / maps),    fdAtk:     r2(a.sFdT     / maps),   fdDef:     r2(a.sFdCT    / maps),
+      fkfd:   r2((a.sFk - a.sFd)   / maps),
+      fkfdAtk: r2((a.sFkT - a.sFdT) / maps),
+      fkfdDef: r2((a.sFkCT - a.sFdCT) / maps),
+    };
+  }).sort((a, b) => b.kd - a.kd);
+}
+
+export async function getTournamentPlayerAvg(
+  filters: { reg?: string; tour?: string; bo?: string }
+): Promise<TournamentPlayerAvg | null> {
+  let seriesIds: string[] | null = null;
+  if (filters.bo && filters.bo !== 'all') {
+    let draftQuery = supabase.from('draft').select('series_id').eq('bo', parseInt(filters.bo));
+    if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
+    if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
+    const { data: draftData } = await draftQuery;
+    if (!draftData || draftData.length === 0) return null;
+    seriesIds = [...new Set(draftData.map((d: any) => d.series_id))];
+  }
+
+  let query = supabase
+    .from('player_stats')
+    .select('player, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT');
+
+  if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
+  if (filters.reg)  query = query.eq('reg_id', filters.reg);
+  if (seriesIds)    query = query.in('series_id', seriesIds);
+
+  const { data: rows } = await query.limit(200000);
+  if (!rows || rows.length === 0) return null;
+
+  type Acc2 = {
+    kills: number; deaths: number; killsT: number; deadT: number; killsCT: number; deadCT: number;
+    sRating: number; sRatingT: number; sRatingCT: number;
+    sAcs: number; sAcsT: number; sAcsCT: number;
+    sAdr: number; sAdrT: number; sAdrCT: number;
+    sHs: number; sHsT: number; sHsCT: number;
+    maps: number;
+  };
+  const pm: Record<string, Acc2> = {};
+  const z2 = (): Acc2 => ({
+    kills: 0, deaths: 0, killsT: 0, deadT: 0, killsCT: 0, deadCT: 0,
+    sRating: 0, sRatingT: 0, sRatingCT: 0,
+    sAcs: 0, sAcsT: 0, sAcsCT: 0,
+    sAdr: 0, sAdrT: 0, sAdrCT: 0,
+    sHs: 0, sHsT: 0, sHsCT: 0,
+    maps: 0,
+  });
+
+  for (const row of rows) {
+    if (!row.player) continue;
+    if (!pm[row.player]) pm[row.player] = z2();
+    const a = pm[row.player];
+    a.kills     += Number(row.killsBoth)    || 0;
+    a.deaths    += Number(row.deadBoth)     || 0;
+    a.killsT    += Number(row.killsT)       || 0;
+    a.deadT     += Number(row.deadT)        || 0;
+    a.killsCT   += Number(row.killsCT)      || 0;
+    a.deadCT    += Number(row.deadCT)       || 0;
+    a.sRating   += Number(row.ratingBoth)   || 0;
+    a.sRatingT  += Number(row.ratingT)      || 0;
+    a.sRatingCT += Number(row['rating-ct']) || 0;
+    a.sAcs      += Number(row.acsBoth)      || 0;
+    a.sAcsT     += Number(row.acsT)         || 0;
+    a.sAcsCT    += Number(row.acsCT)        || 0;
+    a.sAdr      += Number(row.adrBoth)      || 0;
+    a.sAdrT     += Number(row.adrT)         || 0;
+    a.sAdrCT    += Number(row.adrCT)        || 0;
+    a.sHs       += Number(row.hsBoth)       || 0;
+    a.sHsT      += Number(row.hsT)          || 0;
+    a.sHsCT     += Number(row.hsCT)         || 0;
+    a.maps++;
+  }
+
+  const players = Object.values(pm);
+  if (players.length === 0) return null;
+
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const mean = (vals: number[]) => r2(vals.reduce((a, b) => a + b, 0) / vals.length);
+
+  return {
+    kd:        mean(players.map(a => a.deaths === 0 ? a.kills   : a.kills   / a.deaths)),
+    kdAtk:     mean(players.map(a => a.deadT  === 0 ? a.killsT  : a.killsT  / a.deadT)),
+    kdDef:     mean(players.map(a => a.deadCT === 0 ? a.killsCT : a.killsCT / a.deadCT)),
+    rating:    mean(players.map(a => a.sRating   / a.maps)),
+    ratingAtk: mean(players.map(a => a.sRatingT  / a.maps)),
+    ratingDef: mean(players.map(a => a.sRatingCT / a.maps)),
+    acs:       mean(players.map(a => a.sAcs    / a.maps)),
+    acsAtk:    mean(players.map(a => a.sAcsT   / a.maps)),
+    acsDef:    mean(players.map(a => a.sAcsCT  / a.maps)),
+    adr:       mean(players.map(a => a.sAdr    / a.maps)),
+    adrAtk:    mean(players.map(a => a.sAdrT   / a.maps)),
+    adrDef:    mean(players.map(a => a.sAdrCT  / a.maps)),
+    hs:        mean(players.map(a => a.sHs     / a.maps)),
+    hsAtk:     mean(players.map(a => a.sHsT    / a.maps)),
+    hsDef:     mean(players.map(a => a.sHsCT   / a.maps)),
+  };
 }
 
 // --- Stats ---
