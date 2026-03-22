@@ -48,7 +48,7 @@ export default async function Page({
     : [];
 
   const agentPickStats = (section === 'agent-picks')
-    ? await getAgentPickStats({ reg, tour, bo })
+    ? await getAgentPickStats({ reg, tour })
     : [];
 
   const agentCompositions = (section === 'agent-picks')
