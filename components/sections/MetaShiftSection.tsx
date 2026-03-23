@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, ReferenceLine } from 'recharts';
 import { AgentPickStat } from '@/lib/types';
 
@@ -55,6 +55,8 @@ function CustomTooltip({ active, payload }: any) {
 }
 
 export function MetaShiftSection({ statsLeft, statsRight, agentImages }: Props) {
+  const [sortBy, setSortBy] = useState<'delta' | 'leftRate'>('delta');
+
   const chartData = useMemo(() => {
     const leftRates = aggregatePickRate(statsLeft);
     const rightRates = aggregatePickRate(statsRight);
@@ -66,8 +68,9 @@ export function MetaShiftSection({ statsLeft, statsRight, agentImages }: Props) 
         rightRate: rightRates[agent] ?? 0,
         delta: (leftRates[agent] ?? 0) - (rightRates[agent] ?? 0),
       }))
-      .sort((a, b) => b.delta - a.delta);
-  }, [statsLeft, statsRight, agentImages]);
+      .filter(d => d.leftRate > 0 || d.rightRate > 0)
+      .sort((a, b) => sortBy === 'delta' ? b.delta - a.delta : b.leftRate - a.leftRate);
+  }, [statsLeft, statsRight, agentImages, sortBy]);
 
   const isEmpty = statsLeft.length === 0 && statsRight.length === 0;
 
@@ -85,11 +88,25 @@ export function MetaShiftSection({ statsLeft, statsRight, agentImages }: Props) 
 
   return (
     <div className="bg-[#1a1d23] rounded-xl border border-gray-800 p-6">
-      <div className="flex items-center gap-4 mb-4">
+      <div className="flex items-center gap-4 mb-4 flex-wrap">
         <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Left pick rate</span>
         <span className="text-xs text-gray-500">vs</span>
         <span className="text-xs font-bold text-orange-400 uppercase tracking-wider">Right pick rate</span>
         <span className="text-xs text-gray-500 ml-2">— bars show delta (left − right)</span>
+        <div className="ml-auto flex gap-1 bg-[#0f1115] rounded-lg p-1">
+          <button
+            onClick={() => setSortBy('delta')}
+            className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${sortBy === 'delta' ? 'bg-[#252a33] text-white' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            Sort by delta
+          </button>
+          <button
+            onClick={() => setSortBy('leftRate')}
+            className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${sortBy === 'leftRate' ? 'bg-[#252a33] text-white' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            Sort by left pick rate
+          </button>
+        </div>
       </div>
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart

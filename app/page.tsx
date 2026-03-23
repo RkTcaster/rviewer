@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getMapImages, getAgentImages, getOverallMapFullStats } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -27,11 +27,11 @@ export default async function Page({
 
   // Team data (only for team sections)
   const result = (!isOverall && !isMetaShift && team)
-    ? await getMapStats({ team, tour, bo, reg, last })
+    ? await getMapStats({ team, tour, bo, reg, last, dateFrom, dateTo })
     : null;
 
   const resultB = (isCompare && team2)
-    ? await getMapStats({ team: team2, tour: tour2, bo, reg, last })
+    ? await getMapStats({ team: team2, tour: tour2, bo, reg, last, dateFrom: dateFrom2, dateTo: dateTo2 })
     : null;
 
   const rankings = (section === 'compare-stats')
@@ -90,8 +90,7 @@ export default async function Page({
   const recovery = result?.recovery || { wins: 0, total: 0 };
   const pab = result?.pab || { atkWins: 0, defWins: 0, wins: 0, atkTotal: 0, defTotal: 0, total: 0 };
 
-  const regions = await getRegions();
-  const teams = await getTeams(reg);
+  const [regions, teams, lastUpdateDate] = await Promise.all([getRegions(), getTeams(reg), getLastUpdateDate()]);
   const teams2 = isMetaShift ? await getTeams(reg2) : [];
   // Tours source differs by context
   const tours = (isOverall || isMetaShift) ? await getAllTours(reg) : await getTours(team, reg);
@@ -151,10 +150,18 @@ export default async function Page({
 
   return (
     <div className="flex min-h-screen bg-[#0f1115] text-gray-100">
-      <Sidebar />
+      <Sidebar lastUpdateDate={lastUpdateDate} />
       <div className="flex-1 flex flex-col min-w-0">
         <header className="p-8 pb-0">
-          <h1 className="text-4xl font-bold text-gray-100">VCT Team stats</h1>
+          <h1 className="text-4xl font-bold text-gray-100">{{
+            'maps': 'Maps',
+            'compare-maps': 'Compare Maps',
+            'compare-stats': 'Compare Stats',
+            'player-stats': 'Player Stats',
+            'map-picks': 'Map Picks',
+            'agent-picks': 'Agent Picks',
+            'meta-shift': 'Meta Shift',
+          }[section] ?? section}</h1>
           {reg && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">
               {regions.find(r => r.reg_id === reg)?.region ?? reg}

@@ -64,11 +64,11 @@ export function CompareSection({ statsA, statsB, teamAName, teamBName }: Props) 
               <thead className="bg-[#0f1115] text-gray-400 text-[11.5px] uppercase tracking-widest">
                 {/* Team name labels */}
                 <tr>
-                  <th colSpan={6} className="py-2 text-center text-blue-300 border-b border-gray-700 font-bold tracking-wider">
+                  <th colSpan={6} className="py-2 text-center text-blue-300 border-b border-gray-700 font-bold tracking-wider text-[23px]">
                     {teamAName}
                   </th>
-                  <th className="py-2 border-b border-gray-700 bg-[#252a33]" />
-                  <th colSpan={6} className="py-2 text-center text-orange-300 border-b border-gray-700 font-bold tracking-wider">
+                  <th className="py-2 border-b border-gray-700" />
+                  <th colSpan={6} className="py-2 text-center text-orange-300 border-b border-gray-700 font-bold tracking-wider text-[23px]">
                     {teamBName}
                   </th>
                 </tr>

@@ -114,11 +114,9 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
   // Compositions panel data
   const compositionPanel = useMemo(() => {
     if (selectedMap) {
-      // Top 10 for the selected map
       return compositions
         .filter(c => c.map === selectedMap)
-        .sort((a, b) => b.played - a.played)
-        .slice(0, 10);
+        .sort((a, b) => b.played - a.played);
     }
     // All maps, top 2 each
     const byMap: Record<string, CompositionStat[]> = {};
@@ -149,7 +147,7 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
   return (
     <div className="flex flex-col gap-6">
       {/* KPI + Map filter row */}
-      <div className="flex items-start gap-6">
+      <div className="flex items-start gap-6 flex-wrap">
         <KPICard
           title="Maps"
           value={String(mapCount)}
@@ -167,6 +165,9 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
             {maps.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
         </div>
+        {selectedMap && (
+          <p className="text-[11px] text-gray-500 self-end pb-2 ml-auto">WR% for non mirror matchups</p>
+        )}
       </div>
 
       {/* Main 50/50 layout */}
@@ -249,6 +250,11 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
                         <div key={i} className="flex items-center gap-1.5 flex-wrap">
                           <CompositionIcons composition={c.composition} agentImages={agentImages} />
                           <span className="text-gray-500 text-xs shrink-0">({c.played})</span>
+                          {selectedMap && c.winRate !== undefined && (
+                            <span className={`text-xs font-bold shrink-0 ${c.winRate >= 55 ? 'text-green-400' : c.winRate <= 45 ? 'text-red-400' : 'text-gray-300'}`}>
+                              {c.winRate}% WR
+                            </span>
+                          )}
                           {selectedMap && c.teams && c.teams.length > 0 && (
                             <span className="text-[10px] text-gray-400 leading-tight">
                               {c.teams.map((t, j) => (

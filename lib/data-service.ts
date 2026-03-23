@@ -361,15 +361,15 @@ export async function getAgentPickStats(
 export async function getOverallCompositions(
   filters: { team?: string; reg?: string; tour?: string; bo?: string; last?: string }
 ): Promise<CompositionStat[]> {
-  let query = supabase
-    .from('player_stats')
-    .select('team, map, series_id, map_id, agent, reg_id, tour_id');
-
-  if (filters.team) query = query.eq('team', filters.team);
-  if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
-  if (filters.reg)  query = query.eq('reg_id', filters.reg);
-
-  const { data: rows } = await query;
+  const rows = await fetchAllPages<any>((from, to) => {
+    let q = supabase
+      .from('player_stats')
+      .select('team, map, series_id, map_id, agent, reg_id, tour_id');
+    if (filters.team) q = q.eq('team', filters.team);
+    if (filters.tour) q = q.in('tour_id', filters.tour.split(','));
+    if (filters.reg)  q = q.eq('reg_id', filters.reg);
+    return q.range(from, to);
+  });
   if (!rows || rows.length === 0) return [];
 
   // Group rows by (team, map, series_id, map_id) → collect agents
@@ -380,20 +380,78 @@ export async function getOverallCompositions(
     if (row.agent) grouped[key].push(row.agent);
   }
 
-  // Build (map, composition) counts + teams
-  const countMap: Record<string, CompositionStat & { teamCounts: Record<string, number> }> = {};
+  // Build compoByInstance: for each (series_id, map_id) → which team played which composition
+  const compoByInstance: Record<string, Record<string, string>> = {};
   for (const [key, agents] of Object.entries(grouped)) {
     if (agents.length === 0) continue;
-    const [team, mapName] = key.split('__');
-    const composition = agents.slice().sort().join(', ');
-    const countKey = `${mapName}__${composition}`;
-    if (!countMap[countKey]) countMap[countKey] = { map: mapName, composition, played: 0, teamCounts: {} };
-    countMap[countKey].played++;
-    countMap[countKey].teamCounts[team] = (countMap[countKey].teamCounts[team] || 0) + 1;
+    const parts = key.split('__');
+    const team = parts[0];
+    const series_id = parts[2];
+    const map_id = parts[3];
+    const instKey = `${series_id}__${map_id}`;
+    if (!compoByInstance[instKey]) compoByInstance[instKey] = {};
+    compoByInstance[instKey][team] = agents.slice().sort().join(', ');
   }
 
-  return Object.values(countMap).map(({ teamCounts, ...rest }) => ({
+  // Fetch round_info to determine map winners
+  const allSeriesIds = [...new Set(Object.keys(grouped).map(k => k.split('__')[2]))];
+  const roundRows = await fetchAllPages<any>((from, to) =>
+    supabase.from('round_info')
+      .select('series_id, map_id, round, teamA, teamB, rndA, rndB')
+      .in('series_id', allSeriesIds)
+      .range(from, to)
+  );
+
+  // Find the final round (max round number) per map_id → determine winner
+  const finalRoundByMapId: Record<string, any> = {};
+  for (const r of roundRows) {
+    const prev = finalRoundByMapId[r.map_id];
+    if (!prev || Number(r.round) > Number(prev.round)) {
+      finalRoundByMapId[r.map_id] = r;
+    }
+  }
+  // winner[map_id] = winning team name
+  const winnerByMapId: Record<string, string> = {};
+  for (const [map_id, r] of Object.entries(finalRoundByMapId)) {
+    winnerByMapId[map_id] = Number(r.rndA) === 1 ? r.teamA?.trim() : r.teamB?.trim();
+  }
+
+  // Build (map, composition) counts + teams + win rate (excluding mirror matches)
+  const countMap: Record<string, CompositionStat & { teamCounts: Record<string, number>; nonMirrorWins: number }> = {};
+  for (const [key, agents] of Object.entries(grouped)) {
+    if (agents.length === 0) continue;
+    const parts = key.split('__');
+    const team = parts[0];
+    const mapName = parts[1];
+    const map_id = parts[3];
+    const instKey = `${parts[2]}__${map_id}`;
+    const composition = agents.slice().sort().join(', ');
+    const countKey = `${mapName}__${composition}`;
+    if (!countMap[countKey]) countMap[countKey] = { map: mapName, composition, played: 0, nonMirrorPlayed: 0, nonMirrorWins: 0, teamCounts: {} };
+
+    countMap[countKey].played++;
+    countMap[countKey].teamCounts[team] = (countMap[countKey].teamCounts[team] || 0) + 1;
+
+    // Check mirror: does the opponent have the exact same composition?
+    const instance = compoByInstance[instKey] ?? {};
+    const opponentComps = Object.entries(instance).filter(([t]) => t !== team).map(([, c]) => c);
+    const isMirror = opponentComps.length > 0 && opponentComps.every(c => c === composition);
+    if (!isMirror) {
+      countMap[countKey].nonMirrorPlayed = (countMap[countKey].nonMirrorPlayed ?? 0) + 1;
+      const winner = winnerByMapId[map_id];
+      if (winner && winner.toLowerCase() === team.toLowerCase()) {
+        countMap[countKey].nonMirrorWins++;
+      }
+    }
+  }
+
+  return Object.values(countMap).map(({ teamCounts, nonMirrorWins, nonMirrorPlayed, ...rest }) => ({
     ...rest,
+    nonMirrorPlayed,
+    nonMirrorWins,
+    winRate: nonMirrorPlayed && nonMirrorPlayed > 0
+      ? Math.round(nonMirrorWins / nonMirrorPlayed * 100)
+      : undefined,
     teams: Object.entries(teamCounts)
       .map(([team, played]) => ({ team, played }))
       .sort((a, b) => b.played - a.played),
@@ -680,6 +738,11 @@ export async function getAgentImages(): Promise<Record<string, string>> {
   );
 }
 
+export async function getLastUpdateDate(): Promise<string | null> {
+  const { data } = await supabase.from('draft').select('date').order('date', { ascending: false }).limit(1);
+  return data?.[0]?.date ?? null;
+}
+
 export async function getMapImages(): Promise<Record<string, string>> {
   const { data } = await supabase.from('maps_name_ids').select('map, image_path');
   if (!data) return {};
@@ -690,7 +753,7 @@ export async function getMapImages(): Promise<Record<string, string>> {
 
 // --- Stats ---
 
-export async function getMapStats(filters: { team: string; tour?: string; bo?: string; reg?: string; last?: string }): Promise<DashboardData> {
+export async function getMapStats(filters: { team: string; tour?: string; bo?: string; reg?: string; last?: string; dateFrom?: string; dateTo?: string }): Promise<DashboardData> {
   let idQuery = supabase
     .from('draft')
     .select('series_id, date')
@@ -698,9 +761,11 @@ export async function getMapStats(filters: { team: string; tour?: string; bo?: s
     .order('date', { ascending: false });
 
   // Aplicar filtros de torneo/región/bo a la búsqueda de IDs también
-  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
-  if (filters.reg) idQuery = idQuery.eq('reg_id', filters.reg);
+  if (filters.tour)     idQuery = idQuery.in('tour_id', filters.tour.split(','));
+  if (filters.reg)      idQuery = idQuery.eq('reg_id', filters.reg);
   if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
+  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
+  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
 
   // Aplicar el LÍMITE (Last X)
   if (filters.last && filters.last !== 'all') {

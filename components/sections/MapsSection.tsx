@@ -139,7 +139,10 @@ export function MapsSection({ stats, compositions, agentImages }: Props) {
                                   ))
                                 : <span className="text-gray-300 font-mono text-xs">{c.composition}</span>
                               }
-                              <span className="text-purple-400 text-xs">({c.played})</span>
+                              {c.nonMirrorPlayed !== undefined && c.nonMirrorWins !== undefined
+                                ? <span className="text-purple-400 text-xs">{c.nonMirrorWins}W-{c.nonMirrorPlayed - c.nonMirrorWins}L</span>
+                                : <span className="text-purple-400 text-xs">({c.played})</span>
+                              }
                             </div>
                           );
                         })

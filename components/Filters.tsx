@@ -126,10 +126,14 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     );
   }
 
-  return (
-  <div className="flex flex-wrap items-start gap-6 mb-8 bg-[#1a1d23] p-5 rounded-xl border border-gray-800 shadow-xl">
+  const isCompareStats = searchParams.get('section') === 'compare-stats';
 
-      {/* REGIÓN */}
+  return (
+  <div className="flex flex-col gap-4 mb-8 bg-[#1a1d23] p-5 rounded-xl border border-gray-800 shadow-xl">
+
+    {/* FILA 1: Region, Serie, Last X */}
+    <div className="flex flex-wrap items-start gap-6">
+
       <div className="flex flex-col gap-1">
         <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Region</label>
         <select
@@ -144,27 +148,6 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         </select>
       </div>
 
-      {/* EQUIPO (solo modo team) */}
-      {!isOverall && (
-        <SearchableSelect
-          label="Team"
-          options={teams}
-          selected={searchParams.get('team') || ""}
-          onChange={(val) => updateFilter('team', val)}
-          placeholder="Choose a team"
-        />
-      )}
-
-      {/* MULTISELECT TORNEO */}
-      <SearchableMultiSelect
-        label="Tournament"
-        options={tours}
-        selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || []}
-        onChange={(values) => updateMultiFilter('tour', values)}
-        disabled={!isOverall && !searchParams.get('team')}
-      />
-
-      {/* SERIE */}
       <div className="flex flex-col gap-1">
         <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Serie</label>
         <select
@@ -178,7 +161,6 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         </select>
       </div>
 
-      {/* SELECTOR: ÚLTIMAS PARTIDAS (solo modo team) */}
       {!isOverall && (
         <div className="flex flex-col gap-1">
           <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Last X matches</label>
@@ -196,28 +178,99 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         </div>
       )}
 
-      {/* SEPARADOR + TEAM B (solo en modo compare) */}
-      {isCompare && (
+    </div>
+
+    {/* FILA 2: Team A, Tournament A, From A, To A */}
+    <div className="flex flex-wrap items-start gap-6 pt-3 border-t border-gray-800">
+
+      {!isOverall && (
+        <SearchableSelect
+          label="Team"
+          options={teams}
+          selected={searchParams.get('team') || ""}
+          onChange={(val) => updateFilter('team', val)}
+          placeholder="Choose a team"
+        />
+      )}
+
+      <SearchableMultiSelect
+        label="Tournament"
+        options={tours}
+        selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || []}
+        onChange={(values) => updateMultiFilter('tour', values)}
+        disabled={!isOverall && !searchParams.get('team')}
+      />
+
+      {isCompareStats && (
         <>
-          <div className="self-stretch border-l border-gray-700 mx-1" />
-
-          <SearchableSelect
-            label="Team B"
-            options={teams}
-            selected={searchParams.get('team2') || ''}
-            onChange={(val) => updateFilter('team2', val)}
-            placeholder="Choose Team B"
-          />
-
-          <SearchableMultiSelect
-            label="Tournament (B)"
-            options={tours2}
-            selected={searchParams.get('tour2')?.split(',').filter(x => x !== '') || []}
-            onChange={(values) => updateMultiFilter('tour2', values)}
-            disabled={!searchParams.get('team2')}
-          />
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">From A</label>
+            <input
+              type="date"
+              value={searchParams.get('dateFrom') || ''}
+              onChange={(e) => updateFilter('dateFrom', e.target.value)}
+              className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600 [color-scheme:dark]"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">To A</label>
+            <input
+              type="date"
+              value={searchParams.get('dateTo') || ''}
+              onChange={(e) => updateFilter('dateTo', e.target.value)}
+              className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600 [color-scheme:dark]"
+            />
+          </div>
         </>
       )}
+
+    </div>
+
+    {/* FILA 3: Team B, Tournament B, From B, To B (solo compare) */}
+    {isCompare && (
+      <div className="flex flex-wrap items-start gap-6 pt-3 border-t border-gray-800">
+
+        <SearchableSelect
+          label="Team B"
+          options={teams}
+          selected={searchParams.get('team2') || ''}
+          onChange={(val) => updateFilter('team2', val)}
+          placeholder="Choose Team B"
+        />
+
+        <SearchableMultiSelect
+          label="Tournament (B)"
+          options={tours2}
+          selected={searchParams.get('tour2')?.split(',').filter(x => x !== '') || []}
+          onChange={(values) => updateMultiFilter('tour2', values)}
+          disabled={!searchParams.get('team2')}
+        />
+
+        {isCompareStats && (
+          <>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">From B</label>
+              <input
+                type="date"
+                value={searchParams.get('dateFrom2') || ''}
+                onChange={(e) => updateFilter('dateFrom2', e.target.value)}
+                className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600 [color-scheme:dark]"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">To B</label>
+              <input
+                type="date"
+                value={searchParams.get('dateTo2') || ''}
+                onChange={(e) => updateFilter('dateTo2', e.target.value)}
+                className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600 [color-scheme:dark]"
+              />
+            </div>
+          </>
+        )}
+
+      </div>
+    )}
 
     </div>
   );

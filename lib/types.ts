@@ -77,6 +77,9 @@ export type CompositionStat = {
   map: string;
   composition: string;
   played: number;
+  nonMirrorPlayed?: number;
+  nonMirrorWins?: number;
+  winRate?: number;
   teams?: { team: string; played: number }[];
 };
 

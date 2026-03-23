@@ -23,7 +23,7 @@ const NAV_SECTIONS = [
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentSection = searchParams.get('section') || 'maps';
@@ -54,9 +54,13 @@ export function Sidebar() {
       <div className="p-6 pb-4">
         <h2 className="text-lg font-black tracking-widest uppercase text-gray-100">VCT Data</h2>
         <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Analytics</p>
+        {lastUpdateDate && (() => {
+          const [y, m, d] = lastUpdateDate.split('T')[0].split('-');
+          return <p className="text-[9px] text-gray-600 mt-1">Last update: {d}/{m}/{y.slice(2)}</p>;
+        })()}
       </div>
 
-      <nav className="flex flex-col gap-4 px-3 mt-2 flex-1">
+      <nav className="flex flex-col gap-4 px-3 mt-2">
         {NAV_SECTIONS.map(({ title, items }) => (
           <div key={title}>
             <p className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-gray-600">
@@ -85,7 +89,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="p-4 border-t border-gray-800 mt-auto">
+      <div className="p-4 border-t border-gray-800 mt-4">
         <p className="px-1 mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-600">Contact</p>
         <a
           href="https://x.com/rktcaster"
