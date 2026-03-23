@@ -71,6 +71,9 @@ export type TeamRankStats = {
   pabWins: number; pabTotal: number;
   pabAtkWins: number; pabAtkTotal: number;
   pabDefWins: number; pabDefTotal: number;
+  timeoutLosses: number;
+  retakeDe: number;
+  retakePl: number;
 };
 
 export type CompositionStat = {

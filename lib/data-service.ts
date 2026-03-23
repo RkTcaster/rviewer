@@ -112,6 +112,9 @@ export async function getTournamentRankings(
       pabWins: 0, pabTotal: 0,
       pabAtkWins: 0, pabAtkTotal: 0,
       pabDefWins: 0, pabDefTotal: 0,
+      timeoutLosses: 0,
+      retakeDe: 0,
+      retakePl: 0,
     };
   };
 
@@ -137,6 +140,12 @@ export async function getTournamentRankings(
     else if (rawSide === 'def') { teamStats[tA].defTotal++; if (wonA) teamStats[tA].defWins++; }
     if (sideB === 'atk') { teamStats[tB].attTotal++; if (!wonA) teamStats[tB].attWins++; }
     else if (sideB === 'def') { teamStats[tB].defTotal++; if (!wonA) teamStats[tB].defWins++; }
+
+    // Timeout losses: winCon = 'tim' → attacking side lost
+    if (r.winCon?.trim().toLowerCase() === 'tim') {
+      if (rawSide === 'atk') teamStats[tA].timeoutLosses++;
+      if (sideB === 'atk')   teamStats[tB].timeoutLosses++;
+    }
 
     // Pistols
     if (roundNum === 1 || roundNum === 13) {
@@ -209,6 +218,35 @@ export async function getTournamentRankings(
   Object.values(mapKeyRounds).forEach(({ teamA, teamB, r1, r2, r3, r3side, r13, r14, r15, r15side }) => {
     processHalf(teamA, teamB, r1, r2, r3, r3side);
     processHalf(teamA, teamB, r13, r14, r15, r15side);
+  });
+
+  // Retake efficiency from player_performance
+  const perfRows = await fetchAllPages<any>((from, to) =>
+    supabase.from('player_performance')
+      .select('map_id, team, DE, PL')
+      .in('series_id', seriesIds)
+      .range(from, to)
+  );
+
+  const perfByMapTeam: Record<string, { de: number; pl: number }> = {};
+  for (const p of perfRows) {
+    const k = `${p.map_id}__${p.team?.trim()}`;
+    if (!perfByMapTeam[k]) perfByMapTeam[k] = { de: 0, pl: 0 };
+    perfByMapTeam[k].de += Number(p.DE) || 0;
+    perfByMapTeam[k].pl += Number(p.PL) || 0;
+  }
+
+  Object.entries(mapLastRound).forEach(([map_id, r]: [string, any]) => {
+    const tA = r.teamA?.trim();
+    const tB = r.teamB?.trim();
+    if (!tA || !tB) return;
+    init(tA); init(tB);
+    const perfA = perfByMapTeam[`${map_id}__${tA}`];
+    const perfB = perfByMapTeam[`${map_id}__${tB}`];
+    if (perfA) teamStats[tA].retakeDe += perfA.de;
+    if (perfB) teamStats[tA].retakePl += perfB.pl;
+    if (perfB) teamStats[tB].retakeDe += perfB.de;
+    if (perfA) teamStats[tB].retakePl += perfA.pl;
   });
 
   return teamStats;

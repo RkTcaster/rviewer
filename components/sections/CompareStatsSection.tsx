@@ -18,7 +18,7 @@ interface Props {
   rankings: Record<string, TeamRankStats>;
 }
 
-type MetricKey = 'map' | 'atk' | 'def' | 'pistol' | 'antiEco' | 'recovery' | 'pab' | 'pabAtk' | 'pabDef';
+type MetricKey = 'map' | 'atk' | 'def' | 'pistol' | 'antiEco' | 'recovery' | 'pab' | 'pabAtk' | 'pabDef' | 'timeout' | 'retake';
 
 interface RowData {
   label: string;
@@ -31,6 +31,8 @@ interface RowData {
   totalB: number;
   /** true = lower % is better (inverts color and ranking direction) */
   lowerIsBetter?: boolean;
+  /** true = show raw count instead of W-L% */
+  countOnly?: boolean;
 }
 
 function pct(wins: number, total: number): number | null {
@@ -54,6 +56,8 @@ function getRank(
       case 'pab':      return pct(s.pabWins, s.pabTotal);
       case 'pabAtk':   return pct(s.pabAtkWins, s.pabAtkTotal);
       case 'pabDef':   return pct(s.pabDefWins, s.pabDefTotal);
+      case 'timeout':  return s.timeoutLosses;
+      case 'retake':   return pct(s.retakeDe, s.retakePl);
     }
   };
 
@@ -111,14 +115,14 @@ function StatRow({ row, teamAName, teamBName, rankings }: {
       <td className="px-4 py-4 text-center bg-[#1a1d23] w-20">
         <RankBadge rankInfo={rankA} />
       </td>
-      {/* Team A: W-L */}
+      {/* Team A: W-L or count */}
       <td className="px-4 py-4 text-right bg-[#1a1d23] text-[12px] text-gray-500 whitespace-nowrap">
-        {wlA}
+        {!row.countOnly && wlA}
       </td>
-      {/* Team A: % */}
+      {/* Team A: % or count */}
       <td className="px-5 py-4 text-right bg-[#1a1d23]">
         <span className={`text-2xl font-black ${row.valA !== null ? colorA : 'text-gray-600'}`}>
-          {row.valA !== null ? `${row.valA}%` : '-'}
+          {row.valA !== null ? (row.countOnly ? row.valA : `${row.valA}%`) : '-'}
         </span>
       </td>
 
@@ -127,15 +131,15 @@ function StatRow({ row, teamAName, teamBName, rankings }: {
         <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{row.label}</span>
       </td>
 
-      {/* Team B: % */}
+      {/* Team B: % or count */}
       <td className="px-5 py-4 text-left bg-[#1a1d23]">
         <span className={`text-2xl font-black ${row.valB !== null ? colorB : 'text-gray-600'}`}>
-          {row.valB !== null ? `${row.valB}%` : '-'}
+          {row.valB !== null ? (row.countOnly ? row.valB : `${row.valB}%`) : '-'}
         </span>
       </td>
-      {/* Team B: W-L */}
+      {/* Team B: W-L or count */}
       <td className="px-4 py-4 text-left bg-[#1a1d23] text-[12px] text-gray-500 whitespace-nowrap">
-        {wlB}
+        {!row.countOnly && wlB}
       </td>
       {/* Team B: Ranking */}
       <td className="px-4 py-4 text-center bg-[#1a1d23] w-20">
@@ -150,6 +154,10 @@ export function CompareStatsSection({
   antiEcoA, antiEcoB, recoveryA, recoveryB,
   pabA, pabB, teamAName, teamBName, rankings,
 }: Props) {
+  const timeoutA = rankings[teamAName]?.timeoutLosses ?? 0;
+  const timeoutB = rankings[teamBName]?.timeoutLosses ?? 0;
+  const retakeA = rankings[teamAName] ?? { retakeDe: 0, retakePl: 0 };
+  const retakeB = rankings[teamBName] ?? { retakeDe: 0, retakePl: 0 };
   if (!teamBName) {
     return (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
@@ -215,6 +223,17 @@ export function CompareStatsSection({
       label: 'PAB Def', key: 'pabDef',
       valA: pct(pabA.defWins, pabA.defTotal),       winsA: pabA.defWins,    totalA: pabA.defTotal,
       valB: pct(pabB.defWins, pabB.defTotal),       winsB: pabB.defWins,    totalB: pabB.defTotal,
+    },
+    {
+      label: 'Retake Eff', key: 'retake',
+      valA: pct(retakeA.retakeDe, retakeA.retakePl), winsA: retakeA.retakeDe, totalA: retakeA.retakePl,
+      valB: pct(retakeB.retakeDe, retakeB.retakePl), winsB: retakeB.retakeDe, totalB: retakeB.retakePl,
+    },
+    {
+      label: 'Timeout Losses', key: 'timeout',
+      valA: timeoutA, winsA: timeoutA, totalA: timeoutA,
+      valB: timeoutB, winsB: timeoutB, totalB: timeoutB,
+      lowerIsBetter: true, countOnly: true,
     },
   ];
 
