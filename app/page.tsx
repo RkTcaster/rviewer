@@ -12,6 +12,7 @@ import { MapPicksSection } from '@/components/sections/MapPicksSection';
 import { AgentPicksSection } from '@/components/sections/AgentPicksSection';
 import { PlayerStatsSection } from '@/components/sections/PlayerStatsSection';
 import { MetaShiftSection } from '@/components/sections/MetaShiftSection';
+import { GraphsSection } from '@/components/sections/GraphsSection';
 
 export default async function Page({
   searchParams,
@@ -34,7 +35,7 @@ export default async function Page({
     ? await getMapStats({ team: team2, tour: tour2, bo, reg, last, dateFrom: dateFrom2, dateTo: dateTo2 })
     : null;
 
-  const rankings = (section === 'compare-stats')
+  const rankings = (section === 'compare-stats' || section === 'graphs')
     ? await getTournamentRankings({ tour, reg, bo })
     : {};
 
@@ -108,6 +109,17 @@ export default async function Page({
         return <AgentPicksSection stats={agentPickStats} compositions={agentCompositions} mapImages={mapImages} agentImages={agentImages} mapFullStats={mapFullStats} />;
       case 'meta-shift':
         return <MetaShiftSection statsLeft={agentPickStatsLeft} statsRight={agentPickStatsRight} agentImages={agentImages} />;
+      case 'graphs':
+        return (
+          <GraphsSection
+            pistols={pistols}
+            antiEco={antiEco}
+            recovery={recovery}
+            pab={pab}
+            stats={stats}
+            rankStats={rankings[team || '']}
+          />
+        );
       case 'player-stats':
         return <PlayerStatsSection stats={playerStats} tournamentAvg={tournamentPlayerAvg} />;
       case 'economy':
@@ -161,6 +173,7 @@ export default async function Page({
             'map-picks': 'Map Picks',
             'agent-picks': 'Agent Picks',
             'meta-shift': 'Meta Shift',
+            'graphs': 'Sankey',
           }[section] ?? section}</h1>
           {reg && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">

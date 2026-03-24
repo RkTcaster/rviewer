@@ -1,3 +1,4 @@
+import { Sword, Shield } from 'lucide-react';
 import { MapStat, TeamRankStats } from '@/lib/types';
 
 type PabStat = { wins: number; total: number; atkWins: number; atkTotal: number; defWins: number; defTotal: number };
@@ -18,10 +19,10 @@ interface Props {
   rankings: Record<string, TeamRankStats>;
 }
 
-type MetricKey = 'map' | 'atk' | 'def' | 'pistol' | 'antiEco' | 'recovery' | 'pab' | 'pabAtk' | 'pabDef' | 'timeout' | 'retake';
+type MetricKey = 'map' | 'atk' | 'def' | 'pistol' | 'antiEco' | 'recovery' | 'pab' | 'pabAtk' | 'pabDef' | 'timeout' | 'retake' | 'postPlant' | 'plantAtk' | 'plantDef';
 
 interface RowData {
-  label: string;
+  label: React.ReactNode;
   key: MetricKey;
   valA: number | null;
   winsA: number;
@@ -57,7 +58,10 @@ function getRank(
       case 'pabAtk':   return pct(s.pabAtkWins, s.pabAtkTotal);
       case 'pabDef':   return pct(s.pabDefWins, s.pabDefTotal);
       case 'timeout':  return s.timeoutLosses;
-      case 'retake':   return pct(s.retakeDe, s.retakePl);
+      case 'retake':     return pct(s.retakeDe, s.retakePl);
+      case 'postPlant':  return s.postPlantPl > 0 ? pct(s.postPlantPl - s.postPlantDe, s.postPlantPl) : null;
+      case 'plantAtk':   return pct(s.postPlantPl, s.attTotal);
+      case 'plantDef':   return pct(s.retakePl, s.defTotal);
     }
   };
 
@@ -128,7 +132,7 @@ function StatRow({ row, teamAName, teamBName, rankings }: {
 
       {/* Metric label */}
       <td className="px-6 py-4 text-center bg-[#0f1115] min-w-[180px]">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{row.label}</span>
+        <span className="text-[12px] font-bold uppercase tracking-widest text-gray-400">{row.label}</span>
       </td>
 
       {/* Team B: % or count */}
@@ -158,6 +162,8 @@ export function CompareStatsSection({
   const timeoutB = rankings[teamBName]?.timeoutLosses ?? 0;
   const retakeA = rankings[teamAName] ?? { retakeDe: 0, retakePl: 0 };
   const retakeB = rankings[teamBName] ?? { retakeDe: 0, retakePl: 0 };
+  const ppA = rankings[teamAName] ?? { postPlantPl: 0, postPlantDe: 0 };
+  const ppB = rankings[teamBName] ?? { postPlantPl: 0, postPlantDe: 0 };
   if (!teamBName) {
     return (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
@@ -165,6 +171,21 @@ export function CompareStatsSection({
       </div>
     );
   }
+
+  const swordLabel = (text: string) => (
+    <span className="flex items-center justify-center gap-1.5">
+      <Sword size={11} className="text-blue-400 shrink-0" />
+      {text}
+      <Sword size={11} className="text-blue-400 shrink-0" />
+    </span>
+  );
+  const shieldLabel = (text: string) => (
+    <span className="flex items-center justify-center gap-1.5">
+      <Shield size={11} className="text-orange-400 shrink-0" />
+      {text}
+      <Shield size={11} className="text-orange-400 shrink-0" />
+    </span>
+  );
 
   const aggA = {
     wins: statsA.reduce((s, m) => s + m.wins, 0),
@@ -190,14 +211,41 @@ export function CompareStatsSection({
       valB: pct(aggB.wins, aggB.played),            winsB: aggB.wins,       totalB: aggB.played,
     },
     {
-      label: 'Atk Side Winrate', key: 'atk',
+      label: swordLabel('Atk Side Winrate'), key: 'atk',
       valA: pct(aggA.attWins, aggA.attTotal),       winsA: aggA.attWins,    totalA: aggA.attTotal,
       valB: pct(aggB.attWins, aggB.attTotal),       winsB: aggB.attWins,    totalB: aggB.attTotal,
     },
     {
-      label: 'Def Side Winrate', key: 'def',
+      label: swordLabel('Plant Rate ATK'), key: 'plantAtk',
+      valA: pct(rankings[teamAName]?.postPlantPl ?? 0, rankings[teamAName]?.attTotal ?? 0),
+      winsA: rankings[teamAName]?.postPlantPl ?? 0, totalA: rankings[teamAName]?.attTotal ?? 0,
+      valB: pct(rankings[teamBName]?.postPlantPl ?? 0, rankings[teamBName]?.attTotal ?? 0),
+      winsB: rankings[teamBName]?.postPlantPl ?? 0, totalB: rankings[teamBName]?.attTotal ?? 0,
+    },
+    {
+      label: swordLabel('Post Plant WR'), key: 'postPlant',
+      valA: pct(ppA.postPlantPl - ppA.postPlantDe, ppA.postPlantPl),
+      winsA: ppA.postPlantPl - ppA.postPlantDe, totalA: ppA.postPlantPl,
+      valB: pct(ppB.postPlantPl - ppB.postPlantDe, ppB.postPlantPl),
+      winsB: ppB.postPlantPl - ppB.postPlantDe, totalB: ppB.postPlantPl,
+    },
+    {
+      label: shieldLabel('Def Side Winrate'), key: 'def',
       valA: pct(aggA.defWins, aggA.defTotal),       winsA: aggA.defWins,    totalA: aggA.defTotal,
       valB: pct(aggB.defWins, aggB.defTotal),       winsB: aggB.defWins,    totalB: aggB.defTotal,
+    },
+    {
+      label: shieldLabel('Plant Rate DEF'), key: 'plantDef',
+      valA: pct(rankings[teamAName]?.retakePl ?? 0, rankings[teamAName]?.defTotal ?? 0),
+      winsA: rankings[teamAName]?.retakePl ?? 0, totalA: rankings[teamAName]?.defTotal ?? 0,
+      valB: pct(rankings[teamBName]?.retakePl ?? 0, rankings[teamBName]?.defTotal ?? 0),
+      winsB: rankings[teamBName]?.retakePl ?? 0, totalB: rankings[teamBName]?.defTotal ?? 0,
+      lowerIsBetter: true,
+    },
+    {
+      label: shieldLabel('Retake Eff'), key: 'retake',
+      valA: pct(retakeA.retakeDe, retakeA.retakePl), winsA: retakeA.retakeDe, totalA: retakeA.retakePl,
+      valB: pct(retakeB.retakeDe, retakeB.retakePl), winsB: retakeB.retakeDe, totalB: retakeB.retakePl,
     },
     {
       label: 'Pistol Winrate', key: 'pistol',
@@ -223,11 +271,6 @@ export function CompareStatsSection({
       label: 'PAB Def', key: 'pabDef',
       valA: pct(pabA.defWins, pabA.defTotal),       winsA: pabA.defWins,    totalA: pabA.defTotal,
       valB: pct(pabB.defWins, pabB.defTotal),       winsB: pabB.defWins,    totalB: pabB.defTotal,
-    },
-    {
-      label: 'Retake Eff', key: 'retake',
-      valA: pct(retakeA.retakeDe, retakeA.retakePl), winsA: retakeA.retakeDe, totalA: retakeA.retakePl,
-      valB: pct(retakeB.retakeDe, retakeB.retakePl), winsB: retakeB.retakeDe, totalB: retakeB.retakePl,
     },
     {
       label: 'Timeout Losses', key: 'timeout',

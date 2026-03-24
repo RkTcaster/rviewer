@@ -115,6 +115,8 @@ export async function getTournamentRankings(
       timeoutLosses: 0,
       retakeDe: 0,
       retakePl: 0,
+      postPlantPl: 0,
+      postPlantDe: 0,
     };
   };
 
@@ -247,6 +249,11 @@ export async function getTournamentRankings(
     if (perfB) teamStats[tA].retakePl += perfB.pl;
     if (perfB) teamStats[tB].retakeDe += perfB.de;
     if (perfA) teamStats[tB].retakePl += perfA.pl;
+
+    if (perfA) teamStats[tA].postPlantPl += perfA.pl;
+    if (perfB) teamStats[tA].postPlantDe += perfB.de;
+    if (perfB) teamStats[tB].postPlantPl += perfB.pl;
+    if (perfA) teamStats[tB].postPlantDe += perfA.de;
   });
 
   return teamStats;

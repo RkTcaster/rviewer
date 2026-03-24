@@ -74,6 +74,8 @@ export type TeamRankStats = {
   timeoutLosses: number;
   retakeDe: number;
   retakePl: number;
+  postPlantPl: number;
+  postPlantDe: number;
 };
 
 export type CompositionStat = {
