@@ -87,8 +87,10 @@ export async function getTournamentRankings(
   if (!idList || idList.length === 0) return {};
 
   const seriesIds = [...new Set(idList.map(x => x.series_id))];
-  const { data: rounds } = await supabase.from('round_info').select('*').in('series_id', seriesIds);
-  if (!rounds) return {};
+  const rounds = await fetchAllPages<any>((from, to) =>
+    supabase.from('round_info').select('*').in('series_id', seriesIds).range(from, to)
+  );
+  if (!rounds || rounds.length === 0) return {};
 
   const teamStats: Record<string, TeamRankStats> = {};
   const mapLastRound: Record<string, any> = {};
