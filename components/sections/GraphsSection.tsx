@@ -57,7 +57,7 @@ function SankeyChart({
         margin={{ top: 10, right: 200, bottom: 10, left: 10 }}
       >
         <Tooltip
-          formatter={(value: unknown) => [value, 'rounds']}
+          formatter={(value: unknown) => [`${value}`, 'rounds'] as [string, string]}
           contentStyle={{ background: '#0f1115', border: '1px solid #374151', borderRadius: 8, color: '#ffffff' }}
         />
       </Sankey>
