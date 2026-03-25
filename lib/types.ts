@@ -125,6 +125,8 @@ export type TournamentPlayerAvg = {
   hs: number; hsAtk: number; hsDef: number;
 };
 
+export type EconomyBin = { label: string; count: number; wins: number };
+
 export type DashboardData = {
   mapStats: MapStat[];
   draftOrder: {

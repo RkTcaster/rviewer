@@ -11,7 +11,7 @@ interface FiltersProps {
   tours: Tournament[];
   tours2?: Tournament[];
   teams2?: string[];
-  mode?: 'team' | 'overall' | 'meta-shift';
+  mode?: 'team' | 'overall' | 'meta-shift' | 'economy';
 }
 
 export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode = 'team' }: FiltersProps) {
@@ -21,6 +21,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
   const isCompare = section === 'compare-maps' || section === 'compare-stats';
   const isOverall = mode === 'overall';
   const isMetaShift = mode === 'meta-shift';
+  const isEconomy = mode === 'economy';
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -148,20 +149,34 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         </select>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Serie</label>
-        <select
-          value={searchParams.get('bo') || "all"}
-          onChange={(e) => updateFilter('bo', e.target.value)}
-          className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
-        >
-          <option value="all">BO3 & BO5</option>
-          <option value="3">Solo BO3</option>
-          <option value="5">Solo BO5</option>
-        </select>
-      </div>
+      {!isEconomy && (
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Serie</label>
+          <select
+            value={searchParams.get('bo') || "all"}
+            onChange={(e) => updateFilter('bo', e.target.value)}
+            className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
+          >
+            <option value="all">BO3 & BO5</option>
+            <option value="3">Solo BO3</option>
+            <option value="5">Solo BO5</option>
+          </select>
+        </div>
+      )}
 
-      {!isOverall && (
+      {isEconomy && (
+        <div className="flex flex-col gap-1 justify-end">
+          <label className="text-[11px] font-bold text-transparent uppercase tracking-wider">Reset</label>
+          <button
+            onClick={() => router.push(`?section=economy`)}
+            className="px-4 py-2 rounded bg-[#252a33] border border-gray-700 text-sm font-semibold text-gray-400 hover:text-gray-200 hover:border-gray-500 transition-colors"
+          >
+            Reset
+          </button>
+        </div>
+      )}
+
+      {!isOverall && !isEconomy && (
         <div className="flex flex-col gap-1">
           <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Last X matches</label>
           <select
@@ -198,13 +213,13 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         options={tours}
         selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || []}
         onChange={(values) => updateMultiFilter('tour', values)}
-        disabled={!isOverall && !searchParams.get('team')}
+        disabled={!isOverall && !isEconomy && !searchParams.get('team')}
       />
 
-      {isCompareStats && (
+      {(isCompareStats || isEconomy) && (
         <>
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">From A</label>
+            <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">{isEconomy ? 'From' : 'From A'}</label>
             <input
               type="date"
               value={searchParams.get('dateFrom') || ''}
@@ -213,7 +228,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">To A</label>
+            <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">{isEconomy ? 'To' : 'To A'}</label>
             <input
               type="date"
               value={searchParams.get('dateTo') || ''}

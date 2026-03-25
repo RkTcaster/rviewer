@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2 } from 'lucide-react';
+import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign } from 'lucide-react';
 
 const NAV_SECTIONS = [
   {
@@ -10,6 +10,7 @@ const NAV_SECTIONS = [
       { id: 'map-picks',   label: 'Map Picks',   icon: Map },
       { id: 'agent-picks',   label: 'Agent Picks',   icon: Users },
       { id: 'meta-shift',    label: 'Meta Shift',    icon: TrendingUp },
+      { id: 'economy',       label: 'Economy',       icon: DollarSign },
     ],
   },
   {

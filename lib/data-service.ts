@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { AgentPickStat, CompositionStat, DashboardData, MapStat, OverallMapFullStat, OverallMapStat, PlayerStat, Region, TeamRankStats, Tournament, TournamentPlayerAvg } from './types';
+import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, MapStat, OverallMapFullStat, OverallMapStat, PlayerStat, Region, TeamRankStats, Tournament, TournamentPlayerAvg } from './types';
 
 // --- HELPERS ---
 
@@ -1058,4 +1058,71 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Omit<Da
     pab: { atkWins: pabWinsAtk, defWins: pabWinsDef, wins: pabWinsAtk + pabWinsDef, atkTotal: pabAtkTotal, defTotal: pabDefTotal, total: pabAtkTotal + pabDefTotal },
     lastMatchData: lastDate
   };
+}
+
+export async function getEconomyDistribution(filters: {
+  reg?: string; tour?: string; team?: string;
+}): Promise<EconomyBin[]> {
+  const { reg, tour, team } = filters;
+  const BIN_COUNT = 50;
+  const BIN_SIZE = 600; // 30000 / 50
+
+  const emptyBins = (): EconomyBin[] =>
+    Array.from({ length: BIN_COUNT }, (_, i) => ({ label: String(i * BIN_SIZE), count: 0, wins: 0 }));
+
+  let draftQuery = supabase.from('draft').select('series_id');
+  if (reg) draftQuery = draftQuery.eq('reg_id', reg);
+  if (tour) {
+    const tourIds = tour.split(',').filter(Boolean);
+    draftQuery = tourIds.length === 1
+      ? draftQuery.eq('tour_id', tourIds[0])
+      : draftQuery.in('tour_id', tourIds);
+  }
+  const { data: drafts } = await draftQuery;
+  if (!drafts?.length) return emptyBins();
+  const seriesIds = [...new Set(drafts.map((d: any) => d.series_id))];
+
+  // Query 1: counts — no win_A, always succeeds
+  const rows = await fetchAllPages<{ team_a: string; team_b: string; team_a_economy: number; team_b_economy: number; round: number }>((from, to) =>
+    supabase
+      .from('team_economy')
+      .select('team_a,team_b,team_a_economy,team_b_economy,round')
+      .in('series_id', seriesIds)
+      .range(from, to)
+  );
+
+  const bins = emptyBins();
+  for (const row of rows) {
+    if (row.round === 1 || row.round === 13) continue;
+    for (const { val, rowTeam } of [
+      { val: row.team_a_economy, rowTeam: row.team_a },
+      { val: row.team_b_economy, rowTeam: row.team_b },
+    ]) {
+      if (val == null || val < 0) continue;
+      if (team && rowTeam !== team) continue;
+      bins[Math.min(Math.floor(val / BIN_SIZE), BIN_COUNT - 1)].count++;
+    }
+  }
+
+  // Query 2: wins — includes win_A; if column doesn't exist fetchAllPages returns [] gracefully
+  const winRows = await fetchAllPages<{ team_a: string; team_b: string; team_a_economy: number; team_b_economy: number; win_A: number; round: number }>((from, to) =>
+    supabase
+      .from('team_economy')
+      .select('team_a,team_b,team_a_economy,team_b_economy,win_A,round')
+      .in('series_id', seriesIds)
+      .range(from, to)
+  );
+  for (const row of winRows) {
+    if (row.round === 1 || row.round === 13) continue;
+    for (const { val, rowTeam, won } of [
+      { val: row.team_a_economy, rowTeam: row.team_a, won: row.win_A === 1 },
+      { val: row.team_b_economy, rowTeam: row.team_b, won: row.win_A === 0 },
+    ]) {
+      if (val == null || val < 0) continue;
+      if (team && rowTeam !== team) continue;
+      if (won) bins[Math.min(Math.floor(val / BIN_SIZE), BIN_COUNT - 1)].wins++;
+    }
+  }
+
+  return bins;
 }
