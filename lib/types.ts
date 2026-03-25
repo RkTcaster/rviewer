@@ -127,6 +127,21 @@ export type TournamentPlayerAvg = {
 
 export type EconomyBin = { label: string; count: number; wins: number };
 
+export type EconomyMatchup = { played: number; wins: number };
+export type EconomyCategoryStats = {
+  total:     EconomyMatchup;
+  vsEco:     EconomyMatchup;
+  vsSemiEco: EconomyMatchup;
+  vsSemiBuy: EconomyMatchup;
+  vsFullBuy: EconomyMatchup;
+};
+export type TeamEconomyCompare = {
+  eco:     EconomyCategoryStats;
+  semiEco: EconomyCategoryStats;
+  semiBuy: EconomyCategoryStats;
+  fullBuy: EconomyCategoryStats;
+};
+
 export type DashboardData = {
   mapStats: MapStat[];
   draftOrder: {

@@ -18,7 +18,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
   const router = useRouter();
   const searchParams = useSearchParams();
   const section = searchParams.get('section');
-  const isCompare = section === 'compare-maps' || section === 'compare-stats';
+  const isCompare = section === 'compare-maps' || section === 'compare-stats' || section === 'compare-economy';
   const isOverall = mode === 'overall';
   const isMetaShift = mode === 'meta-shift';
   const isEconomy = mode === 'economy';
@@ -127,7 +127,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     );
   }
 
-  const isCompareStats = searchParams.get('section') === 'compare-stats';
+  const isCompareStats = section === 'compare-stats' || section === 'compare-economy';
 
   return (
   <div className="flex flex-col gap-4 mb-8 bg-[#1a1d23] p-5 rounded-xl border border-gray-800 shadow-xl">

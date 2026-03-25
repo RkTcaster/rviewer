@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, MapStat, OverallMapFullStat, OverallMapStat, PlayerStat, Region, TeamRankStats, Tournament, TournamentPlayerAvg } from './types';
+import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, MapStat, OverallMapFullStat, OverallMapStat, PlayerStat, Region, TeamEconomyCompare, TeamRankStats, Tournament, TournamentPlayerAvg } from './types';
 
 // --- HELPERS ---
 
@@ -1125,4 +1125,82 @@ export async function getEconomyDistribution(filters: {
   }
 
   return bins;
+}
+
+function classifyEconomy(val: number): keyof TeamEconomyCompare {
+  if (val < 5000)  return 'eco';
+  if (val < 15000) return 'semiEco';
+  if (val < 20000) return 'semiBuy';
+  return 'fullBuy';
+}
+
+const vsMap: Record<keyof TeamEconomyCompare, keyof EconomyCategoryStats> = {
+  eco:     'vsEco',
+  semiEco: 'vsSemiEco',
+  semiBuy: 'vsSemiBuy',
+  fullBuy: 'vsFullBuy',
+};
+
+function emptyMatchup() { return { played: 0, wins: 0 }; }
+function emptyCategory(): EconomyCategoryStats {
+  return { total: emptyMatchup(), vsEco: emptyMatchup(), vsSemiEco: emptyMatchup(), vsSemiBuy: emptyMatchup(), vsFullBuy: emptyMatchup() };
+}
+function emptyTeamEconomyCompare(): TeamEconomyCompare {
+  return { eco: emptyCategory(), semiEco: emptyCategory(), semiBuy: emptyCategory(), fullBuy: emptyCategory() };
+}
+
+export async function getEconomyCompare(filters: {
+  reg?: string; tour?: string; team?: string;
+}): Promise<TeamEconomyCompare> {
+  const { reg, tour, team } = filters;
+  const stats = emptyTeamEconomyCompare();
+  if (!team) return stats;
+
+  let draftQuery = supabase.from('draft').select('series_id');
+  if (reg) draftQuery = draftQuery.eq('reg_id', reg);
+  if (tour) {
+    const tourIds = tour.split(',').filter(Boolean);
+    draftQuery = tourIds.length === 1
+      ? draftQuery.eq('tour_id', tourIds[0])
+      : draftQuery.in('tour_id', tourIds);
+  }
+  const { data: drafts } = await draftQuery;
+  if (!drafts?.length) return stats;
+  const seriesIds = [...new Set(drafts.map((d: any) => d.series_id))];
+
+  const rows = await fetchAllPages<{
+    team_a: string; team_b: string;
+    team_a_economy: number; team_b_economy: number;
+    win_A: number; round: number;
+  }>((from, to) =>
+    supabase
+      .from('team_economy')
+      .select('team_a,team_b,team_a_economy,team_b_economy,win_A,round')
+      .in('series_id', seriesIds)
+      .range(from, to)
+  );
+
+  for (const row of rows) {
+    if (row.round === 1 || row.round === 13) continue;
+
+    let teamEco: number, oppEco: number, won: boolean;
+    if (row.team_a === team) {
+      teamEco = row.team_a_economy; oppEco = row.team_b_economy; won = row.win_A === 1;
+    } else if (row.team_b === team) {
+      teamEco = row.team_b_economy; oppEco = row.team_a_economy; won = row.win_A === 0;
+    } else continue;
+
+    if (teamEco == null || oppEco == null) continue;
+
+    const teamCat = classifyEconomy(teamEco);
+    const oppCat  = classifyEconomy(oppEco);
+    const vsKey   = vsMap[oppCat];
+
+    stats[teamCat].total.played++;
+    if (won) stats[teamCat].total.wins++;
+    stats[teamCat][vsKey].played++;
+    if (won) stats[teamCat][vsKey].wins++;
+  }
+
+  return stats;
 }
