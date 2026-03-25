@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -13,6 +13,7 @@ import { AgentPicksSection } from '@/components/sections/AgentPicksSection';
 import { PlayerStatsSection } from '@/components/sections/PlayerStatsSection';
 import { MetaShiftSection } from '@/components/sections/MetaShiftSection';
 import { GraphsSection } from '@/components/sections/GraphsSection';
+import { CompareEconomySection } from '@/components/sections/CompareEconomySection';
 
 export default async function Page({
   searchParams,
@@ -23,9 +24,10 @@ export default async function Page({
   const { reg, team, tour, bo, last, section = 'maps', team2, tour2, reg2, dateFrom, dateTo, dateFrom2, dateTo2 } = params;
 
   const isOverall = section === 'map-picks' || section === 'agent-picks';
-  const isCompare = section === 'compare-maps' || section === 'compare-stats';
+  const isCompare = section === 'compare-maps' || section === 'compare-stats' || section === 'compare-economy';
   const isMetaShift = section === 'meta-shift';
   const isEconomy = section === 'economy';
+  const isCompareEconomy = section === 'compare-economy';
 
   // Team data (only for team sections)
   const result = (!isOverall && !isMetaShift && !isEconomy && team)
@@ -94,6 +96,14 @@ export default async function Page({
 
   const [regions, teams, lastUpdateDate] = await Promise.all([getRegions(), getTeams(reg), getLastUpdateDate()]);
   const teams2 = isMetaShift ? await getTeams(reg2) : [];
+  // Compare Economy
+  const econCompareA = isCompareEconomy && team
+    ? await getEconomyCompare({ reg, tour, team })
+    : null;
+  const econCompareB = isCompareEconomy && team2
+    ? await getEconomyCompare({ reg, tour: tour2, team: team2 })
+    : null;
+
   // Economy histogram bins
   const economyBins = isEconomy
     ? await getEconomyDistribution({ reg, tour, team: team || undefined })
@@ -130,6 +140,8 @@ export default async function Page({
         return <PlayerStatsSection stats={playerStats} tournamentAvg={tournamentPlayerAvg} />;
       case 'economy':
         return <EconomySection bins={economyBins} />;
+      case 'compare-economy':
+        return <CompareEconomySection statsA={econCompareA} statsB={econCompareB} teamAName={team || ''} teamBName={team2 || ''} />;
       case 'charts':
         return <ChartsSection stats={stats} />;
       case 'draft':
@@ -181,6 +193,7 @@ export default async function Page({
             'meta-shift': 'Meta Shift',
             'graphs': 'Sankey',
             'economy': 'Economy',
+            'compare-economy': 'Compare Economy',
           }[section] ?? section}</h1>
           {reg && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">
