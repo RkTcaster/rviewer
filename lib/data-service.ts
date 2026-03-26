@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, MapStat, OverallMapFullStat, OverallMapStat, PlayerStat, Region, TeamEconomyCompare, TeamRankStats, Tournament, TournamentPlayerAvg } from './types';
+import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, MapStat, OverallMapFullStat, OverallMapStat, PlayerMatchPoint, PlayerStat, PlayerTimelineData, Region, TeamEconomyCompare, TeamRankStats, Tournament, TournamentPlayerAvg } from './types';
 
 // --- HELPERS ---
 
@@ -524,7 +524,7 @@ export async function getPlayerStats(
 
   let query = supabase
     .from('player_stats')
-    .select('player, agent, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, assistsBoth, assistsT, assistsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT')
+    .select('player, agent, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, assistsBoth, assistsT, assistsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT')
     .eq('team', filters.team);
 
   if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
@@ -543,6 +543,7 @@ export async function getPlayerStats(
     sHs: number; sHsT: number; sHsCT: number;
     sFk: number; sFkT: number; sFkCT: number;
     sFd: number; sFdT: number; sFdCT: number;
+    sKast: number; sKastT: number; sKastCT: number;
     agentCounts: Record<string, number>; maps: number;
   };
   const zero = (): Acc => ({
@@ -554,6 +555,7 @@ export async function getPlayerStats(
     sHs: 0, sHsT: 0, sHsCT: 0,
     sFk: 0, sFkT: 0, sFkCT: 0,
     sFd: 0, sFdT: 0, sFdCT: 0,
+    sKast: 0, sKastT: 0, sKastCT: 0,
     agentCounts: {}, maps: 0,
   });
   const playerMap: Record<string, Acc> = {};
@@ -590,6 +592,9 @@ export async function getPlayerStats(
     a.sFd       += Number(row.fdBoth)        || 0;
     a.sFdT      += Number(row.fdT)           || 0;
     a.sFdCT     += Number(row.fdCT)          || 0;
+    a.sKast     += Number(row.kastBoth)      || 0;
+    a.sKastT    += Number(row.kastT)         || 0;
+    a.sKastCT   += Number(row.kastCT)        || 0;
     a.maps++;
     if (row.agent) a.agentCounts[row.agent] = (a.agentCounts[row.agent] || 0) + 1;
   }
@@ -615,6 +620,9 @@ export async function getPlayerStats(
       fkfd:   r2((a.sFk - a.sFd)   / maps),
       fkfdAtk: r2((a.sFkT - a.sFdT) / maps),
       fkfdDef: r2((a.sFkCT - a.sFdCT) / maps),
+      kast:    r2(a.sKast  / maps),
+      kastAtk: r2(a.sKastT / maps),
+      kastDef: r2(a.sKastCT/ maps),
     };
   }).sort((a, b) => b.kd - a.kd);
 }
@@ -634,13 +642,13 @@ export async function getTournamentPlayerAvg(
 
   let query = supabase
     .from('player_stats')
-    .select('player, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT');
+    .select('player, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT');
 
   if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
   if (filters.reg)  query = query.eq('reg_id', filters.reg);
   if (seriesIds)    query = query.in('series_id', seriesIds);
 
-  const { data: rows } = await query.limit(200000);
+  const rows = await fetchAllPages((from, to) => query.range(from, to));
   if (!rows || rows.length === 0) return null;
 
   type Acc2 = {
@@ -649,6 +657,9 @@ export async function getTournamentPlayerAvg(
     sAcs: number; sAcsT: number; sAcsCT: number;
     sAdr: number; sAdrT: number; sAdrCT: number;
     sHs: number; sHsT: number; sHsCT: number;
+    sFk: number; sFkT: number; sFkCT: number;
+    sFd: number; sFdT: number; sFdCT: number;
+    sKast: number; sKastT: number; sKastCT: number;
     maps: number;
   };
   const pm: Record<string, Acc2> = {};
@@ -658,6 +669,9 @@ export async function getTournamentPlayerAvg(
     sAcs: 0, sAcsT: 0, sAcsCT: 0,
     sAdr: 0, sAdrT: 0, sAdrCT: 0,
     sHs: 0, sHsT: 0, sHsCT: 0,
+    sFk: 0, sFkT: 0, sFkCT: 0,
+    sFd: 0, sFdT: 0, sFdCT: 0,
+    sKast: 0, sKastT: 0, sKastCT: 0,
     maps: 0,
   });
 
@@ -683,6 +697,15 @@ export async function getTournamentPlayerAvg(
     a.sHs       += Number(row.hsBoth)       || 0;
     a.sHsT      += Number(row.hsT)          || 0;
     a.sHsCT     += Number(row.hsCT)         || 0;
+    a.sFk       += Number(row.fkBoth)       || 0;
+    a.sFkT      += Number(row.fkT)          || 0;
+    a.sFkCT     += Number(row.fkCT)         || 0;
+    a.sFd       += Number(row.fdBoth)       || 0;
+    a.sFdT      += Number(row.fdT)          || 0;
+    a.sFdCT     += Number(row.fdCT)         || 0;
+    a.sKast     += Number(row.kastBoth)     || 0;
+    a.sKastT    += Number(row.kastT)        || 0;
+    a.sKastCT   += Number(row.kastCT)       || 0;
     a.maps++;
   }
 
@@ -708,7 +731,167 @@ export async function getTournamentPlayerAvg(
     hs:        mean(players.map(a => a.sHs     / a.maps)),
     hsAtk:     mean(players.map(a => a.sHsT    / a.maps)),
     hsDef:     mean(players.map(a => a.sHsCT   / a.maps)),
+    fkfd:      mean(players.map(a => (a.sFk  - a.sFd)  / a.maps)),
+    fkfdAtk:   mean(players.map(a => (a.sFkT - a.sFdT) / a.maps)),
+    fkfdDef:   mean(players.map(a => (a.sFkCT- a.sFdCT)/ a.maps)),
+    kast:      mean(players.map(a => a.sKast   / a.maps)),
+    kastAtk:   mean(players.map(a => a.sKastT  / a.maps)),
+    kastDef:   mean(players.map(a => a.sKastCT / a.maps)),
   };
+}
+
+export async function getPlayerTimeline(
+  filters: { team: string; reg?: string; tour?: string; bo?: string; last?: string }
+): Promise<PlayerTimelineData> {
+  const limitN = filters.last && filters.last !== 'all' ? parseInt(filters.last) : 10;
+
+  let draftQuery = supabase
+    .from('draft')
+    .select('series_id, date, team, rival')
+    .or(`team.eq."${filters.team}",rival.eq."${filters.team}"`)
+    .order('date', { ascending: false });
+
+  if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
+  if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
+  if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
+
+  const { data: draftRows } = await draftQuery.limit(limitN * 10);
+  if (!draftRows?.length) return [];
+
+  const seriesMap = new Map<string, { date: string; rival: string }>();
+  for (const row of draftRows) {
+    if (!seriesMap.has(row.series_id)) {
+      const rival = row.team === filters.team ? row.rival : row.team;
+      seriesMap.set(row.series_id, { date: row.date, rival });
+    }
+    if (seriesMap.size >= limitN) break;
+  }
+  const seriesIds = [...seriesMap.keys()];
+  if (seriesIds.length === 0) return [];
+
+  const psRows = await fetchAllPages<any>((from, to) =>
+    supabase
+      .from('player_stats')
+      .select('series_id, player, agent, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT')
+      .eq('team', filters.team)
+      .in('series_id', seriesIds)
+      .range(from, to)
+  );
+  if (!psRows?.length) return [];
+
+  type SeriesAcc = {
+    kills: number; deaths: number; killsT: number; deadT: number; killsCT: number; deadCT: number;
+    sRating: number; sRatingT: number; sRatingCT: number;
+    sAcs: number; sAcsT: number; sAcsCT: number;
+    sAdr: number; sAdrT: number; sAdrCT: number;
+    sHs: number; sHsT: number; sHsCT: number;
+    sFk: number; sFkT: number; sFkCT: number;
+    sFd: number; sFdT: number; sFdCT: number;
+    sKast: number; sKastT: number; sKastCT: number;
+    agentCounts: Record<string, number>;
+    maps: number;
+  };
+  const zeroAcc = (): SeriesAcc => ({
+    kills: 0, deaths: 0, killsT: 0, deadT: 0, killsCT: 0, deadCT: 0,
+    sRating: 0, sRatingT: 0, sRatingCT: 0,
+    sAcs: 0, sAcsT: 0, sAcsCT: 0,
+    sAdr: 0, sAdrT: 0, sAdrCT: 0,
+    sHs: 0, sHsT: 0, sHsCT: 0,
+    sFk: 0, sFkT: 0, sFkCT: 0,
+    sFd: 0, sFdT: 0, sFdCT: 0,
+    sKast: 0, sKastT: 0, sKastCT: 0,
+    agentCounts: {}, maps: 0,
+  });
+
+  const playerSeriesAcc: Record<string, Record<string, SeriesAcc>> = {};
+
+  for (const row of psRows) {
+    if (!row.player || !row.series_id) continue;
+    if (!playerSeriesAcc[row.player]) playerSeriesAcc[row.player] = {};
+    if (!playerSeriesAcc[row.player][row.series_id]) {
+      playerSeriesAcc[row.player][row.series_id] = zeroAcc();
+    }
+    const a = playerSeriesAcc[row.player][row.series_id];
+    a.kills     += Number(row.killsBoth)    || 0;
+    a.deaths    += Number(row.deadBoth)     || 0;
+    a.killsT    += Number(row.killsT)       || 0;
+    a.deadT     += Number(row.deadT)        || 0;
+    a.killsCT   += Number(row.killsCT)      || 0;
+    a.deadCT    += Number(row.deadCT)       || 0;
+    a.sRating   += Number(row.ratingBoth)   || 0;
+    a.sRatingT  += Number(row.ratingT)      || 0;
+    a.sRatingCT += Number(row['rating-ct']) || 0;
+    a.sAcs      += Number(row.acsBoth)      || 0;
+    a.sAcsT     += Number(row.acsT)         || 0;
+    a.sAcsCT    += Number(row.acsCT)        || 0;
+    a.sAdr      += Number(row.adrBoth)      || 0;
+    a.sAdrT     += Number(row.adrT)         || 0;
+    a.sAdrCT    += Number(row.adrCT)        || 0;
+    a.sHs       += Number(row.hsBoth)       || 0;
+    a.sHsT      += Number(row.hsT)          || 0;
+    a.sHsCT     += Number(row.hsCT)         || 0;
+    a.sFk       += Number(row.fkBoth)       || 0;
+    a.sFkT      += Number(row.fkT)          || 0;
+    a.sFkCT     += Number(row.fkCT)         || 0;
+    a.sFd       += Number(row.fdBoth)       || 0;
+    a.sFdT      += Number(row.fdT)          || 0;
+    a.sFdCT     += Number(row.fdCT)         || 0;
+    a.sKast     += Number(row.kastBoth)     || 0;
+    a.sKastT    += Number(row.kastT)        || 0;
+    a.sKastCT   += Number(row.kastCT)       || 0;
+    a.maps++;
+    if (row.agent) a.agentCounts[row.agent] = (a.agentCounts[row.agent] || 0) + 1;
+  }
+
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const chronologicalIds = [...seriesIds].reverse();
+
+  const result: PlayerTimelineData = Object.entries(playerSeriesAcc).map(([player, bySeriesId]) => {
+    const allAgentCounts = Object.values(bySeriesId).reduce((acc, a) => {
+      for (const [ag, cnt] of Object.entries(a.agentCounts)) {
+        acc[ag] = (acc[ag] || 0) + cnt;
+      }
+      return acc;
+    }, {} as Record<string, number>);
+    const agent = Object.entries(allAgentCounts).sort((x, y) => y[1] - x[1])[0]?.[0] ?? '';
+
+    const matches: PlayerMatchPoint[] = chronologicalIds.flatMap(sid => {
+      const meta = seriesMap.get(sid)!;
+      const a = bySeriesId[sid];
+      if (!a) return [];
+      const { kills, deaths, killsT, deadT, killsCT, deadCT, maps } = a;
+      return [{
+        seriesId: sid,
+        date: meta.date,
+        rival: meta.rival,
+        kd:        deaths === 0 ? kills   : r2(kills   / deaths),
+        kdAtk:     deadT  === 0 ? killsT  : r2(killsT  / deadT),
+        kdDef:     deadCT === 0 ? killsCT : r2(killsCT / deadCT),
+        rating:    r2(a.sRating   / maps),
+        ratingAtk: r2(a.sRatingT  / maps),
+        ratingDef: r2(a.sRatingCT / maps),
+        acs:       r2(a.sAcs    / maps),
+        acsAtk:    r2(a.sAcsT   / maps),
+        acsDef:    r2(a.sAcsCT  / maps),
+        adr:       r2(a.sAdr    / maps),
+        adrAtk:    r2(a.sAdrT   / maps),
+        adrDef:    r2(a.sAdrCT  / maps),
+        hs:        r2(a.sHs  / maps),
+        hsAtk:     r2(a.sHsT / maps),
+        hsDef:     r2(a.sHsCT/ maps),
+        fkfd:      r2((a.sFk  - a.sFd)  / maps),
+        fkfdAtk:   r2((a.sFkT - a.sFdT) / maps),
+        fkfdDef:   r2((a.sFkCT- a.sFdCT)/ maps),
+        kast:      r2(a.sKast  / maps),
+        kastAtk:   r2(a.sKastT / maps),
+        kastDef:   r2(a.sKastCT/ maps),
+      }];
+    });
+
+    return { player, agent, matches };
+  });
+
+  return result;
 }
 
 export async function getOverallMapFullStats(

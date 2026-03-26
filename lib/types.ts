@@ -115,6 +115,7 @@ export type PlayerStat = {
   fk: number; fkAtk: number; fkDef: number;
   fd: number; fdAtk: number; fdDef: number;
   fkfd: number; fkfdAtk: number; fkfdDef: number;
+  kast: number; kastAtk: number; kastDef: number;
 };
 
 export type TournamentPlayerAvg = {
@@ -122,7 +123,9 @@ export type TournamentPlayerAvg = {
   rating: number; ratingAtk: number; ratingDef: number;
   acs: number; acsAtk: number; acsDef: number;
   adr: number; adrAtk: number; adrDef: number;
-  hs: number; hsAtk: number; hsDef: number;
+  hs: number;   hsAtk: number;   hsDef: number;
+  fkfd: number; fkfdAtk: number; fkfdDef: number;
+  kast: number; kastAtk: number; kastDef: number;
 };
 
 export type EconomyBin = { label: string; count: number; wins: number };
@@ -141,6 +144,27 @@ export type TeamEconomyCompare = {
   semiBuy: EconomyCategoryStats;
   fullBuy: EconomyCategoryStats;
 };
+
+export type PlayerMatchPoint = {
+  seriesId: string;
+  date: string;
+  rival: string;
+  kd: number;     kdAtk: number;     kdDef: number;
+  rating: number; ratingAtk: number; ratingDef: number;
+  acs: number;    acsAtk: number;    acsDef: number;
+  adr: number;    adrAtk: number;    adrDef: number;
+  hs: number;     hsAtk: number;     hsDef: number;
+  fkfd: number;   fkfdAtk: number;   fkfdDef: number;
+  kast: number;   kastAtk: number;   kastDef: number;
+};
+
+export type PlayerTimeline = {
+  player: string;
+  agent: string;
+  matches: PlayerMatchPoint[];
+};
+
+export type PlayerTimelineData = PlayerTimeline[];
 
 export type DashboardData = {
   mapStats: MapStat[];

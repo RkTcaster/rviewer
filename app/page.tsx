@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -87,6 +87,10 @@ export default async function Page({
     ? await getTournamentPlayerAvg({ reg, tour, bo })
     : null;
 
+  const playerTimeline = (section === 'player-stats' && team)
+    ? await getPlayerTimeline({ team, reg, tour, bo, last })
+    : [];
+
   const stats = result?.mapStats || [];
   const draftOrder = result?.draftOrder || { a: 0, b: 0 };
   const pistols = result?.pistols || { wins: 0, total: 0 };
@@ -137,7 +141,7 @@ export default async function Page({
           />
         );
       case 'player-stats':
-        return <PlayerStatsSection stats={playerStats} tournamentAvg={tournamentPlayerAvg} />;
+        return <PlayerStatsSection stats={playerStats} tournamentAvg={tournamentPlayerAvg} timeline={playerTimeline} />;
       case 'economy':
         return <EconomySection bins={economyBins} />;
       case 'compare-economy':
