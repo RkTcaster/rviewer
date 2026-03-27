@@ -517,9 +517,9 @@ export async function getPlayerStats(
     let draftQuery = supabase.from('draft').select('series_id').eq('bo', parseInt(filters.bo));
     if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
     if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
-    const { data: draftData } = await draftQuery;
-    if (!draftData || draftData.length === 0) return [];
-    seriesIds = [...new Set(draftData.map((d: any) => d.series_id))];
+    const draftData = await fetchAllPages<{ series_id: string }>((from, to) => draftQuery.range(from, to));
+    if (!draftData.length) return [];
+    seriesIds = [...new Set(draftData.map(d => d.series_id))];
   }
 
   let query = supabase
@@ -600,6 +600,12 @@ export async function getPlayerStats(
   }
 
   const r2 = (n: number) => Math.round(n * 100) / 100;
+  const teamFk   = Object.values(playerMap).reduce((s, a) => s + a.sFk,   0);
+  const teamFd   = Object.values(playerMap).reduce((s, a) => s + a.sFd,   0);
+  const teamFkT  = Object.values(playerMap).reduce((s, a) => s + a.sFkT,  0);
+  const teamFdT  = Object.values(playerMap).reduce((s, a) => s + a.sFdT,  0);
+  const teamFkCT = Object.values(playerMap).reduce((s, a) => s + a.sFkCT, 0);
+  const teamFdCT = Object.values(playerMap).reduce((s, a) => s + a.sFdCT, 0);
   return Object.entries(playerMap).map(([player, a]) => {
     const { kills, deaths, killsT, deadT, killsCT, deadCT, maps } = a;
     const kd    = deaths === 0 ? kills   : r2(kills   / deaths);
@@ -623,6 +629,9 @@ export async function getPlayerStats(
       kast:    r2(a.sKast  / maps),
       kastAtk: r2(a.sKastT / maps),
       kastDef: r2(a.sKastCT/ maps),
+      entry:    r2((a.sFk  + a.sFd)  / (teamFk  + teamFd  || 1) * 100),
+      entryAtk: r2((a.sFkT + a.sFdT) / (teamFkT + teamFdT || 1) * 100),
+      entryDef: r2((a.sFkCT+ a.sFdCT)/ (teamFkCT+ teamFdCT|| 1) * 100),
     };
   }).sort((a, b) => b.kd - a.kd);
 }
@@ -769,15 +778,47 @@ export async function getPlayerTimeline(
   const seriesIds = [...seriesMap.keys()];
   if (seriesIds.length === 0) return [];
 
-  const psRows = await fetchAllPages<any>((from, to) =>
-    supabase
-      .from('player_stats')
-      .select('series_id, player, agent, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT')
-      .eq('team', filters.team)
-      .in('series_id', seriesIds)
-      .range(from, to)
-  );
+  const [psRows, riRows] = await Promise.all([
+    fetchAllPages<any>((from, to) =>
+      supabase
+        .from('player_stats')
+        .select('series_id, player, agent, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT')
+        .eq('team', filters.team)
+        .in('series_id', seriesIds)
+        .range(from, to)
+    ),
+    fetchAllPages<any>((from, to) =>
+      supabase
+        .from('round_info')
+        .select('series_id, map_id, round, teamA, rndA')
+        .in('series_id', seriesIds)
+        .range(from, to)
+    ),
+  ]);
   if (!psRows?.length) return [];
+
+  // Determine series winner: for each map find max round → rndA=1 means teamA won
+  const mapMaxRound: Record<string, Record<string, number>> = {};
+  const mapFinalRow: Record<string, Record<string, { teamA: string; rndA: number }>> = {};
+  for (const r of riRows ?? []) {
+    const sid = r.series_id; const mid = r.map_id; const rnd = Number(r.round);
+    if (!mapMaxRound[sid]) { mapMaxRound[sid] = {}; mapFinalRow[sid] = {}; }
+    if (mapMaxRound[sid][mid] == null || rnd > mapMaxRound[sid][mid]) {
+      mapMaxRound[sid][mid] = rnd;
+      mapFinalRow[sid][mid] = { teamA: r.teamA?.trim(), rndA: Number(r.rndA) };
+    }
+  }
+  const seriesWon: Record<string, boolean> = {};
+  for (const [sid, maps] of Object.entries(mapFinalRow)) {
+    let teamWins = 0, rivalWins = 0;
+    for (const { teamA, rndA } of Object.values(maps)) {
+      const teamAWon = rndA === 1;
+      const isTeamA = teamA === filters.team;
+      if ((isTeamA && teamAWon) || (!isTeamA && !teamAWon)) teamWins++;
+      else rivalWins++;
+    }
+    seriesWon[sid] = teamWins > rivalWins;
+  }
 
   type SeriesAcc = {
     kills: number; deaths: number; killsT: number; deadT: number; killsCT: number; deadCT: number;
@@ -844,6 +885,18 @@ export async function getPlayerTimeline(
   }
 
   const r2 = (n: number) => Math.round(n * 100) / 100;
+
+  const teamSeriesTotals: Record<string, { fk: number; fd: number; fkT: number; fdT: number; fkCT: number; fdCT: number }> = {};
+  for (const bySeriesId of Object.values(playerSeriesAcc)) {
+    for (const [sid, a] of Object.entries(bySeriesId)) {
+      if (!teamSeriesTotals[sid]) teamSeriesTotals[sid] = { fk: 0, fd: 0, fkT: 0, fdT: 0, fkCT: 0, fdCT: 0 };
+      const t = teamSeriesTotals[sid];
+      t.fk   += a.sFk;   t.fd   += a.sFd;
+      t.fkT  += a.sFkT;  t.fdT  += a.sFdT;
+      t.fkCT += a.sFkCT; t.fdCT += a.sFdCT;
+    }
+  }
+
   const chronologicalIds = [...seriesIds].reverse();
 
   const result: PlayerTimelineData = Object.entries(playerSeriesAcc).map(([player, bySeriesId]) => {
@@ -885,6 +938,10 @@ export async function getPlayerTimeline(
         kast:      r2(a.sKast  / maps),
         kastAtk:   r2(a.sKastT / maps),
         kastDef:   r2(a.sKastCT/ maps),
+        entry:     r2((a.sFk  + a.sFd)  / (teamSeriesTotals[sid].fk  + teamSeriesTotals[sid].fd  || 1) * 100),
+        entryAtk:  r2((a.sFkT + a.sFdT) / (teamSeriesTotals[sid].fkT + teamSeriesTotals[sid].fdT || 1) * 100),
+        entryDef:  r2((a.sFkCT+ a.sFdCT)/ (teamSeriesTotals[sid].fkCT+ teamSeriesTotals[sid].fdCT|| 1) * 100),
+        won:       seriesWon[sid] ?? false,
       }];
     });
 

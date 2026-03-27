@@ -20,7 +20,6 @@ const NAV_SECTIONS = [
       { id: 'compare-maps',  label: 'Compare Maps',  icon: GitCompareArrows },
       { id: 'compare-stats',    label: 'Compare Stats',    icon: Scale },
       { id: 'compare-economy', label: 'Compare Economy', icon: Scale },
-      { id: 'graphs',        label: 'Sankey',        icon: BarChart2 },
       { id: 'player-stats',  label: 'Player Stats',  icon: UserRound },
     ],
   },

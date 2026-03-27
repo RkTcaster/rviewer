@@ -116,6 +116,7 @@ export type PlayerStat = {
   fd: number; fdAtk: number; fdDef: number;
   fkfd: number; fkfdAtk: number; fkfdDef: number;
   kast: number; kastAtk: number; kastDef: number;
+  entry: number; entryAtk: number; entryDef: number;
 };
 
 export type TournamentPlayerAvg = {
@@ -156,6 +157,8 @@ export type PlayerMatchPoint = {
   hs: number;     hsAtk: number;     hsDef: number;
   fkfd: number;   fkfdAtk: number;   fkfdDef: number;
   kast: number;   kastAtk: number;   kastDef: number;
+  entry: number;  entryAtk: number;  entryDef: number;
+  won: boolean;
 };
 
 export type PlayerTimeline = {
