@@ -4,6 +4,7 @@ import { Region, Tournament } from '@/lib/types';
 import { MultiSelect } from "./MultiSelect";
 import { SearchableSelect } from "./SearchableSelect";
 import { SearchableMultiSelect } from "./SearchableMultiSelect";
+import { StringMultiSelect } from "./StringMultiSelect";
 
 interface FiltersProps {
   regions: Region[];
@@ -27,10 +28,10 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set(key, value); else params.delete(key);
 
-    if (key === 'reg') { params.delete('team'); params.delete('tour'); params.delete('team2'); params.delete('tour2'); }
-    if (key === 'reg2') { params.delete('team2'); params.delete('tour2'); }
-    if (key === 'team') { params.delete('tour'); }
-    if (key === 'team2') { params.delete('tour2'); }
+    if (key === 'reg') { params.delete('team'); params.delete('tour'); params.delete('team2'); params.delete('tour2'); params.delete('excA'); }
+    if (key === 'reg2') { params.delete('team2'); params.delete('tour2'); params.delete('excB'); }
+    if (key === 'team') { params.delete('tour'); if (value) params.delete('excA'); }
+    if (key === 'team2') { params.delete('tour2'); if (value) params.delete('excB'); }
 
     router.push(`?${params.toString()}`);
   };
@@ -58,8 +59,20 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
       </div>
     );
 
+    const resetAllFilters = () => {
+      const params = new URLSearchParams(searchParams.toString());
+      ['reg', 'team', 'tour', 'excA', 'dateFrom', 'dateTo', 'reg2', 'team2', 'tour2', 'excB', 'dateFrom2', 'dateTo2'].forEach(k => params.delete(k));
+      router.push(`?${params.toString()}`);
+    };
+
     return (
-      <div className="flex flex-wrap items-start gap-6 mb-8 bg-[#1a1d23] p-5 rounded-xl border border-gray-800 shadow-xl">
+      <div className="flex flex-wrap items-start gap-6 mb-8 bg-[#1a1d23] p-5 rounded-xl border border-gray-800 shadow-xl relative">
+        <button
+          onClick={resetAllFilters}
+          className="absolute top-3 right-3 text-[10px] font-bold text-red-500 hover:text-red-400 hover:underline uppercase tracking-wider"
+        >
+          Reset filters
+        </button>
         {/* LEFT side */}
         <div className="flex flex-wrap items-start gap-4">
           <div className="flex flex-col gap-1">
@@ -80,6 +93,16 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
             onChange={(val) => updateFilter('team', val)}
             placeholder="All teams"
           />
+          {!searchParams.get('team') && (
+            <StringMultiSelect
+              label="Exclude Teams A"
+              options={teams}
+              selected={searchParams.get('excA')?.split(',').filter(x => x !== '') || []}
+              onChange={(values) => updateMultiFilter('excA', values)}
+              placeholder="Exclude teams..."
+              labelColor="text-blue-400"
+            />
+          )}
           <SearchableMultiSelect
             label="Tournament A"
             options={tours}
@@ -113,6 +136,16 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
             onChange={(val) => updateFilter('team2', val)}
             placeholder="All teams"
           />
+          {!searchParams.get('team2') && (
+            <StringMultiSelect
+              label="Exclude Teams B"
+              options={teams2}
+              selected={searchParams.get('excB')?.split(',').filter(x => x !== '') || []}
+              onChange={(values) => updateMultiFilter('excB', values)}
+              placeholder="Exclude teams..."
+              labelColor="text-orange-400"
+            />
+          )}
           <SearchableMultiSelect
             label="Tournament B"
             options={tours2}
@@ -174,6 +207,16 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
             Reset
           </button>
         </div>
+      )}
+
+      {isOverall && (
+        <StringMultiSelect
+          label="Exclude Teams"
+          options={teams}
+          selected={searchParams.get('excA')?.split(',').filter(x => x !== '') || []}
+          onChange={(values) => updateMultiFilter('excA', values)}
+          placeholder="Exclude teams..."
+        />
       )}
 
       {!isOverall && !isEconomy && (

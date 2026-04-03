@@ -273,12 +273,16 @@ export async function getAllTours(regId?: string): Promise<Tournament[]> {
 }
 
 export async function getOverallMapPicks(
-  filters: { reg?: string; tour?: string; bo?: string }
+  filters: { reg?: string; tour?: string; bo?: string; excludeTeams?: string[] }
 ): Promise<OverallMapStat[]> {
   let query = supabase.from('draft').select('*');
   if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
   if (filters.reg) query = query.eq('reg_id', filters.reg);
   if (filters.bo && filters.bo !== 'all') query = query.eq('bo', parseInt(filters.bo));
+  if (filters.excludeTeams && filters.excludeTeams.length > 0) {
+    query = query.not('team', 'in', `(${filters.excludeTeams.join(',')})`);
+    query = query.not('rival', 'in', `(${filters.excludeTeams.join(',')})`);
+  }
 
   const { data: drafts } = await query;
   if (!drafts) return [];
@@ -309,7 +313,7 @@ export async function getOverallMapPicks(
 }
 
 export async function getAgentPickStats(
-  filters: { reg?: string; tour?: string; team?: string; dateFrom?: string; dateTo?: string }
+  filters: { reg?: string; tour?: string; team?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<AgentPickStat[]> {
   // Pre-fetch series_ids from draft when date filters are active
   let seriesIds: string[] | null = null;
@@ -368,9 +372,13 @@ export async function getAgentPickStats(
     fetchAllPages<{ map_id: string; map: string }>((from, to) =>
       applyFilters(supabase.from('maps_id').select('map_id, map')).range(from, to)
     ),
-    fetchAllPages<{ map: string; agent: string }>((from, to) =>
-      applyFilters(supabase.from('player_stats').select('map, agent')).range(from, to)
-    ),
+    fetchAllPages<{ map: string; agent: string }>((from, to) => {
+      let q = applyFilters(supabase.from('player_stats').select('map, agent'));
+      if (filters.excludeTeams && filters.excludeTeams.length > 0) {
+        q = q.not('team', 'in', `(${filters.excludeTeams.join(',')})`);
+      }
+      return q.range(from, to);
+    }),
   ]);
 
   if (!mapRows || mapRows.length === 0) return [];

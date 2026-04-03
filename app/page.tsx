@@ -18,10 +18,12 @@ import { CompareEconomySection } from '@/components/sections/CompareEconomySecti
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ reg?: string; team?: string; tour?: string; bo?: string; last?: string; section?: string; team2?: string; tour2?: string; reg2?: string; dateFrom?: string; dateTo?: string; dateFrom2?: string; dateTo2?: string }>;
+  searchParams: Promise<{ reg?: string; team?: string; tour?: string; bo?: string; last?: string; section?: string; team2?: string; tour2?: string; reg2?: string; dateFrom?: string; dateTo?: string; dateFrom2?: string; dateTo2?: string; excA?: string; excB?: string }>;
 }) {
   const params = await searchParams;
-  const { reg, team, tour, bo, last, section = 'maps', team2, tour2, reg2, dateFrom, dateTo, dateFrom2, dateTo2 } = params;
+  const { reg, team, tour, bo, last, section = 'maps', team2, tour2, reg2, dateFrom, dateTo, dateFrom2, dateTo2, excA, excB } = params;
+  const excludeTeamsA = excA ? excA.split(',') : [];
+  const excludeTeamsB = excB ? excB.split(',') : [];
 
   const isOverall = section === 'map-picks' || section === 'agent-picks';
   const isCompare = section === 'compare-maps' || section === 'compare-stats' || section === 'compare-economy';
@@ -44,7 +46,7 @@ export default async function Page({
 
   // Overall data (only for overall sections)
   const overallMapStats = (section === 'map-picks')
-    ? await getOverallMapPicks({ reg, tour, bo })
+    ? await getOverallMapPicks({ reg, tour, bo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
     : [];
 
   const compositionsData = (section === 'maps' && team)
@@ -72,11 +74,11 @@ export default async function Page({
     : {};
 
   const agentPickStatsLeft = isMetaShift
-    ? await getAgentPickStats({ reg, tour, team: team || undefined, dateFrom, dateTo })
+    ? await getAgentPickStats({ reg, tour, team: team || undefined, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
     : [];
 
   const agentPickStatsRight = isMetaShift
-    ? await getAgentPickStats({ reg: reg2, tour: tour2, team: team2 || undefined, dateFrom: dateFrom2, dateTo: dateTo2 })
+    ? await getAgentPickStats({ reg: reg2, tour: tour2, team: team2 || undefined, dateFrom: dateFrom2, dateTo: dateTo2, excludeTeams: excludeTeamsB.length > 0 ? excludeTeamsB : undefined })
     : [];
 
   const playerStats = (section === 'player-stats' && team)
