@@ -23,6 +23,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
   const isOverall = mode === 'overall';
   const isMetaShift = mode === 'meta-shift';
   const isEconomy = mode === 'economy';
+  const isRelevantInfo = section === 'relevant-info';
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -256,7 +257,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         options={tours}
         selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || []}
         onChange={(values) => updateMultiFilter('tour', values)}
-        disabled={!isOverall && !isEconomy && !searchParams.get('team')}
+        disabled={!isOverall && !isEconomy && !isRelevantInfo && !searchParams.get('team')}
       />
 
       {(isCompareStats || isEconomy) && (

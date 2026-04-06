@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign } from 'lucide-react';
+import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy } from 'lucide-react';
 
 const NAV_SECTIONS = [
   {
@@ -21,6 +21,12 @@ const NAV_SECTIONS = [
       { id: 'compare-stats',    label: 'Compare Stats',    icon: Scale },
       { id: 'compare-economy', label: 'Compare Economy', icon: Scale },
       { id: 'player-stats',  label: 'Player Stats',  icon: UserRound },
+    ],
+  },
+  {
+    title: 'Tournament Info',
+    items: [
+      { id: 'relevant-info', label: 'Relevant Info', icon: Trophy },
     ],
   },
 ];

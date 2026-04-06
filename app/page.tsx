@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -14,6 +14,7 @@ import { PlayerStatsSection } from '@/components/sections/PlayerStatsSection';
 import { MetaShiftSection } from '@/components/sections/MetaShiftSection';
 import { GraphsSection } from '@/components/sections/GraphsSection';
 import { CompareEconomySection } from '@/components/sections/CompareEconomySection';
+import { RelevantInfoSection } from '@/components/sections/RelevantInfoSection';
 
 export default async function Page({
   searchParams,
@@ -30,9 +31,10 @@ export default async function Page({
   const isMetaShift = section === 'meta-shift';
   const isEconomy = section === 'economy';
   const isCompareEconomy = section === 'compare-economy';
+  const isRelevantInfo = section === 'relevant-info';
 
   // Team data (only for team sections)
-  const result = (!isOverall && !isMetaShift && !isEconomy && team)
+  const result = (!isOverall && !isMetaShift && !isEconomy && !isRelevantInfo && team)
     ? await getMapStats({ team, tour, bo, reg, last, dateFrom, dateTo })
     : null;
 
@@ -115,8 +117,16 @@ export default async function Page({
     ? await getEconomyDistribution({ reg, tour, team: team || undefined })
     : [];
 
+  const longestMaps = isRelevantInfo
+    ? await getLongestMaps({ reg, tour, team: team || undefined, bo, last })
+    : [];
+
+  const topPerformances = isRelevantInfo
+    ? await getTopPlayerPerformances({ reg, tour, team: team || undefined, bo, last })
+    : [];
+
   // Tours source differs by context
-  const tours = (isOverall || isMetaShift || isEconomy) ? await getAllTours(reg) : await getTours(team, reg);
+  const tours = (isOverall || isMetaShift || isEconomy || isRelevantInfo) ? await getAllTours(reg) : await getTours(team, reg);
   const tours2 = isCompare
     ? await getTours(team2, reg)
     : isMetaShift
@@ -148,6 +158,8 @@ export default async function Page({
         return <EconomySection bins={economyBins} />;
       case 'compare-economy':
         return <CompareEconomySection statsA={econCompareA} statsB={econCompareB} teamAName={team || ''} teamBName={team2 || ''} />;
+      case 'relevant-info':
+        return <RelevantInfoSection maps={longestMaps} performances={topPerformances} />;
       case 'charts':
         return <ChartsSection stats={stats} />;
       case 'draft':
@@ -200,6 +212,7 @@ export default async function Page({
             'graphs': 'Sankey',
             'economy': 'Economy',
             'compare-economy': 'Compare Economy',
+          'relevant-info': 'Relevant Info',
           }[section] ?? section}</h1>
           {reg && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">
@@ -229,7 +242,7 @@ export default async function Page({
         </header>
 
         <main className="p-8 pt-6">
-          {(isOverall || isMetaShift || isEconomy) ? (
+          {(isOverall || isMetaShift || isEconomy || isRelevantInfo) ? (
             renderSection()
           ) : !team ? (
             <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">

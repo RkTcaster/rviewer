@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, MapStat, OverallMapFullStat, OverallMapStat, PlayerMatchPoint, PlayerStat, PlayerTimelineData, Region, TeamEconomyCompare, TeamRankStats, Tournament, TournamentPlayerAvg } from './types';
+import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, LongestMapEntry, MapStat, OverallMapFullStat, OverallMapStat, PlayerMatchPoint, PlayerStat, PlayerTimelineData, Region, TeamEconomyCompare, TeamRankStats, TopPlayerPerformance, Tournament, TournamentPlayerAvg } from './types';
 
 // --- HELPERS ---
 
@@ -1451,4 +1451,235 @@ export async function getEconomyCompare(filters: {
   }
 
   return stats;
+}
+
+export async function getTopPlayerPerformances(filters: {
+  reg?: string;
+  tour?: string;
+  team?: string;
+  bo?: string;
+  last?: string;
+}): Promise<TopPlayerPerformance[]> {
+  let seriesIds: string[] | null = null;
+
+  if (filters.bo && filters.bo !== 'all') {
+    let draftQuery = supabase.from('draft').select('series_id').eq('bo', parseInt(filters.bo));
+    if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
+    if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
+    const draftData = await fetchAllPages<{ series_id: string }>((from, to) => draftQuery.range(from, to));
+    if (!draftData.length) return [];
+    seriesIds = [...new Set(draftData.map(d => d.series_id))];
+  }
+
+  if (filters.last && filters.last !== 'all' && filters.team) {
+    const limit = parseInt(filters.last);
+    let lastQuery = supabase
+      .from('draft')
+      .select('series_id, date')
+      .or(`team.eq.${filters.team},rival.eq.${filters.team}`)
+      .order('date', { ascending: false });
+    if (filters.reg)  lastQuery = lastQuery.eq('reg_id', filters.reg);
+    if (filters.tour) lastQuery = lastQuery.in('tour_id', filters.tour.split(','));
+    if (seriesIds)    lastQuery = lastQuery.in('series_id', seriesIds);
+    const lastData = await fetchAllPages<{ series_id: string; date: string }>((from, to) => lastQuery.range(from, to));
+    const seen = new Set<string>();
+    const limitedIds: string[] = [];
+    for (const row of lastData) {
+      if (!seen.has(row.series_id)) {
+        seen.add(row.series_id);
+        limitedIds.push(row.series_id);
+        if (seen.size >= limit) break;
+      }
+    }
+    if (!limitedIds.length) return [];
+    seriesIds = limitedIds;
+  }
+
+  let query = supabase
+    .from('player_stats')
+    .select('player, team, acsBoth, killsBoth, deadBoth, assistsBoth, kastBoth, adrBoth, hsBoth, fkBoth, fdBoth, map, series_id, source_url');
+  if (filters.team) query = query.eq('team', filters.team);
+  if (filters.reg)  query = query.eq('reg_id', filters.reg);
+  if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
+  if (seriesIds)    query = query.in('series_id', seriesIds);
+
+  const rows = await fetchAllPages<{
+    player: string; team: string;
+    acsBoth: string; killsBoth: string; deadBoth: string; assistsBoth: string;
+    kastBoth: string; adrBoth: string; hsBoth: string; fkBoth: string; fdBoth: string;
+    map: string; series_id: string; source_url: string;
+  }>((from, to) => query.range(from, to));
+  if (!rows.length) return [];
+
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+
+  const performances: TopPlayerPerformance[] = rows
+    .filter(r => r.player && r.acsBoth)
+    .map(r => {
+      const kills   = Number(r.killsBoth)   || 0;
+      const deaths  = Number(r.deadBoth)    || 0;
+      const fk      = Number(r.fkBoth)      || 0;
+      const fd      = Number(r.fdBoth)      || 0;
+      return {
+        player:   r.player,
+        team:     r.team ?? '',
+        acs:      Number(r.acsBoth)      || 0,
+        kills,
+        deaths,
+        assists:  Number(r.assistsBoth)  || 0,
+        kd:       r2(deaths === 0 ? kills : kills / deaths),
+        kast:     Number(r.kastBoth)     || 0,
+        adr:      Number(r.adrBoth)      || 0,
+        hs:       Number(r.hsBoth)       || 0,
+        fk,
+        fd,
+        fkfd:     fk - fd,
+        map:      r.map ?? '',
+        event:    '',
+        date:     '',
+        sourceUrl: r.source_url ?? '',
+      };
+    });
+
+  // Enrich dates + event — collect unique series_ids from rows
+  const uniqueSeriesIds = [...new Set(rows.map(r => r.series_id).filter(Boolean))];
+  if (uniqueSeriesIds.length) {
+    const { data: draftRows } = await supabase
+      .from('draft')
+      .select('series_id, date, event')
+      .in('series_id', uniqueSeriesIds);
+    const metaMap = new Map<string, { date: string; event: string }>();
+    for (const d of draftRows ?? []) {
+      if (!metaMap.has(d.series_id)) metaMap.set(d.series_id, { date: d.date ?? '', event: d.event ?? '' });
+    }
+    for (let i = 0; i < performances.length; i++) {
+      const sid = rows[i]?.series_id;
+      if (sid) {
+        const meta = metaMap.get(sid);
+        if (meta) { performances[i].date = meta.date; performances[i].event = meta.event; }
+      }
+    }
+  }
+
+  return performances;
+}
+
+export async function getLongestMaps(filters: {
+  reg?: string;
+  tour?: string;
+  team?: string;
+  bo?: string;
+  last?: string;
+}): Promise<LongestMapEntry[]> {
+  let seriesIds: string[] | null = null;
+
+  // BO filter
+  if (filters.bo && filters.bo !== 'all') {
+    let draftQuery = supabase.from('draft').select('series_id').eq('bo', parseInt(filters.bo));
+    if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
+    if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
+    const draftData = await fetchAllPages<{ series_id: string }>((from, to) => draftQuery.range(from, to));
+    if (!draftData.length) return [];
+    seriesIds = [...new Set(draftData.map(d => d.series_id))];
+  }
+
+  // Last X filter (only when team is provided)
+  if (filters.last && filters.last !== 'all' && filters.team) {
+    const limit = parseInt(filters.last);
+    let lastQuery = supabase
+      .from('draft')
+      .select('series_id, date')
+      .or(`team.eq.${filters.team},rival.eq.${filters.team}`)
+      .order('date', { ascending: false });
+    if (filters.reg)  lastQuery = lastQuery.eq('reg_id', filters.reg);
+    if (filters.tour) lastQuery = lastQuery.in('tour_id', filters.tour.split(','));
+    if (seriesIds)    lastQuery = lastQuery.in('series_id', seriesIds);
+    const lastData = await fetchAllPages<{ series_id: string; date: string }>((from, to) => lastQuery.range(from, to));
+    const seen = new Set<string>();
+    const limitedIds: string[] = [];
+    for (const row of lastData) {
+      if (!seen.has(row.series_id)) {
+        seen.add(row.series_id);
+        limitedIds.push(row.series_id);
+        if (seen.size >= limit) break;
+      }
+    }
+    if (!limitedIds.length) return [];
+    seriesIds = limitedIds;
+  }
+
+  // Main query
+  let query = supabase
+    .from('player_stats')
+    .select('map, map_id, map_duration, team, series_id, tour_id, reg_id, source_url');
+  if (filters.team) query = query.eq('team', filters.team);
+  if (filters.reg)  query = query.eq('reg_id', filters.reg);
+  if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
+  if (seriesIds)    query = query.in('series_id', seriesIds);
+
+  const rows = await fetchAllPages<{ map: string; map_id: string; map_duration: string; team: string; series_id: string; tour_id: string; reg_id: string; source_url: string }>((from, to) => query.range(from, to));
+  if (!rows.length) return [];
+
+  // Deduplicate by map_id — collect both teams and pick the duration
+  const byMapId = new Map<string, { map: string; duration: string; teams: Set<string>; series_id: string; sourceUrl: string }>();
+  for (const row of rows) {
+    if (!row.map_id || !row.map_duration) continue;
+    if (!byMapId.has(row.map_id)) {
+      byMapId.set(row.map_id, { map: row.map, duration: row.map_duration, teams: new Set(), series_id: row.series_id, sourceUrl: row.source_url ?? '' });
+    }
+    if (row.team) byMapId.get(row.map_id)!.teams.add(row.team.trim());
+  }
+
+  // Sort by duration descending — try numeric parse, fall back to string compare
+  const toSeconds = (s: string): number => {
+    const parts = s.split(':').map(Number);
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    const n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  };
+  const sorted = [...byMapId.entries()].sort(([, a], [, b]) => toSeconds(b.duration) - toSeconds(a.duration));
+
+  const top3 = sorted.slice(0, 3);
+  if (!top3.length) return [];
+
+  const top3MapIds = top3.map(([id]) => id);
+  const top3SeriesIds = [...new Set(top3.map(([, v]) => v.series_id))];
+
+  // Fetch event + date from draft
+  const { data: draftRows } = await supabase
+    .from('draft')
+    .select('series_id, date, event')
+    .in('series_id', top3SeriesIds);
+  const draftMeta = new Map<string, { date: string; event: string }>();
+  for (const d of draftRows ?? []) {
+    if (!draftMeta.has(d.series_id)) draftMeta.set(d.series_id, { date: d.date ?? '', event: d.event ?? '' });
+  }
+
+  // Fetch round counts from round_info
+  const { data: roundRows } = await supabase
+    .from('round_info')
+    .select('map_id, round')
+    .in('map_id', top3MapIds);
+  const roundMax = new Map<string, number>();
+  for (const r of roundRows ?? []) {
+    if (!r.map_id) continue;
+    const n = Number(r.round);
+    if (!isNaN(n)) roundMax.set(r.map_id, Math.max(roundMax.get(r.map_id) ?? 0, n));
+  }
+
+  return top3.map(([mapId, v]) => {
+    const teams = [...v.teams];
+    const meta = draftMeta.get(v.series_id) ?? { date: '', event: '' };
+    return {
+      map: v.map,
+      duration: v.duration,
+      teamA: teams[0] ?? '',
+      teamB: teams[1] ?? '',
+      event: meta.event,
+      date: meta.date,
+      rounds: roundMax.get(mapId) ?? 0,
+      sourceUrl: v.sourceUrl,
+    };
+  });
 }

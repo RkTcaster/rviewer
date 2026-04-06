@@ -169,6 +169,37 @@ export type PlayerTimeline = {
 
 export type PlayerTimelineData = PlayerTimeline[];
 
+export type TopPlayerPerformance = {
+  player: string;
+  team: string;
+  acs: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  kd: number;
+  kast: number;
+  adr: number;
+  hs: number;
+  fk: number;
+  fd: number;
+  fkfd: number;
+  map: string;
+  event: string;
+  date: string;
+  sourceUrl: string;
+};
+
+export type LongestMapEntry = {
+  map: string;
+  duration: string;
+  teamA: string;
+  teamB: string;
+  event: string;
+  date: string;
+  rounds: number;
+  sourceUrl: string;
+};
+
 export type DashboardData = {
   mapStats: MapStat[];
   draftOrder: {
