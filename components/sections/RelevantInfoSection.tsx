@@ -60,7 +60,7 @@ export function RelevantInfoSection({
       <section>
         <div className="flex items-center gap-3 mb-4">
           <h2 className="text-sm font-bold uppercase tracking-widest text-gray-500">
-            Top 3 Longest Maps
+            Top 5 Longest Maps
           </h2>
           <SortButtons<MapSort>
             options={[{ key: 'duration', label: 'Duration' }, { key: 'rounds', label: 'Rounds' }]}
@@ -78,11 +78,12 @@ export function RelevantInfoSection({
                 <tr className="text-left text-xs text-gray-500 uppercase tracking-widest bg-[#1a1d23] border-b border-gray-800">
                   <th className="px-4 py-3 w-8">#</th>
                   <th className="px-4 py-3">Map</th>
+                  <th className="px-4 py-3">OT</th>
+                  <th className={`px-4 py-3 ${mapSort === 'rounds' ? 'text-blue-400' : ''}`}>Rounds</th>
                   <th className={`px-4 py-3 ${mapSort === 'duration' ? 'text-blue-400' : ''}`}>Duration</th>
                   <th className="px-4 py-3">Teams</th>
                   <th className="px-4 py-3">Tournament</th>
                   <th className="px-4 py-3">Date</th>
-                  <th className={`px-4 py-3 text-right ${mapSort === 'rounds' ? 'text-blue-400' : ''}`}>Rounds</th>
                   <th className="px-4 py-3 text-right">Link</th>
                 </tr>
               </thead>
@@ -91,6 +92,8 @@ export function RelevantInfoSection({
                   <tr key={i} className="border-b border-gray-800/50 hover:bg-[#1a1d23]/60 transition-colors">
                     <td className="px-4 py-3 text-gray-500 font-bold">{i + 1}</td>
                     <td className="px-4 py-3 font-semibold text-gray-100">{m.map}</td>
+                    <td className="px-4 py-3 font-mono text-gray-300">{m.rounds > 24 ? (m.rounds - 24) / 2 : '—'}</td>
+                    <td className={`px-4 py-3 font-mono ${mapSort === 'rounds' ? 'text-blue-400 font-semibold' : 'text-gray-300'}`}>{m.rounds || '—'}</td>
                     <td className={`px-4 py-3 font-mono font-semibold ${mapSort === 'duration' ? 'text-blue-400' : 'text-gray-300'}`}>{m.duration}</td>
                     <td className="px-4 py-3 text-gray-300">
                       <span className="text-gray-100 font-semibold">{m.teamA}</span>
@@ -99,7 +102,6 @@ export function RelevantInfoSection({
                     </td>
                     <td className="px-4 py-3 text-gray-400">{m.event || '—'}</td>
                     <td className="px-4 py-3 text-gray-400">{fmtDate(m.date)}</td>
-                    <td className={`px-4 py-3 text-right font-mono ${mapSort === 'rounds' ? 'text-blue-400 font-semibold' : 'text-gray-300'}`}>{m.rounds || '—'}</td>
                     <td className="px-4 py-3 text-right">
                       {m.sourceUrl
                         ? <a href={m.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2 text-xs">VLR</a>

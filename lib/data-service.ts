@@ -1640,35 +1640,44 @@ export async function getLongestMaps(filters: {
   };
   const sorted = [...byMapId.entries()].sort(([, a], [, b]) => toSeconds(b.duration) - toSeconds(a.duration));
 
-  const top3 = sorted.slice(0, 3);
-  if (!top3.length) return [];
+  // Take top 50 by duration as pool, then also sort by rounds after fetching them
+  const pool = sorted.slice(0, 50);
+  if (!pool.length) return [];
 
-  const top3MapIds = top3.map(([id]) => id);
-  const top3SeriesIds = [...new Set(top3.map(([, v]) => v.series_id))];
+  const poolMapIds = pool.map(([id]) => id);
 
-  // Fetch event + date from draft
-  const { data: draftRows } = await supabase
-    .from('draft')
-    .select('series_id, date, event')
-    .in('series_id', top3SeriesIds);
-  const draftMeta = new Map<string, { date: string; event: string }>();
-  for (const d of draftRows ?? []) {
-    if (!draftMeta.has(d.series_id)) draftMeta.set(d.series_id, { date: d.date ?? '', event: d.event ?? '' });
-  }
-
-  // Fetch round counts from round_info
-  const { data: roundRows } = await supabase
-    .from('round_info')
-    .select('map_id, round')
-    .in('map_id', top3MapIds);
+  // Fetch round counts for the full pool (needs pagination — up to 50×30 = ~1500 rows)
+  const roundRows = await fetchAllPages<{ map_id: string; round: string }>((from, to) =>
+    supabase.from('round_info').select('map_id, round').in('map_id', poolMapIds).range(from, to)
+  );
   const roundMax = new Map<string, number>();
-  for (const r of roundRows ?? []) {
+  for (const r of roundRows) {
     if (!r.map_id) continue;
     const n = Number(r.round);
     if (!isNaN(n)) roundMax.set(r.map_id, Math.max(roundMax.get(r.map_id) ?? 0, n));
   }
 
-  return top3.map(([mapId, v]) => {
+  // Top 5 by duration, top 5 by rounds — combine and deduplicate
+  const byDuration = pool.slice(0, 5);
+  const byRounds = [...pool].sort(([idA], [idB]) => (roundMax.get(idB) ?? 0) - (roundMax.get(idA) ?? 0)).slice(0, 5);
+  const combined = [...byDuration];
+  for (const entry of byRounds) {
+    if (!combined.some(([id]) => id === entry[0])) combined.push(entry);
+  }
+
+  const combinedSeriesIds = [...new Set(combined.map(([, v]) => v.series_id))];
+
+  // Fetch event + date from draft
+  const { data: draftRows } = await supabase
+    .from('draft')
+    .select('series_id, date, event')
+    .in('series_id', combinedSeriesIds);
+  const draftMeta = new Map<string, { date: string; event: string }>();
+  for (const d of draftRows ?? []) {
+    if (!draftMeta.has(d.series_id)) draftMeta.set(d.series_id, { date: d.date ?? '', event: d.event ?? '' });
+  }
+
+  return combined.map(([mapId, v]) => {
     const teams = [...v.teams];
     const meta = draftMeta.get(v.series_id) ?? { date: '', event: '' };
     return {
