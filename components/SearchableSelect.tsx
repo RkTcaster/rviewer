@@ -55,6 +55,12 @@ export function SearchableSelect({ options, selected, onChange, placeholder, lab
             />
           </div>
           <div className="max-h-[200px] overflow-y-auto">
+            <div
+              onClick={() => { onChange(''); setIsOpen(false); setSearch(""); }}
+              className={`p-2 text-sm cursor-pointer hover:bg-blue-900 transition-colors text-gray-400 ${!selected ? 'bg-blue-900 font-bold text-gray-200' : ''}`}
+            >
+              All
+            </div>
             {filtered.length > 0 ? (
               filtered.map(opt => (
                 <div
