@@ -1,3 +1,4 @@
+// Esto corre con node scripts/upload.mjs
 import fs from 'fs';
 import csv from 'csv-parser';
 import { createClient } from '@supabase/supabase-js';
