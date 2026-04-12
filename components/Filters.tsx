@@ -260,7 +260,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         disabled={!isOverall && !isEconomy && !isRelevantInfo && !searchParams.get('team')}
       />
 
-      {(isCompareStats || isEconomy) && (
+      {(isCompareStats || isEconomy || section === 'map-picks' || section === 'agent-picks') && (
         <>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">{isEconomy ? 'From' : 'From A'}</label>

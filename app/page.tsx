@@ -48,7 +48,7 @@ export default async function Page({
 
   // Overall data (only for overall sections)
   const overallMapStats = (section === 'map-picks')
-    ? await getOverallMapPicks({ reg, tour, bo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
+    ? await getOverallMapPicks({ reg, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
     : [];
 
   const compositionsData = (section === 'maps' && team)
@@ -56,7 +56,7 @@ export default async function Page({
     : [];
 
   const agentPickStats = (section === 'agent-picks')
-    ? await getAgentPickStats({ reg, tour })
+    ? await getAgentPickStats({ reg, tour, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
     : [];
 
   const agentCompositions = (section === 'agent-picks')

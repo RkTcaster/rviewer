@@ -273,12 +273,14 @@ export async function getAllTours(regId?: string): Promise<Tournament[]> {
 }
 
 export async function getOverallMapPicks(
-  filters: { reg?: string; tour?: string; bo?: string; excludeTeams?: string[] }
+  filters: { reg?: string; tour?: string; bo?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<OverallMapStat[]> {
   let query = supabase.from('draft').select('*');
   if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
   if (filters.reg) query = query.eq('reg_id', filters.reg);
   if (filters.bo && filters.bo !== 'all') query = query.eq('bo', parseInt(filters.bo));
+  if (filters.dateFrom) query = query.gte('date', filters.dateFrom);
+  if (filters.dateTo)   query = query.lte('date', filters.dateTo);
   if (filters.excludeTeams && filters.excludeTeams.length > 0) {
     query = query.not('team', 'in', `(${filters.excludeTeams.join(',')})`);
     query = query.not('rival', 'in', `(${filters.excludeTeams.join(',')})`);
@@ -367,11 +369,23 @@ export async function getAgentPickStats(
     });
   }
 
+  // Pre-fetch map_ids played by excluded teams so we can filter the denominator too
+  let excludedMapIds: string[] = [];
+  if (filters.excludeTeams && filters.excludeTeams.length > 0) {
+    const { data: excRows } = await supabase
+      .from('player_stats')
+      .select('map_id')
+      .in('team', filters.excludeTeams);
+    excludedMapIds = [...new Set((excRows ?? []).map((r: any) => r.map_id))];
+  }
+
   // Two parallel queries: map counts from maps_id table + agent picks
   const [mapRows, agentRows] = await Promise.all([
-    fetchAllPages<{ map_id: string; map: string }>((from, to) =>
-      applyFilters(supabase.from('maps_id').select('map_id, map')).range(from, to)
-    ),
+    fetchAllPages<{ map_id: string; map: string }>((from, to) => {
+      let q = applyFilters(supabase.from('maps_id').select('map_id, map'));
+      if (excludedMapIds.length > 0) q = q.not('map_id', 'in', `(${excludedMapIds.join(',')})`);
+      return q.range(from, to);
+    }),
     fetchAllPages<{ map: string; agent: string }>((from, to) => {
       let q = applyFilters(supabase.from('player_stats').select('map, agent'));
       if (filters.excludeTeams && filters.excludeTeams.length > 0) {

@@ -9,7 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.98.0",
+    "@supabase/supabase-js": "^2.103.0",
     "@tanstack/react-table": "^8.21.3",
     "csv-parser": "^3.2.0",
     "dotenv": "^17.3.1",
