@@ -531,14 +531,17 @@ export async function getOverallCompositions(
 }
 
 export async function getPlayerStats(
-  filters: { team: string; reg?: string; tour?: string; bo?: string }
+  filters: { team: string; reg?: string; tour?: string; bo?: string; dateFrom?: string; dateTo?: string }
 ): Promise<PlayerStat[]> {
-  // If bo filter, pre-fetch valid series_ids from draft
+  // Pre-fetch series_ids from draft when bo or date filters are active
   let seriesIds: string[] | null = null;
-  if (filters.bo && filters.bo !== 'all') {
-    let draftQuery = supabase.from('draft').select('series_id').eq('bo', parseInt(filters.bo));
-    if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
-    if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
+  if ((filters.bo && filters.bo !== 'all') || filters.dateFrom || filters.dateTo) {
+    let draftQuery = supabase.from('draft').select('series_id');
+    if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
+    if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
+    if (filters.reg)      draftQuery = draftQuery.eq('reg_id', filters.reg);
+    if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
+    if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
     const draftData = await fetchAllPages<{ series_id: string }>((from, to) => draftQuery.range(from, to));
     if (!draftData.length) return [];
     seriesIds = [...new Set(draftData.map(d => d.series_id))];
@@ -659,13 +662,16 @@ export async function getPlayerStats(
 }
 
 export async function getTournamentPlayerAvg(
-  filters: { reg?: string; tour?: string; bo?: string }
+  filters: { reg?: string; tour?: string; bo?: string; dateFrom?: string; dateTo?: string }
 ): Promise<TournamentPlayerAvg | null> {
   let seriesIds: string[] | null = null;
-  if (filters.bo && filters.bo !== 'all') {
-    let draftQuery = supabase.from('draft').select('series_id').eq('bo', parseInt(filters.bo));
-    if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
-    if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
+  if ((filters.bo && filters.bo !== 'all') || filters.dateFrom || filters.dateTo) {
+    let draftQuery = supabase.from('draft').select('series_id');
+    if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
+    if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
+    if (filters.reg)      draftQuery = draftQuery.eq('reg_id', filters.reg);
+    if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
+    if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
     const { data: draftData } = await draftQuery;
     if (!draftData || draftData.length === 0) return null;
     seriesIds = [...new Set(draftData.map((d: any) => d.series_id))];
@@ -772,7 +778,7 @@ export async function getTournamentPlayerAvg(
 }
 
 export async function getPlayerTimeline(
-  filters: { team: string; reg?: string; tour?: string; bo?: string; last?: string }
+  filters: { team: string; reg?: string; tour?: string; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<PlayerTimelineData> {
   const limitN = filters.last && filters.last !== 'all' ? parseInt(filters.last) : 10;
 
@@ -782,9 +788,11 @@ export async function getPlayerTimeline(
     .or(`team.eq."${filters.team}",rival.eq."${filters.team}"`)
     .order('date', { ascending: false });
 
-  if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
-  if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
+  if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
+  if (filters.reg)      draftQuery = draftQuery.eq('reg_id', filters.reg);
   if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
+  if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
+  if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
 
   const { data: draftRows } = await draftQuery.limit(limitN * 10);
   if (!draftRows?.length) return [];

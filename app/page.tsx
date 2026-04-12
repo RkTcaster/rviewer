@@ -84,15 +84,15 @@ export default async function Page({
     : [];
 
   const playerStats = (section === 'player-stats' && team)
-    ? await getPlayerStats({ team, reg, tour, bo })
+    ? await getPlayerStats({ team, reg, tour, bo, dateFrom, dateTo })
     : [];
 
   const tournamentPlayerAvg = (section === 'player-stats')
-    ? await getTournamentPlayerAvg({ reg, tour, bo })
+    ? await getTournamentPlayerAvg({ reg, tour, bo, dateFrom, dateTo })
     : null;
 
   const playerTimeline = (section === 'player-stats' && team)
-    ? await getPlayerTimeline({ team, reg, tour, bo, last })
+    ? await getPlayerTimeline({ team, reg, tour, bo, last, dateFrom, dateTo })
     : [];
 
   const stats = result?.mapStats || [];

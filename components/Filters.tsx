@@ -260,7 +260,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         disabled={!isOverall && !isEconomy && !isRelevantInfo && !searchParams.get('team')}
       />
 
-      {(isCompareStats || isEconomy || section === 'map-picks' || section === 'agent-picks') && (
+      {(isCompareStats || isEconomy || section === 'map-picks' || section === 'agent-picks' || !section || section === 'maps' || section === 'compare-maps' || section === 'player-stats') && (
         <>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">{isEconomy ? 'From' : 'From A'}</label>
@@ -305,7 +305,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
           disabled={!searchParams.get('team2')}
         />
 
-        {isCompareStats && (
+        {(isCompareStats || section === 'compare-maps') && (
           <>
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">From B</label>
