@@ -5,6 +5,7 @@ import { MultiSelect } from "./MultiSelect";
 import { SearchableSelect } from "./SearchableSelect";
 import { SearchableMultiSelect } from "./SearchableMultiSelect";
 import { StringMultiSelect } from "./StringMultiSelect";
+import { RegionMultiSelect } from "./RegionMultiSelect";
 
 interface FiltersProps {
   regions: Region[];
@@ -34,6 +35,14 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     if (key === 'team') { params.delete('tour'); if (value) params.delete('excA'); }
     if (key === 'team2') { params.delete('tour2'); if (value) params.delete('excB'); }
 
+    router.push(`?${params.toString()}`);
+  };
+
+  const updateRegFilter = (key: 'reg' | 'reg2', values: string[]) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (values.length > 0) params.set(key, values.join(',')); else params.delete(key);
+    if (key === 'reg') { params.delete('team'); params.delete('tour'); params.delete('team2'); params.delete('tour2'); params.delete('excA'); }
+    if (key === 'reg2') { params.delete('team2'); params.delete('tour2'); params.delete('excB'); }
     router.push(`?${params.toString()}`);
   };
 
@@ -76,17 +85,13 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         </button>
         {/* LEFT side */}
         <div className="flex flex-wrap items-start gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-blue-400 uppercase tracking-wider">Region A</label>
-            <select
-              value={searchParams.get('reg') || ''}
-              onChange={(e) => updateFilter('reg', e.target.value)}
-              className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
-            >
-              <option value="">All regions</option>
-              {regions.map(r => <option key={r.reg_id} value={r.reg_id}>{r.region}</option>)}
-            </select>
-          </div>
+          <RegionMultiSelect
+            label="Region A"
+            options={regions}
+            selected={searchParams.get('reg')?.split(',').filter(Boolean) || []}
+            onChange={(values) => updateRegFilter('reg', values)}
+            labelColor="text-blue-400"
+          />
           <SearchableSelect
             label="Team A"
             options={teams}
@@ -119,17 +124,13 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
 
         {/* RIGHT side */}
         <div className="flex flex-wrap items-start gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-orange-400 uppercase tracking-wider">Region B</label>
-            <select
-              value={searchParams.get('reg2') || ''}
-              onChange={(e) => updateFilter('reg2', e.target.value)}
-              className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
-            >
-              <option value="">All regions</option>
-              {regions.map(r => <option key={r.reg_id} value={r.reg_id}>{r.region}</option>)}
-            </select>
-          </div>
+          <RegionMultiSelect
+            label="Region B"
+            options={regions}
+            selected={searchParams.get('reg2')?.split(',').filter(Boolean) || []}
+            onChange={(values) => updateRegFilter('reg2', values)}
+            labelColor="text-orange-400"
+          />
           <SearchableSelect
             label="Team B"
             options={teams2}
@@ -169,19 +170,12 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     {/* FILA 1: Region, Serie, Last X */}
     <div className="flex flex-wrap items-start gap-6">
 
-      <div className="flex flex-col gap-1">
-        <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Region</label>
-        <select
-          value={searchParams.get('reg') || ""}
-          onChange={(e) => updateFilter('reg', e.target.value)}
-          className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
-        >
-          <option value="">Todas</option>
-          {regions.map(r => (
-            <option key={r.reg_id} value={r.reg_id}>{r.region}</option>
-          ))}
-        </select>
-      </div>
+      <RegionMultiSelect
+        label="Region"
+        options={regions}
+        selected={searchParams.get('reg')?.split(',').filter(Boolean) || []}
+        onChange={(values) => updateRegFilter('reg', values)}
+      />
 
       {!isEconomy && (
         <div className="flex flex-col gap-1">

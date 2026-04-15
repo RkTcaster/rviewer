@@ -37,11 +37,11 @@ export async function getRegions(): Promise<Region[]> {
   return data ?? [];
 }
 
-export async function getTeams(regId?: string): Promise<string[]> {
+export async function getTeams(regId?: string[]): Promise<string[]> {
   let query = supabase.from('tournament_played').select('teamA, reg_id');
 
-  if (regId && regId !== "" && regId !== "undefined") {
-    query = query.eq('reg_id', regId);
+  if (regId && regId.length > 0) {
+    query = query.in('reg_id', regId);
   }
 
   const { data, error } = await query;
@@ -54,7 +54,7 @@ export async function getTeams(regId?: string): Promise<string[]> {
   return Array.from(set).sort() as string[];
 }
 
-export async function getTours(teamName?: string, regId?: string): Promise<Tournament[]> {
+export async function getTours(teamName?: string, regId?: string[]): Promise<Tournament[]> {
   if (!teamName) return [];
 
   let query = supabase
@@ -62,7 +62,7 @@ export async function getTours(teamName?: string, regId?: string): Promise<Tourn
     .select('tour_id, event, reg_id')
     .eq('teamA', teamName);
 
-  if (regId) query = query.eq('reg_id', regId);
+  if (regId && regId.length > 0) query = query.in('reg_id', regId);
 
   const { data } = await query;
 
@@ -72,15 +72,15 @@ export async function getTours(teamName?: string, regId?: string): Promise<Tourn
     return acc;
   }, []);
 
-  return unique || [];
+  return (unique || []).sort((a, b) => a.event.localeCompare(b.event));
 }
 
 export async function getTournamentRankings(
-  filters: { tour?: string; reg?: string; bo?: string }
+  filters: { tour?: string; reg?: string[]; bo?: string }
 ): Promise<Record<string, TeamRankStats>> {
   let idQuery = supabase.from('draft').select('series_id');
   if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
-  if (filters.reg) idQuery = idQuery.eq('reg_id', filters.reg);
+  if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
   if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
 
   const { data: idList } = await idQuery;
@@ -261,23 +261,23 @@ export async function getTournamentRankings(
   return teamStats;
 }
 
-export async function getAllTours(regId?: string): Promise<Tournament[]> {
+export async function getAllTours(regId?: string[]): Promise<Tournament[]> {
   let query = supabase.from('tournament_played').select('tour_id, event, reg_id');
-  if (regId && regId !== '') query = query.eq('reg_id', regId);
+  if (regId && regId.length > 0) query = query.in('reg_id', regId);
   const { data } = await query;
   const unique = data?.reduce((acc: Tournament[], cur) => {
     if (!acc.find(t => t.tour_id === cur.tour_id)) acc.push(cur);
     return acc;
   }, []);
-  return unique || [];
+  return (unique || []).sort((a, b) => a.event.localeCompare(b.event));
 }
 
 export async function getOverallMapPicks(
-  filters: { reg?: string; tour?: string; bo?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
+  filters: { reg?: string[]; tour?: string; bo?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<OverallMapStat[]> {
   let query = supabase.from('draft').select('*');
   if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
-  if (filters.reg) query = query.eq('reg_id', filters.reg);
+  if (filters.reg) query = query.in('reg_id', filters.reg!);
   if (filters.bo && filters.bo !== 'all') query = query.eq('bo', parseInt(filters.bo));
   if (filters.dateFrom) query = query.gte('date', filters.dateFrom);
   if (filters.dateTo)   query = query.lte('date', filters.dateTo);
@@ -315,14 +315,14 @@ export async function getOverallMapPicks(
 }
 
 export async function getAgentPickStats(
-  filters: { reg?: string; tour?: string; team?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
+  filters: { reg?: string[]; tour?: string; team?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<AgentPickStat[]> {
   // Pre-fetch series_ids from draft when date filters are active
   let seriesIds: string[] | null = null;
   if (filters.dateFrom || filters.dateTo) {
     let draftQuery = supabase.from('draft').select('series_id');
     if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
-    if (filters.reg)      draftQuery = draftQuery.eq('reg_id', filters.reg);
+    if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
     if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
     if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
     const { data: draftData } = await draftQuery;
@@ -332,7 +332,7 @@ export async function getAgentPickStats(
 
   function applyFilters(q: any) {
     if (filters.tour) q = q.in('tour_id', filters.tour.split(','));
-    if (filters.reg)  q = q.eq('reg_id', filters.reg);
+    if (filters.reg)  q = q.in('reg_id', filters.reg!);
     if (seriesIds)    q = q.in('series_id', seriesIds);
     return q;
   }
@@ -369,23 +369,11 @@ export async function getAgentPickStats(
     });
   }
 
-  // Pre-fetch map_ids played by excluded teams so we can filter the denominator too
-  let excludedMapIds: string[] = [];
-  if (filters.excludeTeams && filters.excludeTeams.length > 0) {
-    const { data: excRows } = await supabase
-      .from('player_stats')
-      .select('map_id')
-      .in('team', filters.excludeTeams);
-    excludedMapIds = [...new Set((excRows ?? []).map((r: any) => r.map_id))];
-  }
-
   // Two parallel queries: map counts from maps_id table + agent picks
   const [mapRows, agentRows] = await Promise.all([
-    fetchAllPages<{ map_id: string; map: string }>((from, to) => {
-      let q = applyFilters(supabase.from('maps_id').select('map_id, map'));
-      if (excludedMapIds.length > 0) q = q.not('map_id', 'in', `(${excludedMapIds.join(',')})`);
-      return q.range(from, to);
-    }),
+    fetchAllPages<{ map_id: string; map: string }>((from, to) =>
+      applyFilters(supabase.from('maps_id').select('map_id, map')).range(from, to)
+    ),
     fetchAllPages<{ map: string; agent: string }>((from, to) => {
       let q = applyFilters(supabase.from('player_stats').select('map, agent'));
       if (filters.excludeTeams && filters.excludeTeams.length > 0) {
@@ -428,7 +416,7 @@ export async function getAgentPickStats(
 }
 
 export async function getOverallCompositions(
-  filters: { team?: string; reg?: string; tour?: string; bo?: string; last?: string }
+  filters: { team?: string; reg?: string[]; tour?: string; bo?: string; last?: string }
 ): Promise<CompositionStat[]> {
   const rows = await fetchAllPages<any>((from, to) => {
     let q = supabase
@@ -436,7 +424,7 @@ export async function getOverallCompositions(
       .select('team, map, series_id, map_id, agent, reg_id, tour_id');
     if (filters.team) q = q.eq('team', filters.team);
     if (filters.tour) q = q.in('tour_id', filters.tour.split(','));
-    if (filters.reg)  q = q.eq('reg_id', filters.reg);
+    if (filters.reg)  q = q.in('reg_id', filters.reg!);
     return q.range(from, to);
   });
   if (!rows || rows.length === 0) return [];
@@ -531,7 +519,7 @@ export async function getOverallCompositions(
 }
 
 export async function getPlayerStats(
-  filters: { team: string; reg?: string; tour?: string; bo?: string; dateFrom?: string; dateTo?: string }
+  filters: { team: string; reg?: string[]; tour?: string; bo?: string; dateFrom?: string; dateTo?: string }
 ): Promise<PlayerStat[]> {
   // Pre-fetch series_ids from draft when bo or date filters are active
   let seriesIds: string[] | null = null;
@@ -539,7 +527,7 @@ export async function getPlayerStats(
     let draftQuery = supabase.from('draft').select('series_id');
     if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
     if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
-    if (filters.reg)      draftQuery = draftQuery.eq('reg_id', filters.reg);
+    if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
     if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
     if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
     const draftData = await fetchAllPages<{ series_id: string }>((from, to) => draftQuery.range(from, to));
@@ -553,7 +541,7 @@ export async function getPlayerStats(
     .eq('team', filters.team);
 
   if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
-  if (filters.reg)  query = query.eq('reg_id', filters.reg);
+  if (filters.reg)  query = query.in('reg_id', filters.reg!);
   if (seriesIds)    query = query.in('series_id', seriesIds);
 
   const rows = await fetchAllPages((from, to) => query.range(from, to));
@@ -662,14 +650,14 @@ export async function getPlayerStats(
 }
 
 export async function getTournamentPlayerAvg(
-  filters: { reg?: string; tour?: string; bo?: string; dateFrom?: string; dateTo?: string }
+  filters: { reg?: string[]; tour?: string; bo?: string; dateFrom?: string; dateTo?: string }
 ): Promise<TournamentPlayerAvg | null> {
   let seriesIds: string[] | null = null;
   if ((filters.bo && filters.bo !== 'all') || filters.dateFrom || filters.dateTo) {
     let draftQuery = supabase.from('draft').select('series_id');
     if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
     if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
-    if (filters.reg)      draftQuery = draftQuery.eq('reg_id', filters.reg);
+    if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
     if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
     if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
     const { data: draftData } = await draftQuery;
@@ -682,7 +670,7 @@ export async function getTournamentPlayerAvg(
     .select('player, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT');
 
   if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
-  if (filters.reg)  query = query.eq('reg_id', filters.reg);
+  if (filters.reg)  query = query.in('reg_id', filters.reg!);
   if (seriesIds)    query = query.in('series_id', seriesIds);
 
   const rows = await fetchAllPages((from, to) => query.range(from, to));
@@ -778,7 +766,7 @@ export async function getTournamentPlayerAvg(
 }
 
 export async function getPlayerTimeline(
-  filters: { team: string; reg?: string; tour?: string; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
+  filters: { team: string; reg?: string[]; tour?: string; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<PlayerTimelineData> {
   const limitN = filters.last && filters.last !== 'all' ? parseInt(filters.last) : 10;
 
@@ -789,7 +777,7 @@ export async function getPlayerTimeline(
     .order('date', { ascending: false });
 
   if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
-  if (filters.reg)      draftQuery = draftQuery.eq('reg_id', filters.reg);
+  if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
   if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
   if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
   if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
@@ -982,11 +970,11 @@ export async function getPlayerTimeline(
 }
 
 export async function getOverallMapFullStats(
-  filters: { reg?: string; tour?: string; bo?: string }
+  filters: { reg?: string[]; tour?: string; bo?: string }
 ): Promise<Record<string, OverallMapFullStat>> {
   let draftQuery = supabase.from('draft').select('*');
   if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
-  if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
+  if (filters.reg)  draftQuery = draftQuery.in('reg_id', filters.reg!);
   if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
 
   const { data: drafts } = await draftQuery;
@@ -1070,7 +1058,7 @@ export async function getMapImages(): Promise<Record<string, string>> {
 
 // --- Stats ---
 
-export async function getMapStats(filters: { team: string; tour?: string; bo?: string; reg?: string; last?: string; dateFrom?: string; dateTo?: string }): Promise<DashboardData> {
+export async function getMapStats(filters: { team: string; tour?: string; bo?: string; reg?: string[]; last?: string; dateFrom?: string; dateTo?: string }): Promise<DashboardData> {
   let idQuery = supabase
     .from('draft')
     .select('series_id, date')
@@ -1079,7 +1067,7 @@ export async function getMapStats(filters: { team: string; tour?: string; bo?: s
 
   // Aplicar filtros de torneo/región/bo a la búsqueda de IDs también
   if (filters.tour)     idQuery = idQuery.in('tour_id', filters.tour.split(','));
-  if (filters.reg)      idQuery = idQuery.eq('reg_id', filters.reg);
+  if (filters.reg)      idQuery = idQuery.in('reg_id', filters.reg!);
   if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
   if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
   if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
@@ -1099,17 +1087,26 @@ export async function getMapStats(filters: { team: string; tour?: string; bo?: s
     lastMatchData: null
   };
 
-  const lastDate = idList[0].date
   const recentIds = idList.map(item => item.series_id);
 
+  // 2. Fetch drafts, rounds and the team's true last match date (unfiltered) in parallel
+  const latestMatchQuery = supabase
+    .from('draft')
+    .select('date')
+    .or(`team.eq."${filters.team}",rival.eq."${filters.team}"`)
+    .order('date', { ascending: false })
+    .limit(1)
+    .single();
 
-  // 2. Ahora traemos los Drafts y Rondas filtrados por esos IDs específicos
   let draftQuery = supabase.from('draft').select('*').in('series_id', recentIds);
   let roundsQuery = supabase.from('round_info').select('*').in('series_id', recentIds);
 
-  const [{ data: drafts }, { data: rounds }] = await Promise.all([draftQuery, roundsQuery]);
+  const [{ data: drafts }, { data: rounds }, { data: latestMatch }] = await Promise.all([draftQuery, roundsQuery, latestMatchQuery]);
 
-  return procesarTodo(drafts || [], rounds || [], filters.team);
+  return {
+    ...procesarTodo(drafts || [], rounds || [], filters.team),
+    lastMatchData: latestMatch?.date ?? null,
+  };
 }
 
 
@@ -1331,7 +1328,7 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Omit<Da
 }
 
 export async function getEconomyDistribution(filters: {
-  reg?: string; tour?: string; team?: string;
+  reg?: string[]; tour?: string; team?: string;
 }): Promise<EconomyBin[]> {
   const { reg, tour, team } = filters;
   const BIN_COUNT = 50;
@@ -1341,7 +1338,7 @@ export async function getEconomyDistribution(filters: {
     Array.from({ length: BIN_COUNT }, (_, i) => ({ label: String(i * BIN_SIZE), count: 0, wins: 0 }));
 
   let draftQuery = supabase.from('draft').select('series_id');
-  if (reg) draftQuery = draftQuery.eq('reg_id', reg);
+  if (reg && reg.length > 0) draftQuery = draftQuery.in('reg_id', reg);
   if (tour) {
     const tourIds = tour.split(',').filter(Boolean);
     draftQuery = tourIds.length === 1
@@ -1420,14 +1417,14 @@ function emptyTeamEconomyCompare(): TeamEconomyCompare {
 }
 
 export async function getEconomyCompare(filters: {
-  reg?: string; tour?: string; team?: string;
+  reg?: string[]; tour?: string; team?: string;
 }): Promise<TeamEconomyCompare> {
   const { reg, tour, team } = filters;
   const stats = emptyTeamEconomyCompare();
   if (!team) return stats;
 
   let draftQuery = supabase.from('draft').select('series_id');
-  if (reg) draftQuery = draftQuery.eq('reg_id', reg);
+  if (reg && reg.length > 0) draftQuery = draftQuery.in('reg_id', reg);
   if (tour) {
     const tourIds = tour.split(',').filter(Boolean);
     draftQuery = tourIds.length === 1
@@ -1476,7 +1473,7 @@ export async function getEconomyCompare(filters: {
 }
 
 export async function getTopPlayerPerformances(filters: {
-  reg?: string;
+  reg?: string[];
   tour?: string;
   team?: string;
   bo?: string;
@@ -1487,7 +1484,7 @@ export async function getTopPlayerPerformances(filters: {
   if (filters.bo && filters.bo !== 'all') {
     let draftQuery = supabase.from('draft').select('series_id').eq('bo', parseInt(filters.bo));
     if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
-    if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
+    if (filters.reg)  draftQuery = draftQuery.in('reg_id', filters.reg!);
     const draftData = await fetchAllPages<{ series_id: string }>((from, to) => draftQuery.range(from, to));
     if (!draftData.length) return [];
     seriesIds = [...new Set(draftData.map(d => d.series_id))];
@@ -1500,7 +1497,7 @@ export async function getTopPlayerPerformances(filters: {
       .select('series_id, date')
       .or(`team.eq.${filters.team},rival.eq.${filters.team}`)
       .order('date', { ascending: false });
-    if (filters.reg)  lastQuery = lastQuery.eq('reg_id', filters.reg);
+    if (filters.reg)  lastQuery = lastQuery.in('reg_id', filters.reg!);
     if (filters.tour) lastQuery = lastQuery.in('tour_id', filters.tour.split(','));
     if (seriesIds)    lastQuery = lastQuery.in('series_id', seriesIds);
     const lastData = await fetchAllPages<{ series_id: string; date: string }>((from, to) => lastQuery.range(from, to));
@@ -1521,7 +1518,7 @@ export async function getTopPlayerPerformances(filters: {
     .from('player_stats')
     .select('player, team, acsBoth, killsBoth, deadBoth, assistsBoth, kastBoth, adrBoth, hsBoth, fkBoth, fdBoth, map, series_id, source_url');
   if (filters.team) query = query.eq('team', filters.team);
-  if (filters.reg)  query = query.eq('reg_id', filters.reg);
+  if (filters.reg)  query = query.in('reg_id', filters.reg!);
   if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
   if (seriesIds)    query = query.in('series_id', seriesIds);
 
@@ -1587,7 +1584,7 @@ export async function getTopPlayerPerformances(filters: {
 }
 
 export async function getLongestMaps(filters: {
-  reg?: string;
+  reg?: string[];
   tour?: string;
   team?: string;
   bo?: string;
@@ -1599,7 +1596,7 @@ export async function getLongestMaps(filters: {
   if (filters.bo && filters.bo !== 'all') {
     let draftQuery = supabase.from('draft').select('series_id').eq('bo', parseInt(filters.bo));
     if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
-    if (filters.reg)  draftQuery = draftQuery.eq('reg_id', filters.reg);
+    if (filters.reg)  draftQuery = draftQuery.in('reg_id', filters.reg!);
     const draftData = await fetchAllPages<{ series_id: string }>((from, to) => draftQuery.range(from, to));
     if (!draftData.length) return [];
     seriesIds = [...new Set(draftData.map(d => d.series_id))];
@@ -1613,7 +1610,7 @@ export async function getLongestMaps(filters: {
       .select('series_id, date')
       .or(`team.eq.${filters.team},rival.eq.${filters.team}`)
       .order('date', { ascending: false });
-    if (filters.reg)  lastQuery = lastQuery.eq('reg_id', filters.reg);
+    if (filters.reg)  lastQuery = lastQuery.in('reg_id', filters.reg!);
     if (filters.tour) lastQuery = lastQuery.in('tour_id', filters.tour.split(','));
     if (seriesIds)    lastQuery = lastQuery.in('series_id', seriesIds);
     const lastData = await fetchAllPages<{ series_id: string; date: string }>((from, to) => lastQuery.range(from, to));
@@ -1635,7 +1632,7 @@ export async function getLongestMaps(filters: {
     .from('player_stats')
     .select('map, map_id, map_duration, team, series_id, tour_id, reg_id, source_url');
   if (filters.team) query = query.eq('team', filters.team);
-  if (filters.reg)  query = query.eq('reg_id', filters.reg);
+  if (filters.reg)  query = query.in('reg_id', filters.reg!);
   if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
   if (seriesIds)    query = query.in('series_id', seriesIds);
 

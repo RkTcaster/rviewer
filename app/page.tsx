@@ -23,6 +23,8 @@ export default async function Page({
 }) {
   const params = await searchParams;
   const { reg, team, tour, bo, last, section = 'maps', team2, tour2, reg2, dateFrom, dateTo, dateFrom2, dateTo2, excA, excB } = params;
+  const regArr = reg ? reg.split(',').filter(Boolean) : undefined;
+  const reg2Arr = reg2 ? reg2.split(',').filter(Boolean) : undefined;
   const excludeTeamsA = excA ? excA.split(',') : [];
   const excludeTeamsB = excB ? excB.split(',') : [];
 
@@ -35,32 +37,32 @@ export default async function Page({
 
   // Team data (only for team sections)
   const result = (!isOverall && !isMetaShift && !isEconomy && !isRelevantInfo && team)
-    ? await getMapStats({ team, tour, bo, reg, last, dateFrom, dateTo })
+    ? await getMapStats({ team, tour, bo, reg: regArr, last, dateFrom, dateTo })
     : null;
 
   const resultB = (isCompare && team2)
-    ? await getMapStats({ team: team2, tour: tour2, bo, reg, last, dateFrom: dateFrom2, dateTo: dateTo2 })
+    ? await getMapStats({ team: team2, tour: tour2, bo, reg: regArr, last, dateFrom: dateFrom2, dateTo: dateTo2 })
     : null;
 
   const rankings = (section === 'compare-stats' || section === 'graphs')
-    ? await getTournamentRankings({ tour, reg, bo })
+    ? await getTournamentRankings({ tour, reg: regArr, bo })
     : {};
 
   // Overall data (only for overall sections)
   const overallMapStats = (section === 'map-picks')
-    ? await getOverallMapPicks({ reg, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
+    ? await getOverallMapPicks({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
     : [];
 
   const compositionsData = (section === 'maps' && team)
-    ? await getOverallCompositions({ team, reg, tour, bo, last })
+    ? await getOverallCompositions({ team, reg: regArr, tour, bo, last })
     : [];
 
   const agentPickStats = (section === 'agent-picks')
-    ? await getAgentPickStats({ reg, tour, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
+    ? await getAgentPickStats({ reg: regArr, tour, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
     : [];
 
   const agentCompositions = (section === 'agent-picks')
-    ? await getOverallCompositions({ reg, tour, bo })
+    ? await getOverallCompositions({ reg: regArr, tour, bo })
     : [];
 
   const mapImages = (section === 'agent-picks')
@@ -72,27 +74,27 @@ export default async function Page({
     : {};
 
   const mapFullStats = (section === 'agent-picks')
-    ? await getOverallMapFullStats({ reg, tour, bo })
+    ? await getOverallMapFullStats({ reg: regArr, tour, bo })
     : {};
 
   const agentPickStatsLeft = isMetaShift
-    ? await getAgentPickStats({ reg, tour, team: team || undefined, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
+    ? await getAgentPickStats({ reg: regArr, tour, team: team || undefined, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
     : [];
 
   const agentPickStatsRight = isMetaShift
-    ? await getAgentPickStats({ reg: reg2, tour: tour2, team: team2 || undefined, dateFrom: dateFrom2, dateTo: dateTo2, excludeTeams: excludeTeamsB.length > 0 ? excludeTeamsB : undefined })
+    ? await getAgentPickStats({ reg: reg2Arr, tour: tour2, team: team2 || undefined, dateFrom: dateFrom2, dateTo: dateTo2, excludeTeams: excludeTeamsB.length > 0 ? excludeTeamsB : undefined })
     : [];
 
   const playerStats = (section === 'player-stats' && team)
-    ? await getPlayerStats({ team, reg, tour, bo, dateFrom, dateTo })
+    ? await getPlayerStats({ team, reg: regArr, tour, bo, dateFrom, dateTo })
     : [];
 
   const tournamentPlayerAvg = (section === 'player-stats')
-    ? await getTournamentPlayerAvg({ reg, tour, bo, dateFrom, dateTo })
+    ? await getTournamentPlayerAvg({ reg: regArr, tour, bo, dateFrom, dateTo })
     : null;
 
   const playerTimeline = (section === 'player-stats' && team)
-    ? await getPlayerTimeline({ team, reg, tour, bo, last, dateFrom, dateTo })
+    ? await getPlayerTimeline({ team, reg: regArr, tour, bo, last, dateFrom, dateTo })
     : [];
 
   const stats = result?.mapStats || [];
@@ -102,35 +104,35 @@ export default async function Page({
   const recovery = result?.recovery || { wins: 0, total: 0 };
   const pab = result?.pab || { atkWins: 0, defWins: 0, wins: 0, atkTotal: 0, defTotal: 0, total: 0 };
 
-  const [regions, teams, lastUpdateDate] = await Promise.all([getRegions(), getTeams(reg), getLastUpdateDate()]);
-  const teams2 = isMetaShift ? await getTeams(reg2) : [];
+  const [regions, teams, lastUpdateDate] = await Promise.all([getRegions(), getTeams(regArr), getLastUpdateDate()]);
+  const teams2 = isMetaShift ? await getTeams(reg2Arr) : [];
   // Compare Economy
   const econCompareA = isCompareEconomy && team
-    ? await getEconomyCompare({ reg, tour, team })
+    ? await getEconomyCompare({ reg: regArr, tour, team })
     : null;
   const econCompareB = isCompareEconomy && team2
-    ? await getEconomyCompare({ reg, tour: tour2, team: team2 })
+    ? await getEconomyCompare({ reg: regArr, tour: tour2, team: team2 })
     : null;
 
   // Economy histogram bins
   const economyBins = isEconomy
-    ? await getEconomyDistribution({ reg, tour, team: team || undefined })
+    ? await getEconomyDistribution({ reg: regArr, tour, team: team || undefined })
     : [];
 
   const longestMaps = isRelevantInfo
-    ? await getLongestMaps({ reg, tour, team: team || undefined, bo, last })
+    ? await getLongestMaps({ reg: regArr, tour, team: team || undefined, bo, last })
     : [];
 
   const topPerformances = isRelevantInfo
-    ? await getTopPlayerPerformances({ reg, tour, team: team || undefined, bo, last })
+    ? await getTopPlayerPerformances({ reg: regArr, tour, team: team || undefined, bo, last })
     : [];
 
   // Tours source differs by context
-  const tours = (isOverall || isMetaShift || isEconomy || isRelevantInfo) ? await getAllTours(reg) : await getTours(team, reg);
+  const tours = (isOverall || isMetaShift || isEconomy || isRelevantInfo) ? await getAllTours(regArr) : await getTours(team, regArr);
   const tours2 = isCompare
-    ? await getTours(team2, reg)
+    ? await getTours(team2, regArr)
     : isMetaShift
-      ? (team2 ? await getTours(team2, reg2) : await getAllTours(reg2))
+      ? (team2 ? await getTours(team2, reg2Arr) : await getAllTours(reg2Arr))
       : [];
 
   function renderSection() {
@@ -214,20 +216,35 @@ export default async function Page({
             'compare-economy': 'Compare Economy',
           'relevant-info': 'Relevant Info',
           }[section] ?? section}</h1>
-          {reg && (
+          {regArr && regArr.length > 0 && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">
-              {regions.find(r => r.reg_id === reg)?.region ?? reg}
+              {regArr.map(r => regions.find(x => x.reg_id === r)?.region ?? r).join(', ')}
             </span>
           )}
-          {result?.lastMatchData && (
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
-              Last team match date:{' '}
-              {new Date(result.lastMatchData).toLocaleDateString('es-AR', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              })}
-            </p>
+          {isCompare ? (
+            (result?.lastMatchData || resultB?.lastMatchData) && (
+              <div className="flex flex-wrap gap-x-6 mt-1">
+                {result?.lastMatchData && (
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    {team} — Last match:{' '}
+                    {new Date(result.lastMatchData).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </p>
+                )}
+                {resultB?.lastMatchData && (
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    {team2} — Last match:{' '}
+                    {new Date(resultB.lastMatchData).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </p>
+                )}
+              </div>
+            )
+          ) : (
+            result?.lastMatchData && (
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
+                Last team match date:{' '}
+                {new Date(result.lastMatchData).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+            )
           )}
           <div className="mt-4">
             <Filters
