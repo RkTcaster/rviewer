@@ -1128,7 +1128,7 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Omit<Da
   const initMap = (map: string) => {
     if (map && !stats[map]) {
       stats[map] = {
-        mapName: map, picks: 0, bans: 0, deciders: 0,
+        mapName: map, picks: 0, pick1: 0, pick2: 0, bans: 0, ban1: 0, ban2: 0, deciders: 0,
         rivalPicks: 0, rivalBans: 0, wins: 0, played: 0,
         attWins: 0, attTotal: 0, defWins: 0, defTotal: 0,
       };
@@ -1143,18 +1143,18 @@ function procesarTodo(drafts: any[], rounds: any[], targetTeam: string): Omit<Da
     else if (m.rival === targetTeam) orderB++;
     // Picks Equipo
     const p1 = isTeam1 ? m.team_1_select_2 : m.team_2_select_2;
-    if (p1) { initMap(p1); stats[p1].picks++; }
+    if (p1) { initMap(p1); stats[p1].picks++; stats[p1].pick1++; }
     if (boType === 5) {
       const p2 = isTeam1 ? m.team_1_select_3 : m.team_2_select_3;
-      if (p2) { initMap(p2); stats[p2].picks++; }
+      if (p2) { initMap(p2); stats[p2].picks++; stats[p2].pick2++; }
     }
 
     // Bans Equipo
     const b1 = isTeam1 ? m.team_1_select_1 : m.team_2_select_1;
-    if (b1) { initMap(b1); stats[b1].bans++; }
+    if (b1) { initMap(b1); stats[b1].bans++; stats[b1].ban1++; }
     if (boType === 3) {
       const b2 = isTeam1 ? m.team_1_select_3 : m.team_2_select_3;
-      if (b2) { initMap(b2); stats[b2].bans++; }
+      if (b2) { initMap(b2); stats[b2].bans++; stats[b2].ban2++; }
     }
 
     // Picks Rival

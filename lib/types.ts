@@ -19,7 +19,11 @@ export type Draft = {
 export type MapStat = {
   mapName: string;
   picks: number;
+  pick1: number;
+  pick2: number;
   bans: number;
+  ban1: number;
+  ban2: number;
   deciders: number;
   rivalPicks: number;
   rivalBans: number;

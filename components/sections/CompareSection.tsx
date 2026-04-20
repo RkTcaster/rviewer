@@ -8,7 +8,7 @@ interface Props {
 }
 
 const EMPTY: MapStat = {
-  mapName: '', picks: 0, bans: 0, deciders: 0,
+  mapName: '', picks: 0, pick1: 0, pick2: 0, bans: 0, ban1: 0, ban2: 0, deciders: 0,
   rivalPicks: 0, rivalBans: 0, wins: 0, played: 0,
   attWins: 0, attTotal: 0, defWins: 0, defTotal: 0,
 };
@@ -77,11 +77,11 @@ export function CompareSection({ statsA, statsB, teamAName, teamBName }: Props) 
                   {/* Team A side */}
                   <th className={`${th} bg-blue-900/30 text-blue-400`}>Decider</th>
                   <th className={`${th} bg-green-900/30 text-green-400`}>
-                    <div>Picks</div>
+                    <div>Picks <span className="text-[10.5px] text-green-600 normal-case font-normal">(1st / 2nd)</span></div>
                     <div className="text-[10.5px] text-gray-500 normal-case font-normal">Pick · Rival</div>
                   </th>
                   <th className={`${th} bg-red-900/30 text-red-400`}>
-                    <div>Bans</div>
+                    <div>Bans <span className="text-[10.5px] text-red-700 normal-case font-normal">(1st / 2nd)</span></div>
                     <div className="text-[10.5px] text-gray-500 normal-case font-normal">Ban · Rival</div>
                   </th>
                   <th className={`${th} bg-rose-900/80`}>Atk Side</th>
@@ -96,11 +96,11 @@ export function CompareSection({ statsA, statsB, teamAName, teamBName }: Props) 
                   <th className={`${th} bg-green-800/80`}>Def Side</th>
                   <th className={`${th} bg-rose-900/80`}>Atk Side</th>
                   <th className={`${th} bg-red-900/30 text-red-400`}>
-                    <div>Bans</div>
+                    <div>Bans <span className="text-[10.5px] text-red-700 normal-case font-normal">(1st / 2nd)</span></div>
                     <div className="text-[10.5px] text-gray-500 normal-case font-normal">Ban · Rival</div>
                   </th>
                   <th className={`${th} bg-green-900/30 text-green-400`}>
-                    <div>Picks</div>
+                    <div>Picks <span className="text-[10.5px] text-green-600 normal-case font-normal">(1st / 2nd)</span></div>
                     <div className="text-[10.5px] text-gray-500 normal-case font-normal">Pick · Rival</div>
                   </th>
                   <th className={`${th} bg-blue-900/30 text-blue-400`}>Decider</th>
@@ -117,11 +117,15 @@ export function CompareSection({ statsA, statsB, teamAName, teamBName }: Props) 
                         {sa.deciders || <span className="text-gray-600">-</span>}
                       </td>
                       <td className="p-3 text-center bg-green-900/10">
-                        <div className="font-bold text-green-400">{sa.picks}</div>
+                        <div className="font-bold text-green-400">
+                          {sa.picks}{sa.picks > 0 && <span className="font-normal text-green-600 ml-1">({sa.pick1}/{sa.pick2})</span>}
+                        </div>
                         <div className="text-[11.5px] text-gray-500">{sa.rivalPicks}</div>
                       </td>
                       <td className="p-3 text-center bg-red-900/10">
-                        <div className="font-bold text-red-400">{sa.bans}</div>
+                        <div className="font-bold text-red-400">
+                          {sa.bans}{sa.bans > 0 && <span className="font-normal text-red-700 ml-1">({sa.ban1}/{sa.ban2})</span>}
+                        </div>
                         <div className="text-[11.5px] text-gray-500">{sa.rivalBans}</div>
                       </td>
                       <td className="p-3 text-center bg-[#1a1d23]">
@@ -148,11 +152,15 @@ export function CompareSection({ statsA, statsB, teamAName, teamBName }: Props) 
                         <SideCell wins={sb.attWins} total={sb.attTotal} />
                       </td>
                       <td className="p-3 text-center bg-red-900/10">
-                        <div className="font-bold text-red-400">{sb.bans}</div>
+                        <div className="font-bold text-red-400">
+                          {sb.bans}{sb.bans > 0 && <span className="font-normal text-red-700 ml-1">({sb.ban1}/{sb.ban2})</span>}
+                        </div>
                         <div className="text-[11.5px] text-gray-500">{sb.rivalBans}</div>
                       </td>
                       <td className="p-3 text-center bg-green-900/10">
-                        <div className="font-bold text-green-400">{sb.picks}</div>
+                        <div className="font-bold text-green-400">
+                          {sb.picks}{sb.picks > 0 && <span className="font-normal text-green-600 ml-1">({sb.pick1}/{sb.pick2})</span>}
+                        </div>
                         <div className="text-[11.5px] text-gray-500">{sb.rivalPicks}</div>
                       </td>
                       <td className="p-3 text-center text-blue-400 font-bold bg-blue-900/10">

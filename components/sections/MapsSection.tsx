@@ -74,8 +74,8 @@ export function MapsSection({ stats, compositions, agentImages }: Props) {
               <th className="p-4 text-center border-b border-gray-800 bg-gray-900/80">Winrate</th>
               <th className="p-4 text-center border-b border-gray-800 bg-rose-900/80">Atk Side</th>
               <th className="p-4 text-center border-b border-gray-800 bg-green-800/80">Def Side</th>
-              <SortableTh col="picks" className="bg-green-900/30 text-green-400">Picks</SortableTh>
-              <SortableTh col="bans" className="bg-red-900/30 text-red-400">Bans</SortableTh>
+              <SortableTh col="picks" className="bg-green-900/30 text-green-400">Picks <span className="text-[10.5px] text-green-600 normal-case font-normal">(1st / 2nd)</span></SortableTh>
+              <SortableTh col="bans" className="bg-red-900/30 text-red-400">Bans <span className="text-[10.5px] text-red-700 normal-case font-normal">(1st / 2nd)</span></SortableTh>
               <SortableTh col="deciders" className="bg-blue-900/30 text-blue-400">Decider</SortableTh>
               <SortableTh col="rivalPicks" className="bg-gray-900/80">Picks Rival</SortableTh>
               <SortableTh col="rivalBans" className="bg-gray-900/80">Bans Rival</SortableTh>
@@ -120,8 +120,12 @@ export function MapsSection({ stats, compositions, agentImages }: Props) {
                     </div>
                   </td>
 
-                  <td className="p-4 text-center text-green-400 font-bold bg-green-900/10">{s.picks}</td>
-                  <td className="p-4 text-center text-red-400 font-bold bg-red-900/10">{s.bans}</td>
+                  <td className="p-4 text-center text-green-400 font-bold bg-green-900/10">
+                    {s.picks}{s.picks > 0 && <span className="font-normal text-green-600 ml-1">({s.pick1}/{s.pick2})</span>}
+                  </td>
+                  <td className="p-4 text-center text-red-400 font-bold bg-red-900/10">
+                    {s.bans}{s.bans > 0 && <span className="font-normal text-red-700 ml-1">({s.ban1}/{s.ban2})</span>}
+                  </td>
                   <td className="p-4 text-center text-blue-400 font-bold bg-blue-900/10">{s.deciders}</td>
                   <td className="p-4 text-center text-gray-300">{s.rivalPicks}</td>
                   <td className="p-4 text-center text-gray-300">{s.rivalBans}</td>
