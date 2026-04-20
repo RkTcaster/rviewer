@@ -26,7 +26,8 @@ const NAV_SECTIONS = [
   {
     title: 'Tournament Info',
     items: [
-      { id: 'relevant-info', label: 'Relevant Info', icon: Trophy },
+      { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
+      { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Trophy },
     ],
   },
 ];

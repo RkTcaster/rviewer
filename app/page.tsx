@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -15,6 +15,7 @@ import { MetaShiftSection } from '@/components/sections/MetaShiftSection';
 import { GraphsSection } from '@/components/sections/GraphsSection';
 import { CompareEconomySection } from '@/components/sections/CompareEconomySection';
 import { RelevantInfoSection } from '@/components/sections/RelevantInfoSection';
+import { SkirmishSection } from '@/components/sections/SkirmishSection';
 
 export default async function Page({
   searchParams,
@@ -34,9 +35,10 @@ export default async function Page({
   const isEconomy = section === 'economy';
   const isCompareEconomy = section === 'compare-economy';
   const isRelevantInfo = section === 'relevant-info';
+  const isSkirmish = section === 'skirmish-americas';
 
   // Team data (only for team sections)
-  const result = (!isOverall && !isMetaShift && !isEconomy && !isRelevantInfo && team)
+  const result = (!isOverall && !isMetaShift && !isEconomy && !isRelevantInfo && !isSkirmish && team)
     ? await getMapStats({ team, tour, bo, reg: regArr, last, dateFrom, dateTo })
     : null;
 
@@ -127,6 +129,8 @@ export default async function Page({
     ? await getTopPlayerPerformances({ reg: regArr, tour, team: team || undefined, bo, last })
     : [];
 
+  const skirmishStats = isSkirmish ? await getSkirmishStats() : null;
+
   // Tours source differs by context
   const tours = (isOverall || isMetaShift || isEconomy || isRelevantInfo) ? await getAllTours(regArr) : await getTours(team, regArr);
   const tours2 = isCompare
@@ -162,6 +166,8 @@ export default async function Page({
         return <CompareEconomySection statsA={econCompareA} statsB={econCompareB} teamAName={team || ''} teamBName={team2 || ''} />;
       case 'relevant-info':
         return <RelevantInfoSection maps={longestMaps} performances={topPerformances} />;
+      case 'skirmish-americas':
+        return <SkirmishSection stats={skirmishStats!} />;
       case 'charts':
         return <ChartsSection stats={stats} />;
       case 'draft':
@@ -215,6 +221,7 @@ export default async function Page({
             'economy': 'Economy',
             'compare-economy': 'Compare Economy',
           'relevant-info': 'Relevant Info',
+          'skirmish-americas': 'Skirmish VCT Americas Stage 1',
           }[section] ?? section}</h1>
           {regArr && regArr.length > 0 && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">
@@ -246,20 +253,22 @@ export default async function Page({
               </p>
             )
           )}
-          <div className="mt-4">
-            <Filters
-              regions={regions}
-              teams={teams}
-              tours={tours}
-              tours2={tours2}
-              teams2={teams2}
-              mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : 'team'}
-            />
-          </div>
+          {!isSkirmish && (
+            <div className="mt-4">
+              <Filters
+                regions={regions}
+                teams={teams}
+                tours={tours}
+                tours2={tours2}
+                teams2={teams2}
+                mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : 'team'}
+              />
+            </div>
+          )}
         </header>
 
         <main className="p-8 pt-6">
-          {(isOverall || isMetaShift || isEconomy || isRelevantInfo) ? (
+          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish) ? (
             renderSection()
           ) : !team ? (
             <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">

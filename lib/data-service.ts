@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, LongestMapEntry, MapStat, OverallMapFullStat, OverallMapStat, PlayerMatchPoint, PlayerStat, PlayerTimelineData, Region, TeamEconomyCompare, TeamRankStats, TopPlayerPerformance, Tournament, TournamentPlayerAvg } from './types';
+import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, LongestMapEntry, MapStat, OverallMapFullStat, OverallMapStat, PlayerMatchPoint, PlayerStat, PlayerTimelineData, Region, SkirmishStats, SkirmishTeamStat, SkirmishPlayerStat, TeamEconomyCompare, TeamRankStats, TopPlayerPerformance, Tournament, TournamentPlayerAvg } from './types';
 
 // --- HELPERS ---
 
@@ -1710,4 +1710,64 @@ export async function getLongestMaps(filters: {
       sourceUrl: v.sourceUrl,
     };
   });
+}
+
+export async function getSkirmishStats(): Promise<SkirmishStats> {
+  const { data, error } = await supabase
+    .from('skirmish')
+    .select('Winner_Side, Match_Side_Winner, TeamA, TeamB, PlayerA_score, PlayerB_Score, TeamA_Player, TeamB_Player');
+
+  if (error) {
+    console.error('[getSkirmishStats] Supabase error:', JSON.stringify(error));
+    return { total: 0, sideAWins: 0, sideBWins: 0, matchSideWinnerSum: 0, teams: [] };
+  }
+
+  const total = data?.length ?? 0;
+  if (total === 0) return { total: 0, sideAWins: 0, sideBWins: 0, matchSideWinnerSum: 0, teams: [] };
+
+  const sideAWins = data!.filter((r: any) => r.Winner_Side === 'A').length;
+  const sideBWins = data!.filter((r: any) => r.Winner_Side === 'B').length;
+  const matchSideWinnerSum = data!.reduce((acc: number, r: any) => acc + (Number(r.Match_Side_Winner) || 0), 0);
+
+  type TeamEntry = { wins: number; losses: number; matchWins: number; bSideWins: number; players: Record<string, { wins: number; losses: number }> };
+  const teamMap: Record<string, TeamEntry> = {};
+  const init = (t: string) => { if (t && !teamMap[t]) teamMap[t] = { wins: 0, losses: 0, matchWins: 0, bSideWins: 0, players: {} }; };
+  const initPlayer = (t: string, p: string) => { if (p && !teamMap[t].players[p]) teamMap[t].players[p] = { wins: 0, losses: 0 }; };
+
+  for (const r of data! as any[]) {
+    const a = r.TeamA as string;
+    const b = r.TeamB as string;
+    const pa = r.TeamA_Player as string;
+    const pb = r.TeamB_Player as string;
+    const matchWon = Number(r.Match_Side_Winner) >= 1;
+    init(a); init(b);
+    if (Number(r.PlayerA_score) >= 5) {
+      if (a) {
+        teamMap[a].wins++;
+        if (matchWon) teamMap[a].matchWins++;
+        if (r.Winner_Side === 'B') teamMap[a].bSideWins++;
+        if (pa) { initPlayer(a, pa); teamMap[a].players[pa].wins++; }
+      }
+      if (b && pb) { initPlayer(b, pb); teamMap[b].players[pb].losses++; }
+      if (b) teamMap[b].losses++;
+    } else if (Number(r.PlayerB_Score) >= 5) {
+      if (b) {
+        teamMap[b].wins++;
+        if (matchWon) teamMap[b].matchWins++;
+        if (r.Winner_Side === 'B') teamMap[b].bSideWins++;
+        if (pb) { initPlayer(b, pb); teamMap[b].players[pb].wins++; }
+      }
+      if (a && pa) { initPlayer(a, pa); teamMap[a].players[pa].losses++; }
+      if (a) teamMap[a].losses++;
+    }
+  }
+
+  const teams: SkirmishTeamStat[] = Object.entries(teamMap)
+    .map(([team, s]) => ({
+      team, wins: s.wins, losses: s.losses, matchWins: s.matchWins, bSideWins: s.bSideWins,
+      players: Object.entries(s.players).map(([name, p]) => ({ name, wins: p.wins, losses: p.losses })).sort((a, b) => b.wins - a.wins),
+    }))
+    .sort((a, b) => b.wins - a.wins || a.losses - b.losses);
+
+  return { total, sideAWins, sideBWins, matchSideWinnerSum, teams };
 }

@@ -204,6 +204,25 @@ export type LongestMapEntry = {
   sourceUrl: string;
 };
 
+export type SkirmishPlayerStat = { name: string; wins: number; losses: number };
+
+export type SkirmishTeamStat = {
+  team: string;
+  wins: number;
+  losses: number;
+  matchWins: number;
+  bSideWins: number;
+  players: SkirmishPlayerStat[];
+};
+
+export type SkirmishStats = {
+  total: number;
+  sideAWins: number;
+  sideBWins: number;
+  matchSideWinnerSum: number;
+  teams: SkirmishTeamStat[];
+};
+
 export type DashboardData = {
   mapStats: MapStat[];
   draftOrder: {
