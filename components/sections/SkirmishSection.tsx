@@ -43,7 +43,7 @@ export function SkirmishSection({ stats }: Props) {
               <th className="p-3 text-center border-b border-gray-800 text-green-400">Wins</th>
               <th className="p-3 text-center border-b border-gray-800 text-red-400">Losses</th>
               <th className="p-3 text-center border-b border-gray-800 text-orange-400">Skirmish Win → Match</th>
-              <th className="p-3 text-center border-b border-gray-800 text-blue-400">B Side Wins</th>
+              <th className="p-3 text-center border-b border-gray-800 text-blue-400">B Side Select</th>
               <th className="p-3 border-b border-gray-800 text-purple-400">Players</th>
             </tr>
           </thead>
