@@ -230,7 +230,7 @@ export default async function Page({
             'compare-economy': 'Compare Economy',
           'relevant-info': 'Relevant Info',
           'skirmish-americas': 'Skirmish VCT Americas Stage 1',
-          'playoff-pct': 'Playoff %',
+          'playoff-pct': 'Playoff % (Number of possible results, not probability)',
           }[section] ?? section}</h1>
           {regArr && regArr.length > 0 && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">

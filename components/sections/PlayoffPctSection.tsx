@@ -20,13 +20,16 @@ type MatchKey = typeof MATCH_KEYS[number];
 const POS_KEYS = ['pos1', 'pos2', 'pos3', 'pos4', 'pos5', 'pos6'] as const;
 
 const MATCH_LABEL: Record<MatchKey, string> = {
-  week1_match_1: 'W1 · Match 1',
-  week1_match_2: 'W1 · Match 2',
-  week1_match_3: 'W1 · Match 3',
-  week2_match_1: 'W2 · Match 1',
-  week2_match_2: 'W2 · Match 2',
-  week2_match_3: 'W2 · Match 3',
+  week1_match_1: 'Match 1',
+  week1_match_2: 'Match 2',
+  week1_match_3: 'Match 3',
+  week2_match_1: 'Match 1',
+  week2_match_2: 'Match 2',
+  week2_match_3: 'Match 3',
 };
+
+const WEEK1_KEYS: MatchKey[] = ['week1_match_1', 'week1_match_2', 'week1_match_3'];
+const WEEK2_KEYS: MatchKey[] = ['week2_match_1', 'week2_match_2', 'week2_match_3'];
 
 function parseMatchup(value: string): { teamA: string; score: string; teamB: string } | null {
   const m = value.match(/^(.+?)_(\d-\d)_(.+)$/);
@@ -202,27 +205,55 @@ export function PlayoffPctSection({ scenariosA, scenariosB }: Props) {
         )}
       </div>
 
-      <div className="bg-[#1a1d23] rounded-xl border border-gray-800 p-4">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Match results</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {MATCH_KEYS.map(k => {
-            const tt = matchTeamsByKey[k];
-            return (
-              <StringMultiSelect
-                key={k}
-                label={`${MATCH_LABEL[k]} — ${tt.teamA} vs ${tt.teamB}`}
-                options={matchOptions[k]}
-                selected={perMatch[k]}
-                onChange={(vals) => setPerMatch(prev => ({ ...prev, [k]: vals }))}
-                placeholder="All results"
-                selectedLabel={(n) => `${n} result${n === 1 ? '' : 's'}`}
-                renderOption={(opt) => {
-                  const p = parseMatchup(opt);
-                  return p ? `${p.teamA} ${p.score} ${p.teamB}` : opt;
-                }}
-              />
-            );
-          })}
+      <div className="bg-[#1a1d23] rounded-xl border border-gray-800 p-4 flex flex-col gap-4">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Match results</p>
+
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-blue-400 mb-2">Week 4</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {WEEK1_KEYS.map(k => {
+              const tt = matchTeamsByKey[k];
+              return (
+                <StringMultiSelect
+                  key={k}
+                  label={`${MATCH_LABEL[k]} — ${tt.teamA} vs ${tt.teamB}`}
+                  options={matchOptions[k]}
+                  selected={perMatch[k]}
+                  onChange={(vals) => setPerMatch(prev => ({ ...prev, [k]: vals }))}
+                  placeholder="All results"
+                  selectedLabel={(n) => `${n} result${n === 1 ? '' : 's'}`}
+                  renderOption={(opt) => {
+                    const p = parseMatchup(opt);
+                    return p ? `${p.teamA} ${p.score} ${p.teamB}` : opt;
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-blue-400 mb-2">Week 5</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {WEEK2_KEYS.map(k => {
+              const tt = matchTeamsByKey[k];
+              return (
+                <StringMultiSelect
+                  key={k}
+                  label={`${MATCH_LABEL[k]} — ${tt.teamA} vs ${tt.teamB}`}
+                  options={matchOptions[k]}
+                  selected={perMatch[k]}
+                  onChange={(vals) => setPerMatch(prev => ({ ...prev, [k]: vals }))}
+                  placeholder="All results"
+                  selectedLabel={(n) => `${n} result${n === 1 ? '' : 's'}`}
+                  renderOption={(opt) => {
+                    const p = parseMatchup(opt);
+                    return p ? `${p.teamA} ${p.score} ${p.teamB}` : opt;
+                  }}
+                />
+              );
+            })}
+          </div>
         </div>
       </div>
 
