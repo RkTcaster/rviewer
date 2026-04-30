@@ -11,9 +11,11 @@ interface Props {
   label: string;
   placeholder?: string;
   labelColor?: string;
+  selectedLabel?: (n: number) => string;
+  renderOption?: (opt: string) => React.ReactNode;
 }
 
-export function StringMultiSelect({ options, selected, onChange, disabled, label, placeholder = "Select...", labelColor = "text-gray-200" }: Props) {
+export function StringMultiSelect({ options, selected, onChange, disabled, label, placeholder = "Select...", labelColor = "text-gray-200", selectedLabel, renderOption }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -46,7 +48,7 @@ export function StringMultiSelect({ options, selected, onChange, disabled, label
         className="flex items-center justify-between border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[240px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
       >
         <span className="truncate max-w-[200px] font-medium">
-          {selected.length === 0 ? placeholder : `${selected.length} excluded`}
+          {selected.length === 0 ? placeholder : (selectedLabel ? selectedLabel(selected.length) : `${selected.length} excluded`)}
         </span>
         <ChevronDown className="w-4 h-4 text-gray-400" />
       </div>
@@ -73,7 +75,7 @@ export function StringMultiSelect({ options, selected, onChange, disabled, label
                   onClick={() => toggleOption(opt)}
                   className={`p-2 flex items-center justify-between text-sm cursor-pointer hover:bg-blue-900 transition-colors ${isSelected ? 'bg-blue-900/40 font-bold' : 'font-medium'}`}
                 >
-                  <span>{opt}</span>
+                  <span>{renderOption ? renderOption(opt) : opt}</span>
                   {isSelected && <Check className="w-5 h-5 text-white" />}
                 </div>
               );

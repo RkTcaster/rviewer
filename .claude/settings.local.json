@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(grep -r player_stats /c/programacion/rviewer --include=*.ts --include=*.tsx --include=*.sql)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(npx tsc *)"
     ]
   }
 }

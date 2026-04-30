@@ -28,6 +28,7 @@ const NAV_SECTIONS = [
     items: [
       { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
       { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Trophy },
+      { id: 'playoff-pct',        label: 'Playoff %',          icon: Trophy },
     ],
   },
 ];

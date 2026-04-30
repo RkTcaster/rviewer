@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getGroupScenarios } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -16,6 +16,7 @@ import { GraphsSection } from '@/components/sections/GraphsSection';
 import { CompareEconomySection } from '@/components/sections/CompareEconomySection';
 import { RelevantInfoSection } from '@/components/sections/RelevantInfoSection';
 import { SkirmishSection } from '@/components/sections/SkirmishSection';
+import { PlayoffPctSection } from '@/components/sections/PlayoffPctSection';
 
 export default async function Page({
   searchParams,
@@ -36,9 +37,10 @@ export default async function Page({
   const isCompareEconomy = section === 'compare-economy';
   const isRelevantInfo = section === 'relevant-info';
   const isSkirmish = section === 'skirmish-americas';
+  const isPlayoffPct = section === 'playoff-pct';
 
   // Team data (only for team sections)
-  const result = (!isOverall && !isMetaShift && !isEconomy && !isRelevantInfo && !isSkirmish && team)
+  const result = (!isOverall && !isMetaShift && !isEconomy && !isRelevantInfo && !isSkirmish && !isPlayoffPct && team)
     ? await getMapStats({ team, tour, bo, reg: regArr, last, dateFrom, dateTo })
     : null;
 
@@ -131,6 +133,10 @@ export default async function Page({
 
   const skirmishStats = isSkirmish ? await getSkirmishStats() : null;
 
+  const [groupAScenarios, groupBScenarios] = isPlayoffPct
+    ? await Promise.all([getGroupScenarios('A'), getGroupScenarios('B')])
+    : [[], []];
+
   // Tours source differs by context
   const tours = (isOverall || isMetaShift || isEconomy || isRelevantInfo) ? await getAllTours(regArr) : await getTours(team, regArr);
   const tours2 = isCompare
@@ -168,6 +174,8 @@ export default async function Page({
         return <RelevantInfoSection maps={longestMaps} performances={topPerformances} />;
       case 'skirmish-americas':
         return <SkirmishSection stats={skirmishStats!} />;
+      case 'playoff-pct':
+        return <PlayoffPctSection scenariosA={groupAScenarios} scenariosB={groupBScenarios} />;
       case 'charts':
         return <ChartsSection stats={stats} />;
       case 'draft':
@@ -222,6 +230,7 @@ export default async function Page({
             'compare-economy': 'Compare Economy',
           'relevant-info': 'Relevant Info',
           'skirmish-americas': 'Skirmish VCT Americas Stage 1',
+          'playoff-pct': 'Playoff %',
           }[section] ?? section}</h1>
           {regArr && regArr.length > 0 && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">
@@ -253,7 +262,7 @@ export default async function Page({
               </p>
             )
           )}
-          {!isSkirmish && (
+          {!isSkirmish && !isPlayoffPct && (
             <div className="mt-4">
               <Filters
                 regions={regions}
@@ -268,7 +277,7 @@ export default async function Page({
         </header>
 
         <main className="p-8 pt-6">
-          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish) ? (
+          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct) ? (
             renderSection()
           ) : !team ? (
             <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">

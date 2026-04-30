@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, LongestMapEntry, MapStat, OverallMapFullStat, OverallMapStat, PlayerMatchPoint, PlayerStat, PlayerTimelineData, Region, SkirmishStats, SkirmishTeamStat, SkirmishPlayerStat, TeamEconomyCompare, TeamRankStats, TopPlayerPerformance, Tournament, TournamentPlayerAvg } from './types';
+import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, GroupScenarioRow, LongestMapEntry, MapStat, OverallMapFullStat, OverallMapStat, PlayerMatchPoint, PlayerStat, PlayerTimelineData, Region, SkirmishStats, SkirmishTeamStat, SkirmishPlayerStat, TeamEconomyCompare, TeamRankStats, TopPlayerPerformance, Tournament, TournamentPlayerAvg } from './types';
 
 // --- HELPERS ---
 
@@ -1770,4 +1770,15 @@ export async function getSkirmishStats(): Promise<SkirmishStats> {
     .sort((a, b) => b.wins - a.wins || a.losses - b.losses);
 
   return { total, sideAWins, sideBWins, matchSideWinnerSum, teams };
+}
+
+export async function getGroupScenarios(group: 'A' | 'B'): Promise<GroupScenarioRow[]> {
+  const table = group === 'A' ? 'group_a' : 'group_b';
+  const rows = await fetchAllPages<GroupScenarioRow>((from, to) =>
+    supabase
+      .from(table)
+      .select('week1_match_1, week1_match_2, week1_match_3, week2_match_1, week2_match_2, week2_match_3, pos1, pos2, pos3, pos4, pos5, pos6')
+      .range(from, to)
+  );
+  return rows;
 }
