@@ -4,11 +4,10 @@ import { useMemo, useState } from 'react';
 import { KPICard } from '@/components/KPICard';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { StringMultiSelect } from '@/components/StringMultiSelect';
-import { GroupScenarioRow } from '@/lib/types';
+import { SimulationRow } from '@/lib/types';
 
 interface Props {
-  scenariosA: GroupScenarioRow[];
-  scenariosB: GroupScenarioRow[];
+  scenarios: SimulationRow[];
 }
 
 const MATCH_KEYS = [
@@ -37,18 +36,18 @@ function parseMatchup(value: string): { teamA: string; score: string; teamB: str
   return { teamA: m[1], score: m[2], teamB: m[3] };
 }
 
-function matchTeams(rows: GroupScenarioRow[], key: MatchKey): { teamA: string; teamB: string } {
+function matchTeams(rows: SimulationRow[], key: MatchKey): { teamA: string; teamB: string } {
   const sample = rows[0]?.[key];
   if (!sample) return { teamA: '', teamB: '' };
   const p = parseMatchup(sample);
   return p ? { teamA: p.teamA, teamB: p.teamB } : { teamA: '', teamB: '' };
 }
 
-function uniqueValues(rows: GroupScenarioRow[], key: MatchKey): string[] {
+function uniqueValues(rows: SimulationRow[], key: MatchKey): string[] {
   return Array.from(new Set(rows.map(r => r[key]))).sort();
 }
 
-function teamsFromRows(rows: GroupScenarioRow[]): string[] {
+function teamsFromRows(rows: SimulationRow[]): string[] {
   if (rows.length === 0) return [];
   const set = new Set<string>();
   for (const k of POS_KEYS) set.add(rows[0][k]);
@@ -69,36 +68,90 @@ const EMPTY_PER_MATCH: Record<MatchKey, string[]> = {
   week2_match_1: [], week2_match_2: [], week2_match_3: [],
 };
 
-export function PlayoffPctSection({ scenariosA, scenariosB }: Props) {
-  const [group, setGroup] = useState<'A' | 'B'>('A');
-  const scenarios = group === 'A' ? scenariosA : scenariosB;
+export function PlayoffPctSection({ scenarios }: Props) {
+  const [regionPick, setRegionPick] = useState<string>('');
+  const [tournamentPick, setTournamentPick] = useState<string>('');
+  const [groupPick, setGroupPick] = useState<string>('');
   const [perMatch, setPerMatch] = useState<Record<MatchKey, string[]>>(() => ({ ...EMPTY_PER_MATCH }));
   const [team, setTeam] = useState<string>('');
   const [positions, setPositions] = useState<string[]>([]);
 
-  function switchGroup(g: 'A' | 'B') {
-    if (g === group) return;
-    setGroup(g);
+  const regions = useMemo(
+    () => Array.from(new Set(scenarios.map(r => r.region))).sort(),
+    [scenarios]
+  );
+
+  const region = regionPick && regions.includes(regionPick) ? regionPick : (regions[0] ?? '');
+
+  const tournaments = useMemo(() => {
+    if (!region) return [];
+    return Array.from(
+      new Set(scenarios.filter(r => r.region === region).map(r => r.tournament))
+    ).sort();
+  }, [scenarios, region]);
+
+  const tournament = tournamentPick && tournaments.includes(tournamentPick) ? tournamentPick : (tournaments[0] ?? '');
+
+  const groups = useMemo(() => {
+    if (!region || !tournament) return [];
+    return Array.from(
+      new Set(
+        scenarios
+          .filter(r => r.region === region && r.tournament === tournament)
+          .map(r => r.group)
+      )
+    ).sort();
+  }, [scenarios, region, tournament]);
+
+  const group = groupPick && groups.includes(groupPick) ? groupPick : (groups[0] ?? '');
+
+  const slice = useMemo(
+    () => scenarios.filter(r => r.region === region && r.tournament === tournament && r.group === group),
+    [scenarios, region, tournament, group]
+  );
+
+  function resetDownstreamFilters() {
     setPerMatch({ ...EMPTY_PER_MATCH });
     setTeam('');
     setPositions([]);
   }
 
-  const teams = useMemo(() => teamsFromRows(scenarios), [scenarios]);
+  function changeRegion(v: string) {
+    if (v === region) return;
+    setRegionPick(v);
+    setTournamentPick('');
+    setGroupPick('');
+    resetDownstreamFilters();
+  }
+
+  function changeTournament(v: string) {
+    if (v === tournament) return;
+    setTournamentPick(v);
+    setGroupPick('');
+    resetDownstreamFilters();
+  }
+
+  function changeGroup(v: string) {
+    if (v === group) return;
+    setGroupPick(v);
+    resetDownstreamFilters();
+  }
+
+  const teams = useMemo(() => teamsFromRows(slice), [slice]);
   const matchTeamsByKey = useMemo(() => {
     const out = {} as Record<MatchKey, { teamA: string; teamB: string }>;
-    for (const k of MATCH_KEYS) out[k] = matchTeams(scenarios, k);
+    for (const k of MATCH_KEYS) out[k] = matchTeams(slice, k);
     return out;
-  }, [scenarios]);
+  }, [slice]);
 
   const matchOptions = useMemo(() => {
     const out = {} as Record<MatchKey, string[]>;
-    for (const k of MATCH_KEYS) out[k] = uniqueValues(scenarios, k);
+    for (const k of MATCH_KEYS) out[k] = uniqueValues(slice, k);
     return out;
-  }, [scenarios]);
+  }, [slice]);
 
   const filtered = useMemo(() => {
-    return scenarios.filter(row => {
+    return slice.filter(row => {
       for (const k of MATCH_KEYS) {
         const sel = perMatch[k];
         if (sel.length > 0 && !sel.includes(row[k])) return false;
@@ -111,7 +164,7 @@ export function PlayoffPctSection({ scenariosA, scenariosB }: Props) {
       }
       return true;
     });
-  }, [scenarios, perMatch, team, positions]);
+  }, [slice, perMatch, team, positions]);
 
   const total = filtered.length;
 
@@ -177,32 +230,59 @@ export function PlayoffPctSection({ scenariosA, scenariosB }: Props) {
   const hasAnyFilter =
     Object.values(perMatch).some(v => v.length > 0) || !!team || positions.length > 0;
 
+  if (scenarios.length === 0) {
+    return (
+      <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400 m-4">
+        No simulation data available.
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6 p-4">
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => switchGroup('A')}
-          className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${group === 'A' ? 'bg-blue-600 text-white' : 'bg-[#1a1d23] text-gray-400 hover:text-gray-200 border border-gray-800'}`}
-        >
-          Group A
-        </button>
-        <button
-          onClick={() => switchGroup('B')}
-          className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${group === 'B' ? 'bg-blue-600 text-white' : 'bg-[#1a1d23] text-gray-400 hover:text-gray-200 border border-gray-800'}`}
-        >
-          Group B
-        </button>
-        <span className="ml-auto text-[11px] font-bold uppercase tracking-widest text-gray-400">
-          {total.toLocaleString()} / {scenarios.length.toLocaleString()} scenarios
-        </span>
-        {hasAnyFilter && (
-          <button
-            onClick={resetFilters}
-            className="text-[10px] font-bold text-red-400 hover:underline uppercase tracking-widest"
-          >
-            Reset
-          </button>
-        )}
+      <div className="bg-[#1a1d23] rounded-xl border border-gray-800 p-4 flex flex-col gap-4">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Tournament selection</p>
+        <div className="flex flex-wrap gap-3 items-end">
+          <SearchableSelect
+            label="Region"
+            options={regions}
+            selected={region}
+            onChange={changeRegion}
+            placeholder="Select region"
+          />
+          <SearchableSelect
+            label="Tournament"
+            options={tournaments}
+            selected={tournament}
+            onChange={changeTournament}
+            placeholder="Select tournament"
+          />
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Group</label>
+            <div className="flex items-center gap-2">
+              {groups.map(g => (
+                <button
+                  key={g}
+                  onClick={() => changeGroup(g)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${group === g ? 'bg-blue-600 text-white' : 'bg-[#1a1d23] text-gray-400 hover:text-gray-200 border border-gray-800'}`}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+          <span className="ml-auto text-[11px] font-bold uppercase tracking-widest text-gray-400">
+            {total.toLocaleString()} / {slice.length.toLocaleString()} scenarios
+          </span>
+          {hasAnyFilter && (
+            <button
+              onClick={resetFilters}
+              className="text-[10px] font-bold text-red-400 hover:underline uppercase tracking-widest"
+            >
+              Reset
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-[#1a1d23] rounded-xl border border-gray-800 p-4 flex flex-col gap-4">

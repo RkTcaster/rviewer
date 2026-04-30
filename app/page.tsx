@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getGroupScenarios } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -133,9 +133,7 @@ export default async function Page({
 
   const skirmishStats = isSkirmish ? await getSkirmishStats() : null;
 
-  const [groupAScenarios, groupBScenarios] = isPlayoffPct
-    ? await Promise.all([getGroupScenarios('A'), getGroupScenarios('B')])
-    : [[], []];
+  const simulationScenarios = isPlayoffPct ? await getSimulationScenarios() : [];
 
   // Tours source differs by context
   const tours = (isOverall || isMetaShift || isEconomy || isRelevantInfo) ? await getAllTours(regArr) : await getTours(team, regArr);
@@ -175,7 +173,7 @@ export default async function Page({
       case 'skirmish-americas':
         return <SkirmishSection stats={skirmishStats!} />;
       case 'playoff-pct':
-        return <PlayoffPctSection scenariosA={groupAScenarios} scenariosB={groupBScenarios} />;
+        return <PlayoffPctSection scenarios={simulationScenarios} />;
       case 'charts':
         return <ChartsSection stats={stats} />;
       case 'draft':

@@ -35,11 +35,18 @@ const FILES_TO_UPLOAD = [
   { file: 'table_player_stats.csv', table: 'player_stats', pk: 'map_id, player' }, 
   { file: 'table_player_performance.csv', table: 'player_performance', pk: 'map_id, player' },
 
-  { file: 'table_group_a.csv', table: 'group_a', pk: 'week1_match_1, week1_match_2, week1_match_3, week2_match_1, week2_match_2, week2_match_3' },
-  { file: 'table_group_b.csv', table: 'group_b', pk: 'week1_match_1, week1_match_2, week1_match_3, week2_match_1, week2_match_2, week2_match_3' },
+  {
+    file: 'simulations.csv',
+    table: 'simulations',
+    pk: 'week1_match_1, week1_match_2, week1_match_3, week2_match_1, week2_match_2, week2_match_3, group, region, tournament',
+    transform: (row) => ({
+      ...row,
+      group: row.group ? row.group.charAt(0).toUpperCase() + row.group.slice(1).toLowerCase() : row.group,
+    }),
+  },
 ];
 
-async function processFile({ file, table, pk }) {
+async function processFile({ file, table, pk, transform }) {
   const filePath = path.join(process.cwd(), 'data', file);
   
   if (!fs.existsSync(filePath)) {
@@ -51,7 +58,7 @@ async function processFile({ file, table, pk }) {
   return new Promise((resolve) => {
     fs.createReadStream(filePath)
       .pipe(csv())
-      .on('data', (data) => results.push(data))
+      .on('data', (data) => results.push(transform ? transform(data) : data))
       .on('end', async () => {
         console.log(`\n📄 Procesando ${file} (${results.length} filas)...`);
         

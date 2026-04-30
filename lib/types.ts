@@ -223,7 +223,7 @@ export type SkirmishStats = {
   teams: SkirmishTeamStat[];
 };
 
-export type GroupScenarioRow = {
+export type SimulationRow = {
   week1_match_1: string;
   week1_match_2: string;
   week1_match_3: string;
@@ -236,6 +236,9 @@ export type GroupScenarioRow = {
   pos4: string;
   pos5: string;
   pos6: string;
+  group: string;
+  region: string;
+  tournament: string;
 };
 
 export type DashboardData = {

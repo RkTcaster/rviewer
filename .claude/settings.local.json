@@ -3,7 +3,9 @@
     "allow": [
       "Bash(grep -r player_stats /c/programacion/rviewer --include=*.ts --include=*.tsx --include=*.sql)",
       "Bash(npm run:*)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(awk -F',' 'NR>1 {print $13\"|\"$14\"|\"$15}' simulations.csv)",
+      "Bash(npx eslint *)"
     ]
   }
 }
