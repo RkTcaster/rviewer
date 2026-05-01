@@ -175,19 +175,15 @@ export function PlayoffPctSection({ scenarios }: Props) {
     return out;
   }, [filtered, teams]);
 
-  const bestPosByTeam = useMemo(() => {
-    const out: Record<string, { pos: number; count: number } | null> = {};
-    for (const t of teams) {
-      let best: { pos: number; count: number } | null = null;
-      const counts = [0, 0, 0, 0, 0, 0];
-      for (const r of filtered) {
-        const idx = POS_KEYS.findIndex(p => r[p] === t);
-        if (idx >= 0) counts[idx]++;
+  const playoffCounts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const t of teams) out[t] = 0;
+    const playoffPosKeys = POS_KEYS.slice(0, 4);
+    for (const r of filtered) {
+      for (const k of playoffPosKeys) {
+        const t = r[k];
+        if (t in out) out[t]++;
       }
-      for (let i = 0; i < counts.length; i++) {
-        if (counts[i] > 0) { best = { pos: i + 1, count: counts[i] }; break; }
-      }
-      out[t] = best;
     }
     return out;
   }, [filtered, teams]);
@@ -218,6 +214,10 @@ export function PlayoffPctSection({ scenarios }: Props) {
     return [...teams].sort((a, b) => (firstPlaceCounts[b] ?? 0) - (firstPlaceCounts[a] ?? 0));
   }, [teams, firstPlaceCounts]);
 
+  const sortedTeamsByPlayoff = useMemo(() => {
+    return [...teams].sort((a, b) => (playoffCounts[b] ?? 0) - (playoffCounts[a] ?? 0));
+  }, [teams, playoffCounts]);
+
   const pct = (n: number) => total > 0 ? Math.round((n / total) * 10000) / 100 : 0;
   const fmt = (n: number) => n.toFixed(2);
 
@@ -240,6 +240,54 @@ export function PlayoffPctSection({ scenarios }: Props) {
 
   return (
     <div className="flex flex-col gap-6 p-4">
+      <div className="flex flex-col gap-3">
+        <details className="group bg-[#1a1d23] rounded-xl border border-gray-800 overflow-hidden">
+          <summary className="cursor-pointer list-none p-4 flex items-center justify-between hover:bg-[#1f232b] transition-colors">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-gray-200">Explanation of tiebreak</span>
+            <span className="text-gray-400 text-xs transition-transform group-open:rotate-180">▼</span>
+          </summary>
+          <div className="px-4 pb-4 text-sm text-gray-300 leading-relaxed border-t border-gray-800 pt-3 space-y-3">
+            <p className="font-bold text-gray-200">Tie-Breaker Process:</p>
+            <ol className="list-decimal pl-6 space-y-1">
+              <li>Head-to-head Match score.</li>
+              <li>Head-to-head map differential.</li>
+              <li>Head-to-head round differential.</li>
+              <li>Split/event map differential.</li>
+              <li>Split/event round differential.</li>
+            </ol>
+            <p>The following &ldquo;Tie-breaker General Rules&rdquo; will be applied for 3+ Team tie-breakers:</p>
+            <ul className="list-disc pl-6 space-y-2">
+              <li>If any Team(s) can be clearly ranked based on a single applicable tiebreaker criterion (e.g., head-to-head match score), those Team(s) will confirm their standing and be removed from the tie.</li>
+              <li>
+                For any remaining Teams that are still tied under the same criterion, the tiebreaker process will be reapplied from the beginning among the tied Teams.
+                <ul className="list-[circle] pl-6 mt-1">
+                  <li>Example: In a 4-way tie, if Team A (3&ndash;0) and Team D (0&ndash;3) can be clearly ranked as first and fourth respectively while Team B and Team C remain tied (1&ndash;1), Team A and Team D confirm their standings and are removed from the tie. The tiebreaker process is reapplied from the beginning between Team B and Team C to determine their final placements.</li>
+                </ul>
+              </li>
+              <li>In the event that multiple ties occur simultaneously, each tie shall be resolved independently within its respective subgroup. For each subgroup, the tiebreaker process will be reapplied from the beginning, using the standard tiebreaker procedures outlined in the &lsquo;Tie-Breaker Process&rsquo; above. The final placement of teams will preserve subgroup hierarchy: the highest-ranked team within a lower-ranked subgroup may not be placed above any team in a higher-ranked subgroup, regardless of subsequent tiebreaker outcomes within the subgroup.</li>
+              <li>This process will continue until all teams are fully ranked.</li>
+            </ul>
+            <p>If a tie still remains after applying all procedures, a Bo1 match may be implemented at the discretion of League Officials. An alternative process may be implemented on a case-by-case basis.</p>
+          </div>
+        </details>
+
+        <details className="group bg-[#1a1d23] rounded-xl border border-gray-800 overflow-hidden">
+          <summary className="cursor-pointer list-none p-4 flex items-center justify-between hover:bg-[#1f232b] transition-colors">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-gray-200">How this tiebreaks are calculated</span>
+            <span className="text-gray-400 text-xs transition-transform group-open:rotate-180">▼</span>
+          </summary>
+          <div className="px-4 pb-4 text-sm text-gray-300 leading-relaxed border-t border-gray-800 pt-3 space-y-3">
+            <p>
+              I&apos;m not sure about the tiebreak for 3+ teams, the example on the rules are 3-0 and 0-3 and I&apos;m not sure if &ldquo;clearly&rdquo; is for beat all the teams in the tiebreak (the 3-0 example in a 4 way tie) or just to create smaller groups (for example in a 4 way tie 2 teams have 2-1 H2H and 2 teams have 1-2 H2H, then you split into 2 groups the 2-1 group and the 1-2 group and calculate the respective 2 teams tie). If you have this information let me know and I will update the script.
+            </p>
+            <p className="font-bold text-gray-200">HOW I CALCULATE:</p>
+            <p>
+              A team is &ldquo;clearly&rdquo; ranked if the team score is only wins vs the tiebreak teams or only losses vs the tiebreak teams. Example: in a 4-way tie, either a team 3-0 in H2H or a team 0-3.
+            </p>
+          </div>
+        </details>
+      </div>
+
       <div className="bg-[#1a1d23] rounded-xl border border-gray-800 p-4 flex flex-col gap-4">
         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Tournament selection</p>
         <div className="flex flex-wrap gap-3 items-end">
@@ -286,7 +334,10 @@ export function PlayoffPctSection({ scenarios }: Props) {
       </div>
 
       <div className="bg-[#1a1d23] rounded-xl border border-gray-800 p-4 flex flex-col gap-4">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Match results</p>
+        <div className="flex flex-wrap items-baseline gap-2">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Match results</p>
+          <p className="text-[11px] text-gray-500 italic">(You can filter by match results in the weekend to updated values in the position matrix)</p>
+        </div>
 
         <div>
           <p className="text-[11px] font-bold uppercase tracking-widest text-blue-400 mb-2">Week 4</p>
@@ -355,40 +406,45 @@ export function PlayoffPctSection({ scenarios }: Props) {
           selectedLabel={(n) => `${n} position${n === 1 ? '' : 's'}`}
           renderOption={(opt) => `P${opt}`}
         />
+        <p className="text-[11px] text-gray-500 italic pb-2">(If you filter by team and position, a new table will appear below the current table showing the results for that position.)</p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-        {team && teamPositionDistribution
-          ? POS_KEYS.map((_, i) => {
-              const count = teamPositionDistribution[i];
-              const p = pct(count);
-              const variant = i === 0 && count > 0 ? 'success' : count === 0 ? 'danger' : 'neutral';
-              return (
-                <KPICard
-                  key={i}
-                  title={`${team} · P${i + 1}`}
-                  value={total > 0 ? `${fmt(p)}%` : '-'}
-                  label={`${count} / ${total}`}
-                  variant={variant}
-                />
-              );
-            })
-          : sortedTeamsByFirst.map((t, idx) => {
-              const count = firstPlaceCounts[t] ?? 0;
+      {team && teamPositionDistribution ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          {POS_KEYS.map((_, i) => {
+            const count = teamPositionDistribution[i];
+            const p = pct(count);
+            const variant = i === 0 && count > 0 ? 'success' : count === 0 ? 'danger' : 'neutral';
+            return (
+              <KPICard
+                key={i}
+                title={`${team} · P${i + 1}`}
+                value={total > 0 ? `${fmt(p)}%` : '-'}
+                label={`${count} / ${total}`}
+                variant={variant}
+              />
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-gray-300">Playoff%</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            {sortedTeamsByPlayoff.map((t, idx) => {
+              const count = playoffCounts[t] ?? 0;
               const p = pct(count);
               if (count === 0) {
-                const best = bestPosByTeam[t];
                 return (
                   <KPICard
                     key={t}
                     title={t}
-                    value={best ? `Best P${best.pos}` : '—'}
-                    label={best ? `${fmt(pct(best.count))}% (${best.count} / ${total})` : '0 scenarios'}
+                    value={total > 0 ? '0%' : '—'}
+                    label={`${count} / ${total}`}
                     variant="danger"
                   />
                 );
               }
-              const variant = idx === 0 ? 'success' : 'neutral';
+              const variant = idx === 0 ? 'success' : count === total ? 'success' : 'neutral';
               return (
                 <KPICard
                   key={t}
@@ -399,7 +455,9 @@ export function PlayoffPctSection({ scenarios }: Props) {
                 />
               );
             })}
-      </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-[#1a1d23] rounded-xl border border-gray-800 overflow-hidden">
         <div className="p-3 border-b border-gray-800 flex items-center justify-between">
@@ -410,15 +468,26 @@ export function PlayoffPctSection({ scenarios }: Props) {
           <thead className="bg-[#0f1115] text-gray-400 text-[11px] uppercase tracking-widest">
             <tr>
               <th className="p-3 border-b border-gray-800">Team</th>
-              {[1, 2, 3, 4, 5, 6].map(p => (
-                <th key={p} className="p-3 text-center border-b border-gray-800">P{p}</th>
+              <th className="p-3 text-center border-b border-gray-800 border-r-2 border-r-blue-500/40">Playoff</th>
+              {['1st', '2nd', '3rd', '4th', '5th', '6th'].map(p => (
+                <th key={p} className="p-3 text-center border-b border-gray-800">{p}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
-            {sortedTeamsByFirst.map(t => (
+            {sortedTeamsByPlayoff.map(t => {
+              const playoffCount = playoffCounts[t] ?? 0;
+              const playoffPct = pct(playoffCount);
+              return (
               <tr key={t}>
                 <td className="p-3 font-bold text-white bg-[#1a1d23]">{t}</td>
+                <td
+                  className="text-center p-3 align-middle border-r-2 border-r-blue-500/40"
+                  style={{ backgroundColor: heatmapBg(playoffPct) }}
+                >
+                  <div className="text-sm font-bold text-white">{fmt(playoffPct)}%</div>
+                  <div className="text-[10px] text-gray-300/80">{playoffCount}</div>
+                </td>
                 {heatmap[t].map((count, i) => {
                   const p = pct(count);
                   return (
@@ -433,7 +502,8 @@ export function PlayoffPctSection({ scenarios }: Props) {
                   );
                 })}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
