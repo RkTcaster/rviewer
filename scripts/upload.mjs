@@ -35,16 +35,16 @@ const FILES_TO_UPLOAD = [
   // { file: 'table_player_stats.csv', table: 'player_stats', pk: 'map_id, player' }, 
   // { file: 'table_player_performance.csv', table: 'player_performance', pk: 'map_id, player' },
 
-  // {
-  //   file: 'simulations.csv',
-  //   table: 'simulations',
-  //   pk: 'week1_match_1, week1_match_2, week1_match_3, week2_match_1, week2_match_2, week2_match_3, group, region, tournament',
-  //   transform: (row) => ({
-  //     ...row,
-  //     group: row.group ? row.group.charAt(0).toUpperCase() + row.group.slice(1).toLowerCase() : row.group,
-  //   }),
-  // },
-  {file: 'table_skirmish.csv', table: 'skirmish', pk:'Date, TeamA'}
+  {
+    file: 'simulations.csv',
+    table: 'simulations',
+    pk: 'week1_match_1, week1_match_2, week1_match_3, week2_match_1, week2_match_2, week2_match_3, group, region, tournament',
+    transform: (row) => ({
+      ...row,
+      group: row.group ? row.group.charAt(0).toUpperCase() + row.group.slice(1).toLowerCase() : row.group,
+    }),
+  },
+  // {file: 'table_skirmish.csv', table: 'skirmish', pk:'Date, TeamA'}
 ];
 
 async function processFile({ file, table, pk, transform }) {

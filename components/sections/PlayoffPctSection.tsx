@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { KPICard } from '@/components/KPICard';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { StringMultiSelect } from '@/components/StringMultiSelect';
@@ -67,6 +67,48 @@ const EMPTY_PER_MATCH: Record<MatchKey, string[]> = {
   week1_match_1: [], week1_match_2: [], week1_match_3: [],
   week2_match_1: [], week2_match_2: [], week2_match_3: [],
 };
+
+const WEEK4_DEFAULTS: Record<string, Array<{ teams: [string, string]; score: string }>> = {
+  alpha: [
+    { teams: ['LEV', 'MIBR'], score: '0-2' },
+  ],
+  omega: [
+    { teams: ['EG', 'NRG'], score: '0-2' },
+    { teams: ['KRU', '100T'], score: '1-2' },
+    { teams: ['FUR', 'SEN'], score: '2-1' },
+  ],
+};
+
+function defaultsForGroup(
+  group: string,
+  matchTeamsByKey: Record<MatchKey, { teamA: string; teamB: string }>,
+  matchOptions: Record<MatchKey, string[]>,
+): Record<MatchKey, string[]> {
+  const out: Record<MatchKey, string[]> = { ...EMPTY_PER_MATCH };
+  const desired = WEEK4_DEFAULTS[group.toLowerCase()];
+  if (!desired) return out;
+  for (const k of WEEK1_KEYS) {
+    const tt = matchTeamsByKey[k];
+    if (!tt.teamA || !tt.teamB) continue;
+    const aLow = tt.teamA.toLowerCase();
+    const bLow = tt.teamB.toLowerCase();
+    for (const d of desired) {
+      const da = d.teams[0].toLowerCase();
+      const db = d.teams[1].toLowerCase();
+      let value: string | null = null;
+      if (aLow === da && bLow === db) {
+        value = `${tt.teamA}_${d.score}_${tt.teamB}`;
+      } else if (aLow === db && bLow === da) {
+        const [s1, s2] = d.score.split('-');
+        value = `${tt.teamA}_${s2}-${s1}_${tt.teamB}`;
+      }
+      if (value && matchOptions[k].includes(value)) {
+        out[k] = [value];
+      }
+    }
+  }
+  return out;
+}
 
 export function PlayoffPctSection({ scenarios }: Props) {
   const [regionPick, setRegionPick] = useState<string>('');
@@ -150,6 +192,15 @@ export function PlayoffPctSection({ scenarios }: Props) {
     return out;
   }, [slice]);
 
+  const defaults = useMemo(
+    () => defaultsForGroup(group, matchTeamsByKey, matchOptions),
+    [group, matchTeamsByKey, matchOptions]
+  );
+
+  useEffect(() => {
+    setPerMatch(defaults);
+  }, [defaults]);
+
   const filtered = useMemo(() => {
     return slice.filter(row => {
       for (const k of MATCH_KEYS) {
@@ -222,13 +273,20 @@ export function PlayoffPctSection({ scenarios }: Props) {
   const fmt = (n: number) => n.toFixed(2);
 
   function resetFilters() {
-    setPerMatch({ ...EMPTY_PER_MATCH });
+    setPerMatch(defaults);
     setTeam('');
     setPositions([]);
   }
 
   const hasAnyFilter =
-    Object.values(perMatch).some(v => v.length > 0) || !!team || positions.length > 0;
+    MATCH_KEYS.some(k => {
+      const cur = perMatch[k];
+      const def = defaults[k];
+      if (cur.length !== def.length) return true;
+      const sortedCur = [...cur].sort();
+      const sortedDef = [...def].sort();
+      return sortedCur.some((v, i) => v !== sortedDef[i]);
+    }) || !!team || positions.length > 0;
 
   if (scenarios.length === 0) {
     return (
@@ -268,22 +326,6 @@ export function PlayoffPctSection({ scenarios }: Props) {
               <li>This process will continue until all teams are fully ranked.</li>
             </ul>
             <p>If a tie still remains after applying all procedures, a Bo1 match may be implemented at the discretion of League Officials. An alternative process may be implemented on a case-by-case basis.</p>
-          </div>
-        </details>
-
-        <details className="group bg-[#1a1d23] rounded-xl border border-gray-800 overflow-hidden">
-          <summary className="cursor-pointer list-none p-4 flex items-center justify-between hover:bg-[#1f232b] transition-colors">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-gray-200">How this tiebreaks are calculated</span>
-            <span className="text-gray-400 text-xs transition-transform group-open:rotate-180">▼</span>
-          </summary>
-          <div className="px-4 pb-4 text-sm text-gray-300 leading-relaxed border-t border-gray-800 pt-3 space-y-3">
-            <p>
-              I&apos;m not sure about the tiebreak for 3+ teams, the example on the rules are 3-0 and 0-3 and I&apos;m not sure if &ldquo;clearly&rdquo; is for beat all the teams in the tiebreak (the 3-0 example in a 4 way tie) or just to create smaller groups (for example in a 4 way tie 2 teams have 2-1 H2H and 2 teams have 1-2 H2H, then you split into 2 groups the 2-1 group and the 1-2 group and calculate the respective 2 teams tie). If you have this information let me know and I will update the script.
-            </p>
-            <p className="font-bold text-gray-200">HOW I CALCULATE:</p>
-            <p>
-              A team is &ldquo;clearly&rdquo; ranked if the team score is only wins vs the tiebreak teams or only losses vs the tiebreak teams. Example: in a 4-way tie, either a team 3-0 in H2H or a team 0-3.
-            </p>
           </div>
         </details>
       </div>
