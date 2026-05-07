@@ -71,6 +71,8 @@ const EMPTY_PER_MATCH: Record<MatchKey, string[]> = {
 const WEEK4_DEFAULTS: Record<string, Array<{ teams: [string, string]; score: string }>> = {
   alpha: [
     { teams: ['LEV', 'MIBR'], score: '0-2' },
+    {teams: ['LOUD', 'C9'], score: '2-1'},
+    {teams: ['G2', 'ENVY'], score: '2-0'},
   ],
   omega: [
     { teams: ['EG', 'NRG'], score: '0-2' },
