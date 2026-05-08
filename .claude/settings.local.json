@@ -5,7 +5,10 @@
       "Bash(npm run:*)",
       "Bash(npx tsc *)",
       "Bash(awk -F',' 'NR>1 {print $13\"|\"$14\"|\"$15}' simulations.csv)",
-      "Bash(npx eslint *)"
+      "Bash(npx eslint *)",
+      "Bash(Get-ChildItem -Path . -Force)",
+      "Bash(Select-Object Name)",
+      "Bash(grep -A1 \"MapPicksSection.tsx$\")"
     ]
   }
 }

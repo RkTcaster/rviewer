@@ -7,7 +7,7 @@ const NAV_SECTIONS = [
   {
     title: 'Overall',
     items: [
-      { id: 'map-picks',   label: 'Map Picks',   icon: Map },
+      { id: 'map-picks',   label: 'Map Info',    icon: Map },
       { id: 'agent-picks',   label: 'Agent Picks',   icon: Users },
       { id: 'meta-shift',    label: 'Meta Shift',    icon: TrendingUp },
       { id: 'economy',       label: 'Economy',       icon: DollarSign },

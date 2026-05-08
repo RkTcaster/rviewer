@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallMapPicks, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -53,8 +53,8 @@ export default async function Page({
     : {};
 
   // Overall data (only for overall sections)
-  const overallMapStats = (section === 'map-picks')
-    ? await getOverallMapPicks({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
+  const mapPicksFullStats = (section === 'map-picks')
+    ? Object.values(await getOverallMapFullStats({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })).sort((a, b) => b.picks - a.picks)
     : [];
 
   const compositionsData = (section === 'maps' && team)
@@ -146,7 +146,7 @@ export default async function Page({
   function renderSection() {
     switch (section) {
       case 'map-picks':
-        return <MapPicksSection stats={overallMapStats} />;
+        return <MapPicksSection stats={mapPicksFullStats} />;
       case 'agent-picks':
         return <AgentPicksSection stats={agentPickStats} compositions={agentCompositions} mapImages={mapImages} agentImages={agentImages} mapFullStats={mapFullStats} />;
       case 'meta-shift':
@@ -220,7 +220,7 @@ export default async function Page({
             'compare-maps': 'Compare Maps',
             'compare-stats': 'Compare Stats',
             'player-stats': 'Player Stats',
-            'map-picks': 'Map Picks',
+            'map-picks': 'Map picks & Side win rate',
             'agent-picks': 'Agent Picks',
             'meta-shift': 'Meta Shift',
             'graphs': 'Sankey',

@@ -970,12 +970,18 @@ export async function getPlayerTimeline(
 }
 
 export async function getOverallMapFullStats(
-  filters: { reg?: string[]; tour?: string; bo?: string }
+  filters: { reg?: string[]; tour?: string; bo?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<Record<string, OverallMapFullStat>> {
   let draftQuery = supabase.from('draft').select('*');
   if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
   if (filters.reg)  draftQuery = draftQuery.in('reg_id', filters.reg!);
   if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
+  if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
+  if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
+  if (filters.excludeTeams && filters.excludeTeams.length > 0) {
+    draftQuery = draftQuery.not('team', 'in', `(${filters.excludeTeams.join(',')})`);
+    draftQuery = draftQuery.not('rival', 'in', `(${filters.excludeTeams.join(',')})`);
+  }
 
   const { data: drafts } = await draftQuery;
   if (!drafts || drafts.length === 0) return {};
@@ -996,10 +1002,10 @@ export async function getOverallMapFullStats(
 
   const stats: Record<string, OverallMapFullStat> = {};
   const init = (map: string) => {
-    if (!stats[map]) stats[map] = { mapName: map, picks: 0, bans: 0, attWins: 0, attTotal: 0, defWins: 0, defTotal: 0 };
+    if (!stats[map]) stats[map] = { mapName: map, picks: 0, bans: 0, deciders: 0, attWins: 0, attTotal: 0, defWins: 0, defTotal: 0 };
   };
 
-  // picks/bans
+  // picks/bans/deciders
   for (const m of drafts) {
     const bo = Number(m.bo);
     if (m.team_1_select_2) { init(m.team_1_select_2); stats[m.team_1_select_2].picks++; }
@@ -1014,6 +1020,7 @@ export async function getOverallMapFullStats(
       if (m.team_1_select_3) { init(m.team_1_select_3); stats[m.team_1_select_3].bans++; }
       if (m.team_2_select_3) { init(m.team_2_select_3); stats[m.team_2_select_3].bans++; }
     }
+    if (m.decider) { init(m.decider); stats[m.decider].deciders++; }
   }
 
   // atk/def WR per round

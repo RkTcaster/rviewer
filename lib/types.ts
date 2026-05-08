@@ -59,6 +59,7 @@ export type OverallMapFullStat = {
   mapName: string;
   picks: number;
   bans: number;
+  deciders: number;
   attWins: number;
   attTotal: number;
   defWins: number;
