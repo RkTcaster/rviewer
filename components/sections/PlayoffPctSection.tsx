@@ -81,6 +81,19 @@ const WEEK4_DEFAULTS: Record<string, Array<{ teams: [string, string]; score: str
   ],
 };
 
+const WEEK5_DEFAULTS: Record<string, Array<{ teams: [string, string]; score: string }>> = {
+  alpha: [
+    { teams: ['G2', 'C9'], score: '2-0' },
+    {teams: ['ENVY', 'MIBR'], score: '2-0'},
+    
+  ],
+  omega: [
+    { teams: ['KRU', 'EG'], score: '2-1' },
+    { teams: ['FUR', '100T'], score: '1-2' },
+    
+  ],
+};
+
 function defaultsForGroup(
   group: string,
   matchTeamsByKey: Record<MatchKey, { teamA: string; teamB: string }>,
@@ -109,6 +122,29 @@ function defaultsForGroup(
       }
     }
   }
+  const desired2 = WEEK5_DEFAULTS[group.toLowerCase()];
+  for (const k of WEEK2_KEYS) {
+    const tt = matchTeamsByKey[k];
+    if (!tt.teamA || !tt.teamB) continue;
+    const aLow = tt.teamA.toLowerCase();
+    const bLow = tt.teamB.toLowerCase();
+    for (const d of desired2) {
+      const da = d.teams[0].toLowerCase();
+      const db = d.teams[1].toLowerCase();
+      let value: string | null = null;
+      if (aLow === da && bLow === db) {
+        value = `${tt.teamA}_${d.score}_${tt.teamB}`;
+      } else if (aLow === db && bLow === da) {
+        const [s1, s2] = d.score.split('-');
+        value = `${tt.teamA}_${s2}-${s1}_${tt.teamB}`;
+      }
+      if (value && matchOptions[k].includes(value)) {
+        out[k] = [value];
+        
+      }
+    }
+  }
+
   return out;
 }
 
