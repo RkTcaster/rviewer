@@ -203,17 +203,17 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
           Choose Team B in the filters above to compare...
         </div>
       ) : (
-        <div className="bg-[#1a1d23] rounded-xl shadow-2xl overflow-hidden border border-gray-800">
-          <div className="overflow-x-auto">
+        <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800">
+          <div>
             <table className="w-full text-left border-collapse text-[13.8px]">
               <thead className="bg-[#0f1115] text-gray-400 text-[11.5px] uppercase tracking-widest">
                 {/* Team name labels */}
                 <tr>
-                  <th colSpan={6} className="py-2 text-center text-blue-300 border-b border-gray-700 font-bold tracking-wider text-[23px]">
+                  <th colSpan={6} className="sticky top-0 z-20 bg-[#0f1115] py-2 text-center text-blue-300 border-b border-gray-700 font-bold tracking-wider text-[23px]">
                     {teamAName}
                   </th>
-                  <th className="py-2 border-b border-gray-700" />
-                  <th colSpan={6} className="py-2 text-center text-orange-300 border-b border-gray-700 font-bold tracking-wider text-[23px]">
+                  <th className="sticky top-0 z-20 bg-[#0f1115] py-2 border-b border-gray-700" />
+                  <th colSpan={6} className="sticky top-0 z-20 bg-[#0f1115] py-2 text-center text-orange-300 border-b border-gray-700 font-bold tracking-wider text-[23px]">
                     {teamBName}
                   </th>
                 </tr>
