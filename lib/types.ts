@@ -93,6 +93,20 @@ export type CompositionStat = {
   teams?: { team: string; played: number }[];
 };
 
+export type MapCompositionStat = {
+  map: string;
+  composition: string;
+  played: number;
+  wins: number;
+  attWins: number;
+  attTotal: number;
+  defWins: number;
+  defTotal: number;
+  players?: Record<string, string>; // agent → most-frequent player name for this comp
+  lastPlayedUrl?: string;
+  lastPlayedDate?: string;
+};
+
 export type AgentPickStat = {
   agent: string;
   map: string;

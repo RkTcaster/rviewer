@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, LongestMapEntry, MapStat, OverallMapFullStat, OverallMapStat, PlayerMatchPoint, PlayerStat, PlayerTimelineData, Region, SimulationRow, SkirmishStats, SkirmishTeamStat, SkirmishPlayerStat, TeamEconomyCompare, TeamRankStats, TopPlayerPerformance, Tournament, TournamentPlayerAvg } from './types';
+import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, LongestMapEntry, MapCompositionStat, MapStat, OverallMapFullStat, OverallMapStat, PlayerMatchPoint, PlayerStat, PlayerTimelineData, Region, SimulationRow, SkirmishStats, SkirmishTeamStat, SkirmishPlayerStat, TeamEconomyCompare, TeamRankStats, TopPlayerPerformance, Tournament, TournamentPlayerAvg } from './types';
 
 // --- HELPERS ---
 
@@ -516,6 +516,211 @@ export async function getOverallCompositions(
     const mapCmp = a.map.localeCompare(b.map);
     return mapCmp !== 0 ? mapCmp : b.played - a.played;
   });
+}
+
+export async function getTeamMapCompositions(
+  filters: { team: string; tour?: string; bo?: string; reg?: string[]; last?: string; dateFrom?: string; dateTo?: string }
+): Promise<MapCompositionStat[]> {
+  // Pre-fetch series_ids from draft for this team applying tour/reg/bo/date/last filters
+  let draftQuery = supabase
+    .from('draft')
+    .select('series_id, date')
+    .or(`team.eq."${filters.team}",rival.eq."${filters.team}"`)
+    .order('date', { ascending: false });
+  if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
+  if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
+  if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
+  if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
+  if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
+  if (filters.last && filters.last !== 'all') draftQuery = draftQuery.limit(parseInt(filters.last));
+
+  const { data: idList } = await draftQuery;
+  if (!idList || idList.length === 0) return [];
+  const seriesIds = [...new Set(idList.map((d: any) => d.series_id))];
+  const dateBySeriesId: Record<string, string> = {};
+  for (const d of idList as any[]) {
+    if (d.series_id && d.date && !dateBySeriesId[d.series_id]) dateBySeriesId[d.series_id] = d.date;
+  }
+
+  // Fetch player_stats for the target team across those series
+  const psRows = await fetchAllPages<any>((from, to) =>
+    supabase
+      .from('player_stats')
+      .select('team, map, series_id, map_id, agent, player, source_url')
+      .eq('team', filters.team)
+      .in('series_id', seriesIds)
+      .range(from, to)
+  );
+  if (!psRows || psRows.length === 0) return [];
+
+  // Group agent+player pairs by (series_id, map_id) for the target team
+  const agentPlayerByInstance: Record<string, Array<{ agent: string; player: string }>> = {};
+  const mapByInstance: Record<string, string> = {};
+  const urlByInstance: Record<string, string> = {};
+  for (const row of psRows) {
+    const key = `${row.series_id}__${row.map_id}`;
+    if (!agentPlayerByInstance[key]) agentPlayerByInstance[key] = [];
+    if (row.agent && row.player) {
+      agentPlayerByInstance[key].push({ agent: row.agent, player: row.player });
+    }
+    if (row.map && !mapByInstance[key]) mapByInstance[key] = row.map;
+    if (row.source_url && !urlByInstance[key]) urlByInstance[key] = row.source_url;
+  }
+
+  // For each instance derive: composition (agents sorted), rosterKey (agent:player sorted)
+  // and a players map (agent → player) for that exact instance.
+  const compositionByInstance: Record<string, string> = {};
+  const rosterKeyByInstance: Record<string, string> = {};
+  const playersByInstance: Record<string, Record<string, string>> = {};
+  for (const [key, pairs] of Object.entries(agentPlayerByInstance)) {
+    if (pairs.length === 0) continue;
+    const sortedByAgent = pairs.slice().sort((a, b) => a.agent.localeCompare(b.agent));
+    compositionByInstance[key] = sortedByAgent.map(p => p.agent).join(', ');
+    rosterKeyByInstance[key] = sortedByAgent.map(p => `${p.agent}:${p.player}`).join('|');
+    const pm: Record<string, string> = {};
+    for (const { agent, player } of sortedByAgent) pm[agent] = player;
+    playersByInstance[key] = pm;
+  }
+
+  // Fetch round_info for those series
+  const rounds = await fetchAllPages<any>((from, to) =>
+    supabase
+      .from('round_info')
+      .select('series_id, map_id, map, round, side, teamA, teamB, rndA, rndB')
+      .in('series_id', seriesIds)
+      .range(from, to)
+  );
+
+  const target = filters.team.trim().toLowerCase();
+  // Group key now includes the roster, so same comp with different players ⇒ separate rows
+  const acc: Record<string, MapCompositionStat> = {};
+  const groupKey = (mapName: string, rosterKey: string) => `${mapName}__${rosterKey}`;
+  const ensure = (mapName: string, rosterKey: string, composition: string, players: Record<string, string>): MapCompositionStat => {
+    const k = groupKey(mapName, rosterKey);
+    if (!acc[k]) {
+      acc[k] = { map: mapName, composition, played: 0, wins: 0, attWins: 0, attTotal: 0, defWins: 0, defTotal: 0, players };
+    }
+    return acc[k];
+  };
+
+  // Side accumulation + final-round detection per (series_id, map_id)
+  const finalRoundByInstance: Record<string, any> = {};
+  for (const r of rounds) {
+    const id = r.map_id;
+    if (!id) continue;
+    const instKey = `${r.series_id}__${id}`;
+    const composition = compositionByInstance[instKey];
+    const rosterKey = rosterKeyByInstance[instKey];
+    if (!composition || !rosterKey) continue;
+
+    const tA = r.teamA?.trim().toLowerCase();
+    const tB = r.teamB?.trim().toLowerCase();
+    const isTeamA = tA === target;
+    const isTeamB = tB === target;
+    if (!isTeamA && !isTeamB) continue;
+
+    const mapName = r.map || mapByInstance[instKey];
+    if (!mapName) continue;
+
+    const wonRound = isTeamA ? Number(r.rndA) === 1 : Number(r.rndB) === 1;
+    const rawSide = r.side?.trim().toLowerCase();
+    const mySide = isTeamA ? rawSide : (rawSide === 'atk' ? 'def' : rawSide === 'def' ? 'atk' : rawSide);
+
+    const stat = ensure(mapName, rosterKey, composition, playersByInstance[instKey]);
+    if (mySide === 'atk') {
+      stat.attTotal++;
+      if (wonRound) stat.attWins++;
+    } else if (mySide === 'def') {
+      stat.defTotal++;
+      if (wonRound) stat.defWins++;
+    }
+
+    const prev = finalRoundByInstance[instKey];
+    if (!prev || Number(r.round) > Number(prev.round)) {
+      finalRoundByInstance[instKey] = r;
+    }
+  }
+
+  // played/wins from last round per instance
+  for (const [instKey, r] of Object.entries(finalRoundByInstance)) {
+    const composition = compositionByInstance[instKey];
+    const rosterKey = rosterKeyByInstance[instKey];
+    if (!composition || !rosterKey) continue;
+    const mapName = r.map || mapByInstance[instKey];
+    if (!mapName) continue;
+    const isTeamA = r.teamA?.trim().toLowerCase() === target;
+    const wonMap = isTeamA ? Number(r.rndA) === 1 : Number(r.rndB) === 1;
+    const stat = ensure(mapName, rosterKey, composition, playersByInstance[instKey]);
+    stat.played++;
+    if (wonMap) stat.wins++;
+  }
+
+  // Track latest played instance per group → attach lastPlayedUrl/Date
+  // draft.date can come either as ISO ("YYYY-MM-DDTHH:MM:SS" / "YYYY-MM-DD HH:MM:SS")
+  // or as text in "D/M/YYYY HH:MM". Try ISO first; fall back to DD/M/YYYY parser.
+  const parseDraftDate = (s: string): number => {
+    if (!s) return 0;
+    // 1) ISO-ish: starts with 4-digit year
+    if (/^\d{4}-\d{1,2}-\d{1,2}/.test(s)) {
+      const t = Date.parse(s.includes('T') ? s : s.replace(' ', 'T'));
+      if (!isNaN(t)) return t;
+    }
+    // 2) D/M/YYYY [HH:MM]
+    const [datePart, timePart] = s.split(' ');
+    if (datePart) {
+      const parts = datePart.split('/');
+      if (parts.length === 3) {
+        const d = Number(parts[0]);
+        const m = Number(parts[1]);
+        const y = Number(parts[2]);
+        if (d && m && y) {
+          let hh = 0, mm = 0;
+          if (timePart) {
+            const tp = timePart.split(':');
+            hh = Number(tp[0]) || 0;
+            mm = Number(tp[1]) || 0;
+          }
+          return new Date(y, m - 1, d, hh, mm).getTime();
+        }
+      }
+    }
+    // 3) Last resort: native parser
+    const t = Date.parse(s);
+    return isNaN(t) ? 0 : t;
+  };
+  const latestPerGroup: Record<string, { ts: number; date: string; url: string }> = {};
+  for (const instKey of Object.keys(finalRoundByInstance)) {
+    const composition = compositionByInstance[instKey];
+    const rosterKey = rosterKeyByInstance[instKey];
+    if (!composition || !rosterKey) continue;
+    const mapName = mapByInstance[instKey] || finalRoundByInstance[instKey].map;
+    if (!mapName) continue;
+    const seriesId = instKey.split('__')[0];
+    const date = dateBySeriesId[seriesId] || '';
+    const ts = parseDraftDate(date);
+    const url = urlByInstance[instKey] || '';
+    const gk = groupKey(mapName, rosterKey);
+    const prev = latestPerGroup[gk];
+    if (!prev || ts > prev.ts) {
+      latestPerGroup[gk] = { ts, date, url };
+    }
+  }
+  for (const [gk, stat] of Object.entries(acc)) {
+    const lp = latestPerGroup[gk];
+    if (lp) {
+      if (lp.url) stat.lastPlayedUrl = lp.url;
+      if (lp.date) stat.lastPlayedDate = lp.date;
+    }
+  }
+
+  return Object.entries(acc).sort(([gkA, a], [gkB, b]) => {
+    const mc = a.map.localeCompare(b.map);
+    if (mc !== 0) return mc;
+    const tsA = latestPerGroup[gkA]?.ts ?? 0;
+    const tsB = latestPerGroup[gkB]?.ts ?? 0;
+    if (tsA !== tsB) return tsB - tsA;
+    return b.played - a.played;
+  }).map(([, v]) => v);
 }
 
 export async function getPlayerStats(

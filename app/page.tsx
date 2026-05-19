@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios } from '@/lib/data-service';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -48,6 +48,13 @@ export default async function Page({
     ? await getMapStats({ team: team2, tour: tour2, bo, reg: regArr, last, dateFrom: dateFrom2, dateTo: dateTo2 })
     : null;
 
+  const compsA = (section === 'compare-maps' && team)
+    ? await getTeamMapCompositions({ team, tour, bo, reg: regArr, last, dateFrom, dateTo })
+    : [];
+  const compsB = (section === 'compare-maps' && team2)
+    ? await getTeamMapCompositions({ team: team2, tour: tour2, bo, reg: regArr, last, dateFrom: dateFrom2, dateTo: dateTo2 })
+    : [];
+
   const rankings = (section === 'compare-stats' || section === 'graphs')
     ? await getTournamentRankings({ tour, reg: regArr, bo })
     : {};
@@ -73,7 +80,7 @@ export default async function Page({
     ? await getMapImages()
     : {};
 
-  const agentImages = (section === 'agent-picks' || section === 'maps' || isMetaShift)
+  const agentImages = (section === 'agent-picks' || section === 'maps' || section === 'compare-maps' || isMetaShift)
     ? await getAgentImages()
     : {};
 
@@ -183,6 +190,9 @@ export default async function Page({
           <CompareSection
             statsA={stats}
             statsB={resultB?.mapStats || []}
+            compsA={compsA}
+            compsB={compsB}
+            agentImages={agentImages}
             teamAName={team || ''}
             teamBName={team2 || ''}
           />
