@@ -54,7 +54,11 @@ function CompositionIcons({
   agentImages: Record<string, string>;
   players?: Record<string, string>;
 }) {
-  const agents = composition.split(', ');
+  const agents = composition.split(', ').slice().sort((a, b) => {
+    const pa = players?.[a] ?? '';
+    const pb = players?.[b] ?? '';
+    return pa.localeCompare(pb);
+  });
   const allHaveIcons = agents.every(a => agentImages[a]);
   if (!allHaveIcons) {
     return <span className="text-gray-300 text-xs leading-snug">{composition}</span>;
@@ -96,6 +100,26 @@ function PctCell({ wins, total }: { wins: number; total: number }) {
   );
 }
 
+function formatDateDMY(raw?: string): string | null {
+  if (!raw) return null;
+  let d: number | null = null, m: number | null = null, y: number | null = null;
+  if (/^\d{4}-\d{1,2}-\d{1,2}/.test(raw)) {
+    const [datePart] = raw.split(/[T ]/);
+    const parts = datePart.split('-');
+    y = Number(parts[0]); m = Number(parts[1]); d = Number(parts[2]);
+  } else {
+    const [datePart] = raw.split(' ');
+    const parts = datePart.split('/');
+    if (parts.length === 3) {
+      d = Number(parts[0]); m = Number(parts[1]); y = Number(parts[2]);
+    }
+  }
+  if (!d || !m || !y) return null;
+  const dd = String(d).padStart(2, '0');
+  const mm = String(m).padStart(2, '0');
+  return `${dd}-${mm}-${y}`;
+}
+
 function CompCells({
   c,
   agentImages,
@@ -105,17 +129,23 @@ function CompCells({
   agentImages: Record<string, string>;
   side: 'a' | 'b';
 }) {
+  const formattedDate = formatDateDMY(c?.lastPlayedDate);
   const link = c?.lastPlayedUrl ? (
-    <a
-      href={c.lastPlayedUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={(e) => e.stopPropagation()}
-      title={c.lastPlayedDate ? `Last played: ${c.lastPlayedDate}` : 'Last played'}
-      className="text-[10px] font-bold uppercase tracking-wider text-blue-400 hover:text-blue-300 underline shrink-0"
-    >
-      Last played
-    </a>
+    <div className="flex flex-col items-center gap-0.5 shrink-0">
+      <a
+        href={c.lastPlayedUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        title={c.lastPlayedDate ? `Last played: ${c.lastPlayedDate}` : 'Last played'}
+        className="text-[10px] font-bold uppercase tracking-wider text-blue-400 hover:text-blue-300 underline"
+      >
+        Last played
+      </a>
+      {formattedDate && (
+        <span className="text-[10px] text-gray-500 leading-none">{formattedDate}</span>
+      )}
+    </div>
   ) : null;
   const linkCell = (
     <td className="p-2 text-center bg-[#161920]">
@@ -291,7 +321,7 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
                         {/* Map name (center) */}
                         <td className="p-3 text-center font-bold text-white bg-[#252a33]">
                           <div className="flex items-center justify-center gap-1.5">
-                            <span className="text-gray-500 text-[10px]">{isExpanded ? '▾' : '▸'}</span>
+                            <span className="text-gray-500 text-[14px]">{isExpanded ? '▾' : '▸'}</span>
                             <span>{mapName}</span>
                           </div>
                         </td>

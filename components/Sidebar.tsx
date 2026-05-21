@@ -36,7 +36,7 @@ const NAV_SECTIONS = [
 export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const currentSection = searchParams.get('section') || 'maps';
+  const currentSection = searchParams.get('section') || 'compare-maps';
 
   function navigate(section: string) {
     const params = new URLSearchParams(searchParams.toString());

@@ -19,7 +19,7 @@ interface FiltersProps {
 export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode = 'team' }: FiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const section = searchParams.get('section');
+  const section = searchParams.get('section') || 'compare-maps';
   const isCompare = section === 'compare-maps' || section === 'compare-stats' || section === 'compare-economy';
   const isOverall = mode === 'overall';
   const isMetaShift = mode === 'meta-shift';
