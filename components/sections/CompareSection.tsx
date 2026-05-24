@@ -148,12 +148,12 @@ function CompCells({
     </div>
   ) : null;
   const linkCell = (
-    <td className="p-2 text-center bg-[#161920]">
+    <td className="p-2 text-center bg-[#252a33]">
       {link}
     </td>
   );
   const iconsCell = (
-    <td colSpan={2} className="p-2 bg-[#161920]">
+    <td colSpan={2} className="p-2 bg-[#252a33]">
       {c ? (
         <div className="flex items-center justify-center gap-2">
           <CompositionIcons composition={c.composition} agentImages={agentImages} players={c.players} />
@@ -165,17 +165,17 @@ function CompCells({
     </td>
   );
   const atkCell = (
-    <td className="p-2 text-center bg-[#161920]">
+    <td className="p-2 text-center bg-[#252a33]">
       {c ? <PctCell wins={c.attWins} total={c.attTotal} /> : <span className="text-gray-700">-</span>}
     </td>
   );
   const defCell = (
-    <td className="p-2 text-center bg-[#161920]">
+    <td className="p-2 text-center bg-[#252a33]">
       {c ? <PctCell wins={c.defWins} total={c.defTotal} /> : <span className="text-gray-700">-</span>}
     </td>
   );
   const wrCell = (
-    <td className="p-2 text-center bg-[#161920]">
+    <td className="p-2 text-center bg-[#252a33]">
       {c ? <PctCell wins={c.wins} total={c.played} /> : <span className="text-gray-700">-</span>}
     </td>
   );
@@ -224,7 +224,7 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
     compsBByMap[c.map].push(c);
   }
 
-  const th = 'p-3 text-center border-b border-gray-800';
+  const th = 'p-3 text-center border-b border-gray-800 sticky top-[48px] z-10';
 
   return (
     <div>
@@ -250,35 +250,36 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
                 {/* Column headers */}
                 <tr>
                   {/* Team A side */}
-                  <th className={`${th} bg-blue-900/30 text-blue-400`}>Decider</th>
-                  <th className={`${th} bg-green-900/30 text-green-400`}>
+                  <th className={`${th} bg-[#141D38] text-blue-400`}>Decider</th>
+                  <th className={`${th} bg-[#11251C] text-green-400`}>
                     <div>Picks <span className="text-[10.5px] text-green-600 normal-case font-normal">(1st / 2nd)</span></div>
                     <div className="text-[10.5px] text-gray-500 normal-case font-normal">Pick · Rival</div>
                   </th>
-                  <th className={`${th} bg-red-900/30 text-red-400`}>
+                  <th className={`${th} bg-[#311517] text-red-400`}>
                     <div>Bans <span className="text-[10.5px] text-red-700 normal-case font-normal">(1st / 2nd)</span></div>
                     <div className="text-[10.5px] text-gray-500 normal-case font-normal">Ban · Rival</div>
                   </th>
-                  <th className={`${th} bg-rose-900/80`}>Atk Side</th>
-                  <th className={`${th} bg-green-800/80`}>Def Side</th>
-                  <th className={`${th} bg-gray-900/80`}>Winrate</th>
+                  <th className={`${th} bg-[#701330]`}>Atk Side</th>
+                  <th className={`${th} bg-[#15542E]`}>Def Side</th>
+                  <th className={`${th} bg-[#111723]`}>Winrate</th>
                   {/* Map center */}
-                  <th className="p-3 text-center border-b border-gray-800 bg-[#252a33] text-white font-bold min-w-[120px]">
-                    Map
+                  <th className="p-3 text-center border-b border-gray-800 bg-[#252a33] text-white font-bold min-w-[120px] sticky top-[48px] z-10">
+                    <div>Map</div>
+                    <div className="text-[10.5px] text-gray-500 normal-case font-normal">Click a map to expand</div>
                   </th>
                   {/* Team B side (mirrored) */}
-                  <th className={`${th} bg-gray-900/80`}>Winrate</th>
-                  <th className={`${th} bg-green-800/80`}>Def Side</th>
-                  <th className={`${th} bg-rose-900/80`}>Atk Side</th>
-                  <th className={`${th} bg-red-900/30 text-red-400`}>
+                  <th className={`${th} bg-[#111723]`}>Winrate</th>
+                  <th className={`${th} bg-[#15542E]`}>Def Side</th>
+                  <th className={`${th} bg-[#701330]`}>Atk Side</th>
+                  <th className={`${th} bg-[#311517] text-red-400`}>
                     <div>Bans <span className="text-[10.5px] text-red-700 normal-case font-normal">(1st / 2nd)</span></div>
                     <div className="text-[10.5px] text-gray-500 normal-case font-normal">Ban · Rival</div>
                   </th>
-                  <th className={`${th} bg-green-900/30 text-green-400`}>
+                  <th className={`${th} bg-[#11251C] text-green-400`}>
                     <div>Picks <span className="text-[10.5px] text-green-600 normal-case font-normal">(1st / 2nd)</span></div>
                     <div className="text-[10.5px] text-gray-500 normal-case font-normal">Pick · Rival</div>
                   </th>
-                  <th className={`${th} bg-blue-900/30 text-blue-400`}>Decider</th>
+                  <th className={`${th} bg-[#141D38] text-blue-400`}>Decider</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800">
@@ -290,7 +291,7 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
                     <Fragment key={mapName}>
                       <tr
                         onClick={() => setExpandedMap(prev => prev === mapName ? null : mapName)}
-                        className="hover:bg-[#252a33] transition-colors cursor-pointer"
+                        className={`transition-colors cursor-pointer ${isExpanded ? 'bg-[#252a33]' : 'hover:bg-[#252a33]'}`}
                       >
                         {/* Team A */}
                         <td className="p-3 text-center text-blue-400 font-bold bg-blue-900/10">
@@ -308,32 +309,32 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
                           </div>
                           <div className="text-[11.5px] text-gray-500">{sa.rivalBans}</div>
                         </td>
-                        <td className="p-3 text-center bg-[#1a1d23]">
+                        <td className="p-3 text-center">
                           <SideCell wins={sa.attWins} total={sa.attTotal} />
                         </td>
-                        <td className="p-3 text-center bg-[#1a1d23]">
+                        <td className="p-3 text-center">
                           <SideCell wins={sa.defWins} total={sa.defTotal} />
                         </td>
-                        <td className="p-3 text-center bg-[#1a1d23]">
+                        <td className="p-3 text-center">
                           <WrCell wins={sa.wins} played={sa.played} />
                         </td>
 
                         {/* Map name (center) */}
                         <td className="p-3 text-center font-bold text-white bg-[#252a33]">
                           <div className="flex items-center justify-center gap-1.5">
-                            <span className="text-gray-500 text-[14px]">{isExpanded ? '▾' : '▸'}</span>
+                            <span className="text-gray-500 text-[23px]">{isExpanded ? '▾' : '▸'}</span>
                             <span>{mapName}</span>
                           </div>
                         </td>
 
                         {/* Team B (mirrored) */}
-                        <td className="p-3 text-center bg-[#1a1d23]">
+                        <td className="p-3 text-center">
                           <WrCell wins={sb.wins} played={sb.played} />
                         </td>
-                        <td className="p-3 text-center bg-[#1a1d23]">
+                        <td className="p-3 text-center">
                           <SideCell wins={sb.defWins} total={sb.defTotal} />
                         </td>
-                        <td className="p-3 text-center bg-[#1a1d23]">
+                        <td className="p-3 text-center">
                           <SideCell wins={sb.attWins} total={sb.attTotal} />
                         </td>
                         <td className="p-3 text-center bg-red-900/10">
@@ -358,7 +359,7 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
                         const n = Math.max(aComps.length, bComps.length);
                         if (n === 0) {
                           return (
-                            <tr className="bg-[#15171c] border-y border-gray-800">
+                            <tr className="bg-[#252a33] border-y border-gray-800">
                               <td colSpan={13} className="p-4 text-center text-gray-600 text-sm italic">No composition data</td>
                             </tr>
                           );
@@ -369,10 +370,10 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
                           return (
                             <tr
                               key={`${mapName}-exp-${i}`}
-                              className={`bg-[#15171c] ${i === 0 ? 'border-t-2 border-t-gray-700' : ''} ${i === n - 1 ? 'border-b-2 border-b-gray-700' : ''}`}
+                              className={`bg-[#252a33] ${i === 0 ? 'border-t-2 border-t-gray-700' : ''} ${i === n - 1 ? 'border-b-2 border-b-gray-700' : ''}`}
                             >
                               <CompCells c={a} agentImages={agentImages} side="a" />
-                              <td className="bg-[#1f232c]" />
+                              <td className="bg-[#252a33]" />
                               <CompCells c={b} agentImages={agentImages} side="b" />
                             </tr>
                           );
