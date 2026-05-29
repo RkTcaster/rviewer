@@ -81,6 +81,8 @@ export type TeamRankStats = {
   retakePl: number;
   postPlantPl: number;
   postPlantDe: number;
+  first3Lost: number;
+  first3Total: number;
 };
 
 export type CompositionStat = {

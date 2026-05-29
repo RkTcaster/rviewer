@@ -76,12 +76,15 @@ export async function getTours(teamName?: string, regId?: string[]): Promise<Tou
 }
 
 export async function getTournamentRankings(
-  filters: { tour?: string; reg?: string[]; bo?: string }
+  filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<Record<string, TeamRankStats>> {
   let idQuery = supabase.from('draft').select('series_id');
   if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
   if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
   if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
+  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
+  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
+  if (filters.last && filters.last !== 'all') idQuery = (idQuery as any).order('date', { ascending: false }).limit(parseInt(filters.last));
 
   const { data: idList } = await idQuery;
   if (!idList || idList.length === 0) return {};
@@ -119,6 +122,8 @@ export async function getTournamentRankings(
       retakePl: 0,
       postPlantPl: 0,
       postPlantDe: 0,
+      first3Lost: 0,
+      first3Total: 0,
     };
   };
 
@@ -222,6 +227,22 @@ export async function getTournamentRankings(
   Object.values(mapKeyRounds).forEach(({ teamA, teamB, r1, r2, r3, r3side, r13, r14, r15, r15side }) => {
     processHalf(teamA, teamB, r1, r2, r3, r3side);
     processHalf(teamA, teamB, r13, r14, r15, r15side);
+  });
+
+  // First-3-lost: count halves where a team lost R1+R2+R3 consecutively
+  Object.values(mapKeyRounds).forEach(({ teamA, teamB, r1, r2, r3, r13, r14, r15 }) => {
+    if (r1 !== undefined && r2 !== undefined && r3 !== undefined) {
+      teamStats[teamA].first3Total++;
+      teamStats[teamB].first3Total++;
+      if (!r1 && !r2 && !r3) teamStats[teamA].first3Lost++;
+      if (r1 && r2 && r3)    teamStats[teamB].first3Lost++;
+    }
+    if (r13 !== undefined && r14 !== undefined && r15 !== undefined) {
+      teamStats[teamA].first3Total++;
+      teamStats[teamB].first3Total++;
+      if (!r13 && !r14 && !r15) teamStats[teamA].first3Lost++;
+      if (r13 && r14 && r15)    teamStats[teamB].first3Lost++;
+    }
   });
 
   // Retake efficiency from player_performance

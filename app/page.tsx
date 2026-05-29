@@ -17,6 +17,7 @@ import { CompareEconomySection } from '@/components/sections/CompareEconomySecti
 import { RelevantInfoSection } from '@/components/sections/RelevantInfoSection';
 import { SkirmishSection } from '@/components/sections/SkirmishSection';
 import { PlayoffPctSection } from '@/components/sections/PlayoffPctSection';
+import { StatsRankSection } from '@/components/sections/StatsRankSection';
 
 export default async function Page({
   searchParams,
@@ -33,6 +34,7 @@ export default async function Page({
   const isOverall = section === 'map-picks' || section === 'agent-picks';
   const isCompare = section === 'compare-maps' || section === 'compare-stats' || section === 'compare-economy';
   const isMetaShift = section === 'meta-shift';
+  const isStatsRank = section === 'stats-rank';
   const isEconomy = section === 'economy';
   const isCompareEconomy = section === 'compare-economy';
   const isRelevantInfo = section === 'relevant-info';
@@ -40,7 +42,7 @@ export default async function Page({
   const isPlayoffPct = section === 'playoff-pct';
 
   // Team data (only for team sections)
-  const result = (!isOverall && !isMetaShift && !isEconomy && !isRelevantInfo && !isSkirmish && !isPlayoffPct && team)
+  const result = (!isOverall && !isMetaShift && !isEconomy && !isRelevantInfo && !isSkirmish && !isPlayoffPct && !isStatsRank && team)
     ? await getMapStats({ team, tour, bo, reg: regArr, last, dateFrom, dateTo })
     : null;
 
@@ -55,8 +57,8 @@ export default async function Page({
     ? await getTeamMapCompositions({ team: team2, tour: tour2, bo, reg: regArr, last, dateFrom: dateFrom2, dateTo: dateTo2 })
     : [];
 
-  const rankings = (section === 'compare-stats' || section === 'graphs')
-    ? await getTournamentRankings({ tour, reg: regArr, bo })
+  const rankings = (section === 'compare-stats' || section === 'graphs' || section === 'stats-rank')
+    ? await getTournamentRankings({ tour, reg: regArr, bo, last, dateFrom, dateTo })
     : {};
 
   // Overall data (only for overall sections)
@@ -143,7 +145,7 @@ export default async function Page({
   const simulationScenarios = isPlayoffPct ? await getSimulationScenarios() : [];
 
   // Tours source differs by context
-  const tours = (isOverall || isMetaShift || isEconomy || isRelevantInfo) ? await getAllTours(regArr) : await getTours(team, regArr);
+  const tours = (isOverall || isMetaShift || isEconomy || isRelevantInfo || isStatsRank) ? await getAllTours(regArr) : await getTours(team, regArr);
   const tours2 = isCompare
     ? await getTours(team2, regArr)
     : isMetaShift
@@ -181,6 +183,8 @@ export default async function Page({
         return <SkirmishSection stats={skirmishStats!} />;
       case 'playoff-pct':
         return <PlayoffPctSection scenarios={simulationScenarios} />;
+      case 'stats-rank':
+        return <StatsRankSection rankings={rankings} />;
       case 'charts':
         return <ChartsSection stats={stats} />;
       case 'draft':
@@ -239,6 +243,7 @@ export default async function Page({
           'relevant-info': 'Relevant Info',
           'skirmish-americas': 'Skirmish VCT Americas Stage 1',
           'playoff-pct': 'Playoff % (Number of possible results, not probability)',
+          'stats-rank': 'Stats Rank',
           }[section] ?? section}</h1>
           {regArr && regArr.length > 0 && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">
@@ -278,14 +283,14 @@ export default async function Page({
                 tours={tours}
                 tours2={tours2}
                 teams2={teams2}
-                mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : 'team'}
+                mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : isStatsRank ? 'stats-rank' : 'team'}
               />
             </div>
           )}
         </header>
 
         <main className="p-8 pt-6">
-          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct) ? (
+          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isStatsRank) ? (
             renderSection()
           ) : !team ? (
             <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">

@@ -13,7 +13,7 @@ interface FiltersProps {
   tours: Tournament[];
   tours2?: Tournament[];
   teams2?: string[];
-  mode?: 'team' | 'overall' | 'meta-shift' | 'economy';
+  mode?: 'team' | 'overall' | 'meta-shift' | 'economy' | 'stats-rank';
 }
 
 export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode = 'team' }: FiltersProps) {
@@ -24,6 +24,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
   const isOverall = mode === 'overall';
   const isMetaShift = mode === 'meta-shift';
   const isEconomy = mode === 'economy';
+  const isStatsRank = mode === 'stats-rank';
   const isRelevantInfo = section === 'relevant-info';
 
   const updateFilter = (key: string, value: string) => {
@@ -236,7 +237,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     {/* FILA 2: Team A, Tournament A, From A, To A */}
     <div className="flex flex-wrap items-start gap-6 pt-3 border-t border-gray-800">
 
-      {!isOverall && (
+      {!isOverall && !isStatsRank && (
         <SearchableSelect
           label="Team"
           options={teams}
@@ -251,10 +252,10 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         options={tours}
         selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || []}
         onChange={(values) => updateMultiFilter('tour', values)}
-        disabled={!isOverall && !isEconomy && !isRelevantInfo && !searchParams.get('team')}
+        disabled={!isOverall && !isEconomy && !isRelevantInfo && !isStatsRank && !searchParams.get('team')}
       />
 
-      {(isCompareStats || isEconomy || section === 'map-picks' || section === 'agent-picks' || !section || section === 'maps' || section === 'compare-maps' || section === 'player-stats') && (
+      {(isCompareStats || isEconomy || isStatsRank || section === 'map-picks' || section === 'agent-picks' || !section || section === 'maps' || section === 'compare-maps' || section === 'player-stats') && (
         <>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">{isEconomy ? 'From' : 'From A'}</label>

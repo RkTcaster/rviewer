@@ -19,7 +19,7 @@ interface Props {
   rankings: Record<string, TeamRankStats>;
 }
 
-type MetricKey = 'map' | 'atk' | 'def' | 'pistol' | 'antiEco' | 'recovery' | 'pab' | 'pabAtk' | 'pabDef' | 'timeout' | 'retake' | 'postPlant' | 'plantAtk' | 'plantDef';
+type MetricKey = 'map' | 'round' | 'atk' | 'def' | 'pistol' | 'antiEco' | 'recovery' | 'pab' | 'pabAtk' | 'pabDef' | 'first3Lost' | 'timeout' | 'retake' | 'postPlant' | 'plantAtk' | 'plantDef';
 
 interface RowData {
   label: React.ReactNode;
@@ -36,6 +36,13 @@ interface RowData {
   countOnly?: boolean;
 }
 
+interface SeparatorRow {
+  separator: true;
+  label: string;
+}
+
+type Row = RowData | SeparatorRow;
+
 function pct(wins: number, total: number): number | null {
   return total > 0 ? Math.round((wins / total) * 100) : null;
 }
@@ -49,6 +56,7 @@ function getRank(
   const getValue = (s: TeamRankStats): number | null => {
     switch (key) {
       case 'map':      return pct(s.mapWins, s.mapPlayed);
+      case 'round':    return pct(s.attWins + s.defWins, s.attTotal + s.defTotal);
       case 'atk':      return pct(s.attWins, s.attTotal);
       case 'def':      return pct(s.defWins, s.defTotal);
       case 'pistol':   return pct(s.pistolWins, s.pistolTotal);
@@ -57,6 +65,7 @@ function getRank(
       case 'pab':      return pct(s.pabWins, s.pabTotal);
       case 'pabAtk':   return pct(s.pabAtkWins, s.pabAtkTotal);
       case 'pabDef':   return pct(s.pabDefWins, s.pabDefTotal);
+      case 'first3Lost': return pct(s.first3Lost, s.first3Total);
       case 'timeout':  return s.timeoutLosses;
       case 'retake':     return pct(s.retakeDe, s.retakePl);
       case 'postPlant':  return s.postPlantPl > 0 ? pct(s.postPlantPl - s.postPlantDe, s.postPlantPl) : null;
@@ -204,11 +213,18 @@ export function CompareStatsSection({
     defTotal: statsB.reduce((s, m) => s + m.defTotal, 0),
   };
 
-  const rows: RowData[] = [
+  const rows: Row[] = [
     {
       label: 'Map Winrate', key: 'map',
       valA: pct(aggA.wins, aggA.played),            winsA: aggA.wins,       totalA: aggA.played,
       valB: pct(aggB.wins, aggB.played),            winsB: aggB.wins,       totalB: aggB.played,
+    },
+    {
+      label: 'Round Winrate', key: 'round',
+      valA: pct(aggA.attWins + aggA.defWins, aggA.attTotal + aggA.defTotal),
+      winsA: aggA.attWins + aggA.defWins, totalA: aggA.attTotal + aggA.defTotal,
+      valB: pct(aggB.attWins + aggB.defWins, aggB.attTotal + aggB.defTotal),
+      winsB: aggB.attWins + aggB.defWins, totalB: aggB.attTotal + aggB.defTotal,
     },
     {
       label: swordLabel('Atk Side Winrate'), key: 'atk',
@@ -247,30 +263,39 @@ export function CompareStatsSection({
       valA: pct(retakeA.retakeDe, retakeA.retakePl), winsA: retakeA.retakeDe, totalA: retakeA.retakePl,
       valB: pct(retakeB.retakeDe, retakeB.retakePl), winsB: retakeB.retakeDe, totalB: retakeB.retakePl,
     },
+    { separator: true, label: 'First 3 rounds per half performance' },
     {
       label: 'Pistol Winrate', key: 'pistol',
       valA: pct(pistolsA.wins, pistolsA.total),     winsA: pistolsA.wins,   totalA: pistolsA.total,
       valB: pct(pistolsB.wins, pistolsB.total),     winsB: pistolsB.wins,   totalB: pistolsB.total,
     },
     {
-      label: 'Post Pistol Into Win', key: 'antiEco',
+      label: 'Post Pistol Into Win (W-W)', key: 'antiEco',
       valA: pct(antiEcoA.wins, antiEcoA.total),     winsA: antiEcoA.wins,   totalA: antiEcoA.total,
       valB: pct(antiEcoB.wins, antiEcoB.total),     winsB: antiEcoB.wins,   totalB: antiEcoB.total,
     },
     {
-      label: 'Bonus Conversion (PAB)', key: 'pab',
+      label: 'Bonus Conversion (W-W-W)', key: 'pab',
       valA: pct(pabA.wins, pabA.total),             winsA: pabA.wins,       totalA: pabA.total,
       valB: pct(pabB.wins, pabB.total),             winsB: pabB.wins,       totalB: pabB.total,
     },
     {
-      label: 'PAB Atk', key: 'pabAtk',
+      label: 'W-W-W Atk', key: 'pabAtk',
       valA: pct(pabA.atkWins, pabA.atkTotal),       winsA: pabA.atkWins,    totalA: pabA.atkTotal,
       valB: pct(pabB.atkWins, pabB.atkTotal),       winsB: pabB.atkWins,    totalB: pabB.atkTotal,
     },
     {
-      label: 'PAB Def', key: 'pabDef',
+      label: 'W-W-W Def', key: 'pabDef',
       valA: pct(pabA.defWins, pabA.defTotal),       winsA: pabA.defWins,    totalA: pabA.defTotal,
       valB: pct(pabB.defWins, pabB.defTotal),       winsB: pabB.defWins,    totalB: pabB.defTotal,
+    },
+    {
+      label: 'L-L-L', key: 'first3Lost',
+      valA: pct(rankings[teamAName]?.first3Lost ?? 0, rankings[teamAName]?.first3Total ?? 0),
+      winsA: rankings[teamAName]?.first3Lost ?? 0, totalA: rankings[teamAName]?.first3Total ?? 0,
+      valB: pct(rankings[teamBName]?.first3Lost ?? 0, rankings[teamBName]?.first3Total ?? 0),
+      winsB: rankings[teamBName]?.first3Lost ?? 0, totalB: rankings[teamBName]?.first3Total ?? 0,
+      lowerIsBetter: true,
     },
     {
       label: 'Timeout Losses', key: 'timeout',
@@ -306,15 +331,23 @@ export function CompareStatsSection({
           </tr>
         </thead>
         <tbody>
-          {rows.map(row => (
-            <StatRow
-              key={row.key}
-              row={row}
-              teamAName={teamAName}
-              teamBName={teamBName}
-              rankings={rankings}
-            />
-          ))}
+          {rows.map((row, i) =>
+            'separator' in row ? (
+              <tr key={`sep-${i}`} className="border-b border-gray-800">
+                <td colSpan={7} className="px-6 py-2 text-center bg-[#0f1115]">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{row.label}</span>
+                </td>
+              </tr>
+            ) : (
+              <StatRow
+                key={row.key}
+                row={row}
+                teamAName={teamAName}
+                teamBName={teamBName}
+                rankings={rankings}
+              />
+            )
+          )}
         </tbody>
       </table>
     </div>
