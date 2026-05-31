@@ -229,19 +229,18 @@ export async function getTournamentRankings(
     processHalf(teamA, teamB, r13, r14, r15, r15side);
   });
 
-  // First-3-lost: count halves where a team lost R1+R2+R3 consecutively
+  // First-3-lost: among halves where a team lost the pistol AND R2, count how
+  // many also lost R3 (full L-L-L sweep). Denominator = pistol+R2 losses.
   Object.values(mapKeyRounds).forEach(({ teamA, teamB, r1, r2, r3, r13, r14, r15 }) => {
     if (r1 !== undefined && r2 !== undefined && r3 !== undefined) {
-      teamStats[teamA].first3Total++;
-      teamStats[teamB].first3Total++;
-      if (!r1 && !r2 && !r3) teamStats[teamA].first3Lost++;
-      if (r1 && r2 && r3)    teamStats[teamB].first3Lost++;
+      // teamA lost pistol (!r1) and R2 (!r2)
+      if (!r1 && !r2) { teamStats[teamA].first3Total++; if (!r3) teamStats[teamA].first3Lost++; }
+      // teamB lost pistol (r1) and R2 (r2)
+      if (r1 && r2)   { teamStats[teamB].first3Total++; if (r3)  teamStats[teamB].first3Lost++; }
     }
     if (r13 !== undefined && r14 !== undefined && r15 !== undefined) {
-      teamStats[teamA].first3Total++;
-      teamStats[teamB].first3Total++;
-      if (!r13 && !r14 && !r15) teamStats[teamA].first3Lost++;
-      if (r13 && r14 && r15)    teamStats[teamB].first3Lost++;
+      if (!r13 && !r14) { teamStats[teamA].first3Total++; if (!r15) teamStats[teamA].first3Lost++; }
+      if (r13 && r14)   { teamStats[teamB].first3Total++; if (r15)  teamStats[teamB].first3Lost++; }
     }
   });
 

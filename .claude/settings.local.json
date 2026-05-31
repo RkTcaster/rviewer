@@ -8,7 +8,9 @@
       "Bash(npx eslint *)",
       "Bash(Get-ChildItem -Path . -Force)",
       "Bash(Select-Object Name)",
-      "Bash(grep -A1 \"MapPicksSection.tsx$\")"
+      "Bash(grep -A1 \"MapPicksSection.tsx$\")",
+      "PowerShell(git ls-files | Measure-Object -Line; \"---\"; git ls-files | Select-Object -First 60)",
+      "Bash(node *)"
     ]
   }
 }

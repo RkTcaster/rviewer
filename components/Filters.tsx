@@ -1,6 +1,6 @@
 "use client";
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Region, Tournament } from '@/lib/types';
+import { Region, Tournament, STATS_RANK_DEFAULT_TOURS } from '@/lib/types';
 import { MultiSelect } from "./MultiSelect";
 import { SearchableSelect } from "./SearchableSelect";
 import { SearchableMultiSelect } from "./SearchableMultiSelect";
@@ -250,7 +250,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
       <SearchableMultiSelect
         label="Tournament"
         options={tours}
-        selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || []}
+        selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || (isStatsRank ? STATS_RANK_DEFAULT_TOURS : [])}
         onChange={(values) => updateMultiFilter('tour', values)}
         disabled={!isOverall && !isEconomy && !isRelevantInfo && !isStatsRank && !searchParams.get('team')}
       />

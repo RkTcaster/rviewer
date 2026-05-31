@@ -48,6 +48,19 @@ export type Tournament = {
   reg_id?: string;
 };
 
+// Torneos seleccionados por defecto al entrar a la solapa Stats Rank
+export const STATS_RANK_DEFAULT_TOURS = [
+  'vct_2026_americas_stage_1',
+  'vct_2026_emea_stage_1',
+  'vct_2026_pacific_stage_1',
+  'vct_2026_china_stage_1',
+];
+
+// Equipos visibles por defecto en la tabla de Stats Rank
+export const STATS_RANK_DEFAULT_TEAMS = [
+  'G2', 'LEV', 'NRG', 'TH', 'VIT', 'FUT', 'FS', 'GE', 'DRG', 'XLG', 'EDG', 'PRX',
+];
+
 export type OverallMapStat = {
   mapName: string;
   picks: number;

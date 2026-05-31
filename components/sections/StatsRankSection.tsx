@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { TeamRankStats } from '@/lib/types';
+import { useRouter } from 'next/navigation';
+import { TeamRankStats, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 
 interface Props {
   rankings: Record<string, TeamRankStats>;
@@ -14,6 +15,8 @@ function pct(wins: number, total: number): number | null {
 type MetricDef = {
   label: string;
   getValue: (s: TeamRankStats) => number | null;
+  /** wins/total for the W-L line under the %. Omit for count-only metrics. */
+  getWL?: (s: TeamRankStats) => { wins: number; total: number };
   lowerIsBetter?: boolean;
   countOnly?: boolean;
 };
@@ -21,21 +24,22 @@ type SeparatorDef = { separator: true; label: string };
 type RowDef = MetricDef | SeparatorDef;
 
 const METRICS: RowDef[] = [
-  { label: 'Map Winrate',            getValue: s => pct(s.mapWins, s.mapPlayed) },
-  { label: 'Round Winrate',          getValue: s => pct(s.attWins + s.defWins, s.attTotal + s.defTotal) },
-  { label: 'Atk Side Winrate',       getValue: s => pct(s.attWins, s.attTotal) },
-  { label: 'Plant Rate ATK',         getValue: s => pct(s.postPlantPl, s.attTotal) },
-  { label: 'Post Plant WR',          getValue: s => s.postPlantPl > 0 ? pct(s.postPlantPl - s.postPlantDe, s.postPlantPl) : null },
-  { label: 'Def Side Winrate',       getValue: s => pct(s.defWins, s.defTotal) },
-  { label: 'Plant Rate DEF',         getValue: s => pct(s.retakePl, s.defTotal), lowerIsBetter: true },
-  { label: 'Retake Eff',             getValue: s => pct(s.retakeDe, s.retakePl) },
+  { label: 'Map Winrate',            getValue: s => pct(s.mapWins, s.mapPlayed),                  getWL: s => ({ wins: s.mapWins, total: s.mapPlayed }) },
+  { label: 'Round Winrate',          getValue: s => pct(s.attWins + s.defWins, s.attTotal + s.defTotal), getWL: s => ({ wins: s.attWins + s.defWins, total: s.attTotal + s.defTotal }) },
+  { label: 'Atk Side Winrate',       getValue: s => pct(s.attWins, s.attTotal),                  getWL: s => ({ wins: s.attWins, total: s.attTotal }) },
+  { label: 'Plant Rate ATK',         getValue: s => pct(s.postPlantPl, s.attTotal),              getWL: s => ({ wins: s.postPlantPl, total: s.attTotal }) },
+  { label: 'Post Plant WR',          getValue: s => s.postPlantPl > 0 ? pct(s.postPlantPl - s.postPlantDe, s.postPlantPl) : null, getWL: s => ({ wins: s.postPlantPl - s.postPlantDe, total: s.postPlantPl }) },
+  { label: 'Def Side Winrate',       getValue: s => pct(s.defWins, s.defTotal),                  getWL: s => ({ wins: s.defWins, total: s.defTotal }) },
+  { label: 'Plant Rate DEF',         getValue: s => pct(s.retakePl, s.defTotal), lowerIsBetter: true, getWL: s => ({ wins: s.retakePl, total: s.defTotal }) },
+  { label: 'Retake Eff',             getValue: s => pct(s.retakeDe, s.retakePl),                 getWL: s => ({ wins: s.retakeDe, total: s.retakePl }) },
   { separator: true, label: 'First 3 rounds performance' },
-  { label: 'Pistol Winrate',         getValue: s => pct(s.pistolWins, s.pistolTotal) },
-  { label: 'Post Pistol Into Win',   getValue: s => pct(s.antiEcoWins, s.antiEcoTotal) },
-  { label: 'Bonus Conversion (PAB)', getValue: s => pct(s.pabWins, s.pabTotal) },
-  { label: 'PAB Atk',               getValue: s => pct(s.pabAtkWins, s.pabAtkTotal) },
-  { label: 'PAB Def',               getValue: s => pct(s.pabDefWins, s.pabDefTotal) },
-  { label: 'Lost R1 + R2 + R3',    getValue: s => pct(s.first3Lost, s.first3Total), lowerIsBetter: true },
+  { label: 'Pistol Winrate',         getValue: s => pct(s.pistolWins, s.pistolTotal),            getWL: s => ({ wins: s.pistolWins, total: s.pistolTotal }) },
+  { label: 'Post Pistol Into Win',   getValue: s => pct(s.antiEcoWins, s.antiEcoTotal),          getWL: s => ({ wins: s.antiEcoWins, total: s.antiEcoTotal }) },
+  { label: 'Bonus Conversion (PAB)', getValue: s => pct(s.pabWins, s.pabTotal),                  getWL: s => ({ wins: s.pabWins, total: s.pabTotal }) },
+  { label: 'PAB Atk',               getValue: s => pct(s.pabAtkWins, s.pabAtkTotal),            getWL: s => ({ wins: s.pabAtkWins, total: s.pabAtkTotal }) },
+  { label: 'PAB Def',               getValue: s => pct(s.pabDefWins, s.pabDefTotal),            getWL: s => ({ wins: s.pabDefWins, total: s.pabDefTotal }) },
+  { label: 'Post Pistol Loss Into Win (L-W)', getValue: s => pct(s.recoveryWins, s.recoveryTotal), getWL: s => ({ wins: s.recoveryWins, total: s.recoveryTotal }) },
+  { label: 'Losing to enemy bonus (L-L-L)',  getValue: s => pct(s.first3Lost, s.first3Total), lowerIsBetter: true, getWL: s => ({ wins: s.first3Lost, total: s.first3Total }) },
   { label: 'Timeout Losses',         getValue: s => s.timeoutLosses, lowerIsBetter: true, countOnly: true },
 ];
 
@@ -51,11 +55,17 @@ function getCellColor(value: number | null, allValues: (number | null)[], lowerI
 }
 
 export function StatsRankSection({ rankings }: Props) {
+  const router = useRouter();
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
+  const [showDetail, setShowDetail] = useState(false);
+
   const allTeams = Object.keys(rankings).sort();
-  const [hiddenTeams, setHiddenTeams] = useState<Set<string>>(new Set());
+  // Por defecto se muestran solo los equipos de STATS_RANK_DEFAULT_TEAMS (el resto ocultos)
+  const [hiddenTeams, setHiddenTeams] = useState<Set<string>>(
+    () => new Set(allTeams.filter(t => !STATS_RANK_DEFAULT_TEAMS.includes(t)))
+  );
 
   const baseTeams = allTeams.filter(t => !hiddenTeams.has(t));
 
@@ -65,6 +75,14 @@ export function StatsRankSection({ rankings }: Props) {
       if (next.has(team)) next.delete(team); else next.add(team);
       return next;
     });
+  }
+
+  function resetFilters() {
+    // Vuelve al estado inicial: 4 torneos por defecto (sin params) y equipos filtrados
+    setHiddenTeams(new Set(allTeams.filter(t => !STATS_RANK_DEFAULT_TEAMS.includes(t))));
+    setSortCol(null);
+    setSortDir('desc');
+    router.push('?section=stats-rank');
   }
 
   if (baseTeams.length === 0) {
@@ -113,6 +131,29 @@ export function StatsRankSection({ rankings }: Props) {
   return (
     <div className="flex flex-col gap-4">
 
+    {/* Controls */}
+    <div className="flex justify-start gap-2 px-1">
+      <button
+        onClick={() => setShowDetail(d => !d)}
+        className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+          showDetail
+            ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+            : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+        }`}
+      >
+        Detail info
+      </button>
+      <button
+        onClick={resetFilters}
+        className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-red-400 hover:border-red-500 hover:text-red-300"
+      >
+        Reset filters
+      </button>
+    </div>
+
+    {/* Teams subtitle */}
+    <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Teams</span>
+
     {/* Team filter chips */}
     <div className="flex flex-wrap gap-2 px-1">
       {allTeams.map(team => {
@@ -134,7 +175,7 @@ export function StatsRankSection({ rankings }: Props) {
     </div>
 
     <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-x-auto">
-      <table className="border-collapse">
+      <table className="border-separate" style={{ borderSpacing: '1px 2px' }}>
         <thead className="bg-[#0f1115]">
           {/* Group header row */}
           <tr>
@@ -165,18 +206,24 @@ export function StatsRankSection({ rankings }: Props) {
                   style={{ width: 48, minWidth: 48 }}
                 >
                   <div
-                    className="flex items-end justify-center pb-2 pt-1 gap-1"
+                    className="flex flex-col items-center justify-end pb-2 pt-1 gap-1"
                     style={{ height: 120 }}
                   >
                     <span
-                      className={`text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${isActive ? 'text-blue-400' : 'text-gray-400'}`}
-                      style={{ writingMode: 'vertical-lr', transform: 'rotate(180deg)' }}
+                      className={`text-[10px] font-bold uppercase tracking-wide text-center leading-tight ${isActive ? 'text-blue-400' : 'text-gray-400'}`}
+                      style={{ whiteSpace: 'pre' }}
                     >
-                      {m.label}
+                      {(() => {
+                        const w = m.label.split(' ');
+                        if (m.label === 'Bonus Conversion (PAB)') return 'Bonus\nConversion\n(PAB)';
+                        if (w.length === 2) return w.join('\n');
+                        if (w.length === 3 || w.length === 4) return `${w[0]} ${w[1]}\n${w.slice(2).join(' ')}`;
+                        if (w.length >= 5) return `${w[0]} ${w[1]}\n${w[2]}\n${w.slice(3).join(' ')}`;
+                        return m.label;
+                      })()}
                     </span>
                     <span
                       className={`text-[9px] shrink-0 ${isActive ? 'text-blue-400' : 'text-gray-600'}`}
-                      style={{ writingMode: 'vertical-lr', transform: 'rotate(180deg)' }}
                     >
                       {isActive ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}
                     </span>
@@ -212,6 +259,14 @@ export function StatsRankSection({ rankings }: Props) {
                         ? m.countOnly ? val : `${val}%`
                         : <span className="text-gray-700">—</span>}
                     </span>
+                    {showDetail && val !== null && m.getWL && (() => {
+                      const { wins, total } = m.getWL(rankings[team]);
+                      return total > 0 ? (
+                        <div className="text-[9px] text-gray-600 whitespace-nowrap">
+                          {wins}W-{total - wins}L
+                        </div>
+                      ) : null;
+                    })()}
                   </td>
                 );
               })}

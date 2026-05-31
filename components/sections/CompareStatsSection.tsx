@@ -280,17 +280,22 @@ export function CompareStatsSection({
       valB: pct(pabB.wins, pabB.total),             winsB: pabB.wins,       totalB: pabB.total,
     },
     {
-      label: 'W-W-W Atk', key: 'pabAtk',
+      label: swordLabel('W-W-W Atk'), key: 'pabAtk',
       valA: pct(pabA.atkWins, pabA.atkTotal),       winsA: pabA.atkWins,    totalA: pabA.atkTotal,
       valB: pct(pabB.atkWins, pabB.atkTotal),       winsB: pabB.atkWins,    totalB: pabB.atkTotal,
     },
     {
-      label: 'W-W-W Def', key: 'pabDef',
+      label: shieldLabel('W-W-W Def'), key: 'pabDef',
       valA: pct(pabA.defWins, pabA.defTotal),       winsA: pabA.defWins,    totalA: pabA.defTotal,
       valB: pct(pabB.defWins, pabB.defTotal),       winsB: pabB.defWins,    totalB: pabB.defTotal,
     },
     {
-      label: 'L-L-L', key: 'first3Lost',
+      label: 'Post Pistol Loss Into Win (L-W)', key: 'recovery',
+      valA: pct(recoveryA.wins, recoveryA.total),   winsA: recoveryA.wins,  totalA: recoveryA.total,
+      valB: pct(recoveryB.wins, recoveryB.total),   winsB: recoveryB.wins,  totalB: recoveryB.total,
+    },
+    {
+      label: 'Losing to enemy bonus (L-L-L)', key: 'first3Lost',
       valA: pct(rankings[teamAName]?.first3Lost ?? 0, rankings[teamAName]?.first3Total ?? 0),
       winsA: rankings[teamAName]?.first3Lost ?? 0, totalA: rankings[teamAName]?.first3Total ?? 0,
       valB: pct(rankings[teamBName]?.first3Lost ?? 0, rankings[teamBName]?.first3Total ?? 0),

@@ -1,5 +1,6 @@
 // app/page.tsx
 import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios } from '@/lib/data-service';
+import { STATS_RANK_DEFAULT_TOURS } from '@/lib/types';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -28,6 +29,10 @@ export default async function Page({
   const { reg, team, tour, bo, last, section = 'compare-maps', team2, tour2, reg2, dateFrom, dateTo, dateFrom2, dateTo2, excA, excB } = params;
   const regArr = reg ? reg.split(',').filter(Boolean) : undefined;
   const reg2Arr = reg2 ? reg2.split(',').filter(Boolean) : undefined;
+  // En Stats Rank, si no hay torneo elegido, usar la selección por defecto
+  const effectiveTour = (section === 'stats-rank' && tour === undefined)
+    ? STATS_RANK_DEFAULT_TOURS.join(',')
+    : tour;
   const excludeTeamsA = excA ? excA.split(',') : [];
   const excludeTeamsB = excB ? excB.split(',') : [];
 
@@ -58,7 +63,7 @@ export default async function Page({
     : [];
 
   const rankings = (section === 'compare-stats' || section === 'graphs' || section === 'stats-rank')
-    ? await getTournamentRankings({ tour, reg: regArr, bo, last, dateFrom, dateTo })
+    ? await getTournamentRankings({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
     : {};
 
   // Overall data (only for overall sections)
