@@ -40,6 +40,12 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
   const currentSection = searchParams.get('section') || 'compare-maps';
 
   function navigate(section: string) {
+    // Stats Rank arranca siempre con su configuración por defecto (sin filtros heredados)
+    if (section === 'stats-rank') {
+      router.push('?section=stats-rank');
+      return;
+    }
+
     const params = new URLSearchParams(searchParams.toString());
     params.set('section', section);
 
