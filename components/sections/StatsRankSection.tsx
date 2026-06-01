@@ -7,7 +7,15 @@ import { TeamRankStats, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 interface Props {
   rankings: Record<string, TeamRankStats>;
   teamLogos?: Record<string, string>;
+  teamRegions?: Record<string, string>;
 }
+
+const REGION_ROWS: { id: string; label: string }[] = [
+  { id: 'reg_0', label: 'Americas' },
+  { id: 'reg_1', label: 'EMEA' },
+  { id: 'reg_2', label: 'Pacific' },
+  { id: 'reg_3', label: 'China' },
+];
 
 function pct(wins: number, total: number): number | null {
   return total > 0 ? Math.round((wins / total) * 100) : null;
@@ -55,7 +63,7 @@ function getCellColor(value: number | null, allValues: (number | null)[], lowerI
   return 'text-gray-300';
 }
 
-export function StatsRankSection({ rankings, teamLogos = {} }: Props) {
+export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }: Props) {
   const router = useRouter();
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -132,32 +140,12 @@ export function StatsRankSection({ rankings, teamLogos = {} }: Props) {
   return (
     <div className="flex flex-col gap-4">
 
-    {/* Controls */}
-    <div className="flex justify-start gap-2 px-1">
-      <button
-        onClick={() => setShowDetail(d => !d)}
-        className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
-          showDetail
-            ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
-            : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
-        }`}
-      >
-        Detail info
-      </button>
-      <button
-        onClick={resetFilters}
-        className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-red-400 hover:border-red-500 hover:text-red-300"
-      >
-        Reset filters
-      </button>
-    </div>
-
     {/* Teams subtitle */}
     <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Teams</span>
 
-    {/* Team filter chips */}
-    <div className="flex flex-wrap gap-2 px-1">
-      {allTeams.map(team => {
+    {/* Team filter chips — one row per region */}
+    {(() => {
+      const renderChip = (team: string) => {
         const active = !hiddenTeams.has(team);
         const logo = teamLogos[team];
         return (
@@ -180,16 +168,70 @@ export function StatsRankSection({ rankings, teamLogos = {} }: Props) {
             <span className={active ? '' : 'line-through'}>{team}</span>
           </button>
         );
-      })}
+      };
+
+      const knownRegions = new Set(REGION_ROWS.map(r => r.id));
+      const rows = REGION_ROWS.map(r => ({
+        label: r.label,
+        teams: allTeams.filter(t => teamRegions[t] === r.id),
+      }));
+      const otherTeams = allTeams.filter(t => !knownRegions.has(teamRegions[t]));
+      if (otherTeams.length > 0) rows.push({ label: 'Other', teams: otherTeams });
+
+      return (
+        <div className="flex flex-col gap-2 px-1">
+          {rows.filter(row => row.teams.length > 0).map(row => (
+            <div key={row.label} className="flex items-center gap-3">
+              <span className="w-16 shrink-0 text-right text-[10px] font-bold uppercase tracking-widest text-gray-600">
+                {row.label}
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {row.teams.map(renderChip)}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    })()}
+
+    {/* Controls */}
+    <div className="flex justify-start gap-2 px-1">
+      <button
+        onClick={() => setShowDetail(d => !d)}
+        className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+          showDetail
+            ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+            : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+        }`}
+      >
+        Detail info
+      </button>
+      <button
+        onClick={resetFilters}
+        className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-red-400 hover:border-red-500 hover:text-red-300"
+      >
+        Reset filters
+      </button>
     </div>
 
     <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-x-auto">
-      <table className="border-separate" style={{ borderSpacing: '1px 2px' }}>
+      <table className="border-separate w-full" style={{ borderSpacing: '1px 2px' }}>
         <thead className="bg-[#0f1115]">
           {/* Group header row */}
           <tr>
-            <th className="sticky left-0 z-10 bg-[#0f1115] border-b border-gray-800 w-8" rowSpan={2} />
-            <th className="sticky left-8 z-10 bg-[#0f1115] border-b border-r border-gray-800" rowSpan={2} />
+            <th
+              className="sticky left-0 z-10 bg-[#0f1115] border-b border-gray-800 w-8 text-center align-bottom pb-2 text-[10px] font-bold uppercase tracking-widest text-gray-500"
+              rowSpan={2}
+            >
+              #
+            </th>
+            <th
+              className="sticky left-8 z-10 bg-[#0f1115] border-b border-r border-gray-800 px-5 text-left align-bottom pb-2 text-[10px] font-bold uppercase tracking-widest text-gray-500 whitespace-nowrap"
+              style={{ width: '1%' }}
+              rowSpan={2}
+            >
+              Team
+            </th>
             <th
               colSpan={firstGroupCount}
               className="px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-widest text-gray-600 border-b border-gray-700"
@@ -212,11 +254,11 @@ export function StatsRankSection({ rankings, teamLogos = {} }: Props) {
                   key={m.label}
                   onClick={() => handleColClick(mi)}
                   className={`border-b border-gray-800 cursor-pointer select-none transition-colors hover:bg-[#252a33] ${isFirstOfGroup ? 'border-l-2 border-l-gray-600' : ''} ${isActive ? 'bg-[#1e2430]' : ''}`}
-                  style={{ width: 48, minWidth: 48 }}
+                  style={{ minWidth: 48 }}
                 >
                   <div
                     className="flex flex-col items-center justify-end pb-2 pt-1 gap-1"
-                    style={{ height: 120 }}
+                    style={{ height: 64 }}
                   >
                     <span
                       className={`text-[10px] font-bold uppercase tracking-wide text-center leading-tight ${isActive ? 'text-blue-400' : 'text-gray-400'}`}
@@ -248,8 +290,13 @@ export function StatsRankSection({ rankings, teamLogos = {} }: Props) {
               <td className="sticky left-0 z-10 bg-[#1a1d23] w-8 text-center py-3 text-[11px] font-bold text-gray-600">
                 {rank + 1}
               </td>
-              <td className="sticky left-8 z-10 bg-[#1a1d23] px-5 py-3 text-[11px] font-bold text-gray-300 border-r border-gray-800 whitespace-nowrap">
-                {team}
+              <td className="sticky left-8 z-10 bg-[#1a1d23] px-5 py-3 text-[11px] font-bold text-gray-300 border-r border-gray-800 whitespace-nowrap" style={{ width: '1%' }}>
+                <div className="flex items-center gap-2">
+                  {teamLogos[team] && (
+                    <img src={teamLogos[team]} alt={team} className="w-5 h-5 object-contain shrink-0" />
+                  )}
+                  {team}
+                </div>
               </td>
               {metricDefs.map((m, mi) => {
                 const val = m.getValue(rankings[team]);
@@ -261,7 +308,7 @@ export function StatsRankSection({ rankings, teamLogos = {} }: Props) {
                   <td
                     key={m.label}
                     className={`py-3 text-center ${isActive ? 'bg-[#1e2430]' : 'bg-[#1a1d23]'} ${isFirstOfGroup ? 'border-l-2 border-l-gray-700' : ''}`}
-                    style={{ width: 48 }}
+                    style={{ minWidth: 48 }}
                   >
                     <span className={`text-sm ${color}`}>
                       {val !== null

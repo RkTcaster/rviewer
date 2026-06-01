@@ -1275,6 +1275,23 @@ export async function getAgentImages(): Promise<Record<string, string>> {
   );
 }
 
+export async function getTeamRegions(): Promise<Record<string, string>> {
+  // Map each team to its home region (reg_0..reg_3), ignoring reg_4 (international events).
+  // If a team appears in multiple regions, the most frequent one wins.
+  const { data } = await supabase.from('tournament_played').select('teamA, reg_id');
+  if (!data) return {};
+  const counts: Record<string, Record<string, number>> = {};
+  for (const r of data as { teamA: string; reg_id: string }[]) {
+    if (!r.teamA || r.reg_id === 'reg_4') continue;
+    (counts[r.teamA] ??= {})[r.reg_id] = (counts[r.teamA]?.[r.reg_id] ?? 0) + 1;
+  }
+  const result: Record<string, string> = {};
+  for (const [team, regs] of Object.entries(counts)) {
+    result[team] = Object.entries(regs).sort((a, b) => b[1] - a[1])[0][0];
+  }
+  return result;
+}
+
 export async function getTeamLogos(): Promise<Record<string, string>> {
   const { data } = await supabase.from('teams').select('team_id, team_path');
   if (!data) return {};

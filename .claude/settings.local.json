@@ -11,7 +11,9 @@
       "Bash(grep -A1 \"MapPicksSection.tsx$\")",
       "PowerShell(git ls-files | Measure-Object -Line; \"---\"; git ls-files | Select-Object -First 60)",
       "Bash(node *)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(sorted\\(set\\(x['reg_id'] for x in d\\)\\)\\)\")",
+      "Bash(python -c ' *)"
     ]
   }
 }
