@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos } from '@/lib/data-service';
 import { STATS_RANK_DEFAULT_TOURS } from '@/lib/types';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
@@ -90,6 +90,8 @@ export default async function Page({
   const agentImages = (section === 'agent-picks' || section === 'maps' || section === 'compare-maps' || isMetaShift)
     ? await getAgentImages()
     : {};
+
+  const teamLogos = isStatsRank ? await getTeamLogos() : {};
 
   const mapFullStats = (section === 'agent-picks')
     ? await getOverallMapFullStats({ reg: regArr, tour, bo })
@@ -189,7 +191,7 @@ export default async function Page({
       case 'playoff-pct':
         return <PlayoffPctSection scenarios={simulationScenarios} />;
       case 'stats-rank':
-        return <StatsRankSection rankings={rankings} />;
+        return <StatsRankSection rankings={rankings} teamLogos={teamLogos} />;
       case 'charts':
         return <ChartsSection stats={stats} />;
       case 'draft':

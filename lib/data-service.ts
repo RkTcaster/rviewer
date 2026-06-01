@@ -1275,6 +1275,16 @@ export async function getAgentImages(): Promise<Record<string, string>> {
   );
 }
 
+export async function getTeamLogos(): Promise<Record<string, string>> {
+  const { data } = await supabase.from('teams').select('team_id, team_path');
+  if (!data) return {};
+  return Object.fromEntries(
+    data
+      .filter((r: { team_id: string; team_path: string | null }) => r.team_path)
+      .map((r: { team_id: string; team_path: string }) => [r.team_id, `/${r.team_path}`])
+  );
+}
+
 export async function getLastUpdateDate(): Promise<string | null> {
   const { data } = await supabase.from('draft').select('date').order('date', { ascending: false }).limit(1);
   return data?.[0]?.date ?? null;

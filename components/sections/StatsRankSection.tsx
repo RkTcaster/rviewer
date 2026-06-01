@@ -6,6 +6,7 @@ import { TeamRankStats, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 
 interface Props {
   rankings: Record<string, TeamRankStats>;
+  teamLogos?: Record<string, string>;
 }
 
 function pct(wins: number, total: number): number | null {
@@ -54,7 +55,7 @@ function getCellColor(value: number | null, allValues: (number | null)[], lowerI
   return 'text-gray-300';
 }
 
-export function StatsRankSection({ rankings }: Props) {
+export function StatsRankSection({ rankings, teamLogos = {} }: Props) {
   const router = useRouter();
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -158,17 +159,25 @@ export function StatsRankSection({ rankings }: Props) {
     <div className="flex flex-wrap gap-2 px-1">
       {allTeams.map(team => {
         const active = !hiddenTeams.has(team);
+        const logo = teamLogos[team];
         return (
           <button
             key={team}
             onClick={() => toggleTeam(team)}
-            className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+            className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
               active
                 ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
-                : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400 line-through'
+                : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
             }`}
           >
-            {team}
+            {logo && (
+              <img
+                src={logo}
+                alt={team}
+                className={`w-4 h-4 object-contain shrink-0 transition-opacity ${active ? '' : 'opacity-40 grayscale'}`}
+              />
+            )}
+            <span className={active ? '' : 'line-through'}>{team}</span>
           </button>
         );
       })}
