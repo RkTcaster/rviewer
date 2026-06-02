@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy } from 'lucide-react';
+import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap } from 'lucide-react';
 
 const NAV_SECTIONS = [
   
@@ -20,14 +21,14 @@ const NAV_SECTIONS = [
     items: [
       { id: 'maps',          label: 'Maps',          icon: LayoutGrid },
       { id: 'compare-maps',  label: 'Compare Maps',  icon: GitCompareArrows },
-      { id: 'compare-stats',    label: 'Compare Stats',    icon: Scale },
+      { id: 'compare-stats',    label: 'Compare Stats',    icon: AlignCenterVertical },
       { id: 'compare-economy', label: 'Compare Economy', icon: Scale },
     ],
   },
   {
     title: 'Testing',
     items: [
-      { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Trophy },
+      { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Zap },
       { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
       { id: 'economy',       label: 'Economy',       icon: DollarSign },
       { id: 'player-stats',  label: 'Player Stats',  icon: UserRound },
@@ -40,6 +41,7 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentSection = searchParams.get('section') || 'stats-rank';
+  const [collapsed, setCollapsed] = useState(false);
 
   function navigate(section: string) {
     // Stats Rank arranca siempre con su configuración por defecto (sin filtros heredados)
@@ -69,22 +71,40 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
   }
 
   return (
-    <aside className="w-[220px] min-h-screen bg-[#0f1115] border-r border-gray-800 flex flex-col shrink-0">
-      <div className="p-6 pb-4">
-        <h2 className="text-lg font-black tracking-widest uppercase text-gray-100">VCT Data</h2>
-        <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Analytics</p>
-        {lastUpdateDate && (() => {
-          const [y, m, d] = lastUpdateDate.split('T')[0].split('-');
-          return <p className="text-[9px] text-gray-600 mt-1">Last update: {d}/{m}/{y.slice(2)}</p>;
-        })()}
+    <aside className={`${collapsed ? 'w-[60px]' : 'w-[220px]'} min-h-screen bg-[#0f1115] border-r border-gray-800 flex flex-col shrink-0 transition-all duration-200`}>
+      <div className={collapsed ? 'p-3 pt-6 pb-4' : 'p-6 pb-4'}>
+        <div className="flex items-center justify-between">
+          {!collapsed && (
+            <h2 className="text-lg font-black tracking-widest uppercase text-gray-100">VCT Data</h2>
+          )}
+          <button
+            onClick={() => setCollapsed(c => !c)}
+            aria-label={collapsed ? 'Expandir' : 'Colapsar'}
+            title={collapsed ? 'Expandir' : 'Colapsar'}
+            className={`${collapsed ? 'mx-auto' : ''} p-1 rounded text-gray-400 hover:text-gray-200 hover:bg-[#1a1d23] transition-all`}
+          >
+            {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
+        </div>
+        {!collapsed && (
+          <>
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Analytics</p>
+            {lastUpdateDate && (() => {
+              const [y, m, d] = lastUpdateDate.split('T')[0].split('-');
+              return <p className="text-[9px] text-gray-600 mt-1">Last update: {d}/{m}/{y.slice(2)}</p>;
+            })()}
+          </>
+        )}
       </div>
 
       <nav className="flex flex-col gap-4 px-3 mt-2">
         {NAV_SECTIONS.map(({ title, items }) => (
           <div key={title}>
-            <p className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-gray-600">
-              {title}
-            </p>
+            {!collapsed && (
+              <p className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-gray-600">
+                {title}
+              </p>
+            )}
             <div className="flex flex-col gap-0.5">
               {items.map(({ id, label, icon: Icon }) => {
                 const active = currentSection === id;
@@ -92,14 +112,18 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
                   <button
                     key={id}
                     onClick={() => navigate(id)}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all text-left
+                    title={label}
+                    className={`flex items-center rounded-lg text-sm font-semibold transition-all
+                      ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5 text-left'}
                       ${active
-                        ? 'bg-[#1a1d23] text-white border-l-2 border-blue-500 pl-[10px] shadow-[inset_0_0_12px_rgba(59,130,246,0.08)]'
+                        ? collapsed
+                          ? 'bg-[#1a1d23] text-white shadow-[inset_0_0_12px_rgba(59,130,246,0.08)]'
+                          : 'bg-[#1a1d23] text-white border-l-2 border-blue-500 pl-[10px] shadow-[inset_0_0_12px_rgba(59,130,246,0.08)]'
                         : 'text-gray-400 hover:text-gray-200 hover:bg-[#1a1d23]/60'
                       }`}
                   >
                     <Icon size={16} />
-                    {label}
+                    {!collapsed && label}
                   </button>
                 );
               })}
@@ -108,6 +132,7 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
         ))}
       </nav>
 
+      {!collapsed && (
       <div className="p-4 border-t border-gray-800 mt-4">
         <p className="px-1 mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-600">Contact</p>
         <a
@@ -133,6 +158,7 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
           rktcaster
         </a>
       </div>
+      )}
     </aside>
   );
 }
