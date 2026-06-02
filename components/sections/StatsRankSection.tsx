@@ -41,15 +41,15 @@ const METRICS: RowDef[] = [
   { label: 'Def Side Winrate',       getValue: s => pct(s.defWins, s.defTotal),                  getWL: s => ({ wins: s.defWins, total: s.defTotal }) },
   { label: 'Plant Rate DEF',         getValue: s => pct(s.retakePl, s.defTotal), lowerIsBetter: true, getWL: s => ({ wins: s.retakePl, total: s.defTotal }) },
   { label: 'Retake Eff',             getValue: s => pct(s.retakeDe, s.retakePl),                 getWL: s => ({ wins: s.retakeDe, total: s.retakePl }) },
+  { label: 'Timeout Losses',         getValue: s => s.timeoutLosses, lowerIsBetter: true, countOnly: true },
   { separator: true, label: 'First 3 rounds performance' },
   { label: 'Pistol Winrate',         getValue: s => pct(s.pistolWins, s.pistolTotal),            getWL: s => ({ wins: s.pistolWins, total: s.pistolTotal }) },
   { label: 'Post Pistol Into Win',   getValue: s => pct(s.antiEcoWins, s.antiEcoTotal),          getWL: s => ({ wins: s.antiEcoWins, total: s.antiEcoTotal }) },
-  { label: 'Bonus Conversion (PAB)', getValue: s => pct(s.pabWins, s.pabTotal),                  getWL: s => ({ wins: s.pabWins, total: s.pabTotal }) },
-  { label: 'PAB Atk',               getValue: s => pct(s.pabAtkWins, s.pabAtkTotal),            getWL: s => ({ wins: s.pabAtkWins, total: s.pabAtkTotal }) },
-  { label: 'PAB Def',               getValue: s => pct(s.pabDefWins, s.pabDefTotal),            getWL: s => ({ wins: s.pabDefWins, total: s.pabDefTotal }) },
+  { label: 'Bonus Conversion (W-W-W)', getValue: s => pct(s.pabWins, s.pabTotal),                  getWL: s => ({ wins: s.pabWins, total: s.pabTotal }) },
+  { label: 'Bonus Conversion Atk',               getValue: s => pct(s.pabAtkWins, s.pabAtkTotal),            getWL: s => ({ wins: s.pabAtkWins, total: s.pabAtkTotal }) },
+  { label: 'Bonus Conversion Def',               getValue: s => pct(s.pabDefWins, s.pabDefTotal),            getWL: s => ({ wins: s.pabDefWins, total: s.pabDefTotal }) },
   { label: 'Post Pistol Loss Into Win (L-W)', getValue: s => pct(s.recoveryWins, s.recoveryTotal), getWL: s => ({ wins: s.recoveryWins, total: s.recoveryTotal }) },
   { label: 'Losing to enemy bonus (L-L-L)',  getValue: s => pct(s.first3Lost, s.first3Total), lowerIsBetter: true, getWL: s => ({ wins: s.first3Lost, total: s.first3Total }) },
-  { label: 'Timeout Losses',         getValue: s => s.timeoutLosses, lowerIsBetter: true, countOnly: true },
 ];
 
 function getCellColor(value: number | null, allValues: (number | null)[], lowerIsBetter: boolean): string {

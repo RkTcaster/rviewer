@@ -26,7 +26,7 @@ export default async function Page({
   searchParams: Promise<{ reg?: string; team?: string; tour?: string; bo?: string; last?: string; section?: string; team2?: string; tour2?: string; reg2?: string; dateFrom?: string; dateTo?: string; dateFrom2?: string; dateTo2?: string; excA?: string; excB?: string }>;
 }) {
   const params = await searchParams;
-  const { reg, team, tour, bo, last, section = 'compare-maps', team2, tour2, reg2, dateFrom, dateTo, dateFrom2, dateTo2, excA, excB } = params;
+  const { reg, team, tour, bo, last, section = 'stats-rank', team2, tour2, reg2, dateFrom, dateTo, dateFrom2, dateTo2, excA, excB } = params;
   const regArr = reg ? reg.split(',').filter(Boolean) : undefined;
   const reg2Arr = reg2 ? reg2.split(',').filter(Boolean) : undefined;
   // En Stats Rank, si no hay torneo elegido, usar la selección por defecto

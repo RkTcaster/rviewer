@@ -4,13 +4,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy } from 'lucide-react';
 
 const NAV_SECTIONS = [
+  
   {
     title: 'Overall',
     items: [
+      { id: 'stats-rank',    label: 'Stats Rank',    icon: BarChart2 },
       { id: 'map-picks',   label: 'Map Info',    icon: Map },
       { id: 'agent-picks',   label: 'Agent Picks',   icon: Users },
       { id: 'meta-shift',    label: 'Meta Shift',    icon: TrendingUp },
-      { id: 'economy',       label: 'Economy',       icon: DollarSign },
+      
     ],
   },
   {
@@ -20,16 +22,16 @@ const NAV_SECTIONS = [
       { id: 'compare-maps',  label: 'Compare Maps',  icon: GitCompareArrows },
       { id: 'compare-stats',    label: 'Compare Stats',    icon: Scale },
       { id: 'compare-economy', label: 'Compare Economy', icon: Scale },
-      { id: 'stats-rank',    label: 'Stats Rank',    icon: BarChart2 },
-      { id: 'player-stats',  label: 'Player Stats',  icon: UserRound },
     ],
   },
   {
-    title: 'Tournament Info',
+    title: 'Testing',
     items: [
-      { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
       { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Trophy },
-      { id: 'playoff-pct',        label: 'Playoff %',          icon: Trophy },
+      { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
+      { id: 'economy',       label: 'Economy',       icon: DollarSign },
+      { id: 'player-stats',  label: 'Player Stats',  icon: UserRound },
+      // { id: 'playoff-pct',        label: 'Playoff %',          icon: Trophy }, 
     ],
   },
 ];
@@ -37,7 +39,7 @@ const NAV_SECTIONS = [
 export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const currentSection = searchParams.get('section') || 'compare-maps';
+  const currentSection = searchParams.get('section') || 'stats-rank';
 
   function navigate(section: string) {
     // Stats Rank arranca siempre con su configuración por defecto (sin filtros heredados)
