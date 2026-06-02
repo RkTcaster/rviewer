@@ -13,8 +13,8 @@ interface Props {
 const REGION_ROWS: { id: string; label: string }[] = [
   { id: 'reg_0', label: 'Americas' },
   { id: 'reg_1', label: 'EMEA' },
-  { id: 'reg_2', label: 'Pacific' },
-  { id: 'reg_3', label: 'China' },
+  { id: 'reg_2', label: 'China' },
+  { id: 'reg_3', label: 'Pacific' },
 ];
 
 function pct(wins: number, total: number): number | null {
