@@ -98,6 +98,13 @@ export type TeamRankStats = {
   first3Total: number;
 };
 
+// Maps Masters: por equipo y por mapa, victorias/jugados
+export type MapWL = { wins: number; played: number; bans: number };
+export type MapsMastersData = {
+  stats: Record<string, Record<string, MapWL>>;
+  maps: string[];
+};
+
 export type CompositionStat = {
   map: string;
   composition: string;

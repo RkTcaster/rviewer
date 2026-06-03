@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats } from '@/lib/data-service';
 import { STATS_RANK_DEFAULT_TOURS } from '@/lib/types';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
@@ -19,6 +19,7 @@ import { RelevantInfoSection } from '@/components/sections/RelevantInfoSection';
 import { SkirmishSection } from '@/components/sections/SkirmishSection';
 import { PlayoffPctSection } from '@/components/sections/PlayoffPctSection';
 import { StatsRankSection } from '@/components/sections/StatsRankSection';
+import { MapsMastersSection } from '@/components/sections/MapsMastersSection';
 
 export default async function Page({
   searchParams,
@@ -29,8 +30,8 @@ export default async function Page({
   const { reg, team, tour, bo, last, section = 'stats-rank', team2, tour2, reg2, dateFrom, dateTo, dateFrom2, dateTo2, excA, excB } = params;
   const regArr = reg ? reg.split(',').filter(Boolean) : undefined;
   const reg2Arr = reg2 ? reg2.split(',').filter(Boolean) : undefined;
-  // En Stats Rank, si no hay torneo elegido, usar la selección por defecto
-  const effectiveTour = (section === 'stats-rank' && tour === undefined)
+  // En Stats Rank y Maps Masters, si no hay torneo elegido, usar la selección por defecto
+  const effectiveTour = ((section === 'stats-rank' || section === 'maps-masters') && tour === undefined)
     ? STATS_RANK_DEFAULT_TOURS.join(',')
     : tour;
   const excludeTeamsA = excA ? excA.split(',') : [];
@@ -40,6 +41,7 @@ export default async function Page({
   const isCompare = section === 'compare-maps' || section === 'compare-stats' || section === 'compare-economy';
   const isMetaShift = section === 'meta-shift';
   const isStatsRank = section === 'stats-rank';
+  const isMapsMasters = section === 'maps-masters';
   const isEconomy = section === 'economy';
   const isCompareEconomy = section === 'compare-economy';
   const isRelevantInfo = section === 'relevant-info';
@@ -47,7 +49,7 @@ export default async function Page({
   const isPlayoffPct = section === 'playoff-pct';
 
   // Team data (only for team sections)
-  const result = (!isOverall && !isMetaShift && !isEconomy && !isRelevantInfo && !isSkirmish && !isPlayoffPct && !isStatsRank && team)
+  const result = (!isOverall && !isMetaShift && !isEconomy && !isRelevantInfo && !isSkirmish && !isPlayoffPct && !isStatsRank && !isMapsMasters && team)
     ? await getMapStats({ team, tour, bo, reg: regArr, last, dateFrom, dateTo })
     : null;
 
@@ -83,7 +85,7 @@ export default async function Page({
     ? await getOverallCompositions({ reg: regArr, tour, bo })
     : [];
 
-  const mapImages = (section === 'agent-picks')
+  const mapImages = (section === 'agent-picks' || section === 'maps-masters')
     ? await getMapImages()
     : {};
 
@@ -91,9 +93,13 @@ export default async function Page({
     ? await getAgentImages()
     : {};
 
-  const [teamLogos, teamRegions] = isStatsRank
+  const [teamLogos, teamRegions] = (isStatsRank || isMapsMasters)
     ? await Promise.all([getTeamLogos(), getTeamRegions()])
     : [{}, {}];
+
+  const mapsMasters = isMapsMasters
+    ? await getMapsMastersStats({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
+    : { stats: {}, maps: [] };
 
   const mapFullStats = (section === 'agent-picks')
     ? await getOverallMapFullStats({ reg: regArr, tour, bo })
@@ -154,7 +160,7 @@ export default async function Page({
   const simulationScenarios = isPlayoffPct ? await getSimulationScenarios() : [];
 
   // Tours source differs by context
-  const tours = (isOverall || isMetaShift || isEconomy || isRelevantInfo || isStatsRank) ? await getAllTours(regArr) : await getTours(team, regArr);
+  const tours = (isOverall || isMetaShift || isEconomy || isRelevantInfo || isStatsRank || isMapsMasters) ? await getAllTours(regArr) : await getTours(team, regArr);
   const tours2 = isCompare
     ? await getTours(team2, regArr)
     : isMetaShift
@@ -194,6 +200,8 @@ export default async function Page({
         return <PlayoffPctSection scenarios={simulationScenarios} />;
       case 'stats-rank':
         return <StatsRankSection rankings={rankings} teamLogos={teamLogos} teamRegions={teamRegions} />;
+      case 'maps-masters':
+        return <MapsMastersSection stats={mapsMasters.stats} maps={mapsMasters.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} />;
       case 'charts':
         return <ChartsSection stats={stats} />;
       case 'draft':
@@ -253,6 +261,7 @@ export default async function Page({
           'skirmish-americas': 'Skirmish VCT Americas Stage 1',
           'playoff-pct': 'Playoff % (Number of possible results, not probability)',
           'stats-rank': 'Stats Rank',
+          'maps-masters': 'Maps Masters',
           }[section] ?? section}</h1>
           {regArr && regArr.length > 0 && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">
@@ -292,14 +301,14 @@ export default async function Page({
                 tours={tours}
                 tours2={tours2}
                 teams2={teams2}
-                mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : isStatsRank ? 'stats-rank' : 'team'}
+                mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : (isStatsRank || isMapsMasters) ? 'stats-rank' : 'team'}
               />
             </div>
           )}
         </header>
 
         <main className="p-8 pt-6">
-          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isStatsRank) ? (
+          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isStatsRank || isMapsMasters) ? (
             renderSection()
           ) : !team ? (
             <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">

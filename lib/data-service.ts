@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, LongestMapEntry, MapCompositionStat, MapStat, OverallMapFullStat, OverallMapStat, PlayerMatchPoint, PlayerStat, PlayerTimelineData, Region, SimulationRow, SkirmishStats, SkirmishTeamStat, SkirmishPlayerStat, TeamEconomyCompare, TeamRankStats, TopPlayerPerformance, Tournament, TournamentPlayerAvg } from './types';
+import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, LongestMapEntry, MapCompositionStat, MapsMastersData, MapWL, MapStat, OverallMapFullStat, OverallMapStat, PlayerMatchPoint, PlayerStat, PlayerTimelineData, Region, SimulationRow, SkirmishStats, SkirmishTeamStat, SkirmishPlayerStat, TeamEconomyCompare, TeamRankStats, TopPlayerPerformance, Tournament, TournamentPlayerAvg } from './types';
 
 // --- HELPERS ---
 
@@ -279,6 +279,81 @@ export async function getTournamentRankings(
   });
 
   return teamStats;
+}
+
+// Maps Masters: usa la misma lógica de filtro que Stats Rank (draft → series → round_info)
+// y devuelve, por equipo y por mapa, victorias/jugados.
+export async function getMapsMastersStats(
+  filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
+): Promise<MapsMastersData> {
+  let idQuery = supabase.from('draft').select('series_id, team, rival, bo, team_1_select_1, team_1_select_3, team_2_select_1, team_2_select_3');
+  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
+  if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
+  if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
+  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
+  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
+  if (filters.last && filters.last !== 'all') idQuery = (idQuery as any).order('date', { ascending: false }).limit(parseInt(filters.last));
+
+  const { data: idList } = await idQuery;
+  if (!idList || idList.length === 0) return { stats: {}, maps: [] };
+
+  const seriesIds = [...new Set(idList.map(x => x.series_id))];
+  const rounds = await fetchAllPages<any>((from, to) =>
+    supabase.from('round_info').select('map_id, map, teamA, teamB, rndA, round').in('series_id', seriesIds).range(from, to)
+  );
+  if (!rounds || rounds.length === 0) return { stats: {}, maps: [] };
+
+  // Última ronda por map_id → define al ganador del mapa
+  const mapLastRound: Record<string, any> = {};
+  rounds.forEach((r) => {
+    const id = r.map_id;
+    if (!id) return;
+    if (!mapLastRound[id] || Number(r.round) > Number(mapLastRound[id].round)) mapLastRound[id] = r;
+  });
+
+  const stats: Record<string, Record<string, MapWL>> = {};
+  const mapTotals: Record<string, number> = {};
+  const ensure = (team: string, map: string) => {
+    if (!stats[team]) stats[team] = {};
+    if (!stats[team][map]) stats[team][map] = { wins: 0, played: 0, bans: 0 };
+  };
+
+  Object.values(mapLastRound).forEach((r: any) => {
+    const tA = r.teamA?.trim();
+    const tB = r.teamB?.trim();
+    const map = r.map?.trim();
+    if (!tA || !tB || !map) return;
+    ensure(tA, map); ensure(tB, map);
+    stats[tA][map].played++;
+    stats[tB][map].played++;
+    if (Number(r.rndA) === 1) stats[tA][map].wins++;
+    else stats[tB][map].wins++;
+    mapTotals[map] = (mapTotals[map] || 0) + 1;
+  });
+
+  // Bans por equipo y mapa (desde el draft).
+  // select_1 siempre es un ban; en BO3 select_3 también es ban.
+  idList.forEach((d: any) => {
+    const t1 = d.team?.trim();
+    const t2 = d.rival?.trim();
+    const isBo3 = Number(d.bo) === 3;
+    const addBan = (team: string | undefined, map: string | null | undefined) => {
+      const m = map?.trim();
+      if (!team || !m) return;
+      ensure(team, m);
+      stats[team][m].bans++;
+    };
+    addBan(t1, d.team_1_select_1);
+    addBan(t2, d.team_2_select_1);
+    if (isBo3) {
+      addBan(t1, d.team_1_select_3);
+      addBan(t2, d.team_2_select_3);
+    }
+  });
+
+  // Mapas ordenados por cantidad de partidas jugadas (desc)
+  const maps = Object.keys(mapTotals).sort((a, b) => mapTotals[b] - mapTotals[a] || a.localeCompare(b));
+  return { stats, maps };
 }
 
 export async function getAllTours(regId?: string[]): Promise<Tournament[]> {

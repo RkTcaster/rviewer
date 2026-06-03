@@ -10,6 +10,7 @@ const NAV_SECTIONS = [
     title: 'Overall',
     items: [
       { id: 'stats-rank',    label: 'Stats Rank',    icon: BarChart2 },
+      { id: 'maps-masters',  label: 'Maps Masters',  icon: LayoutGrid },
       { id: 'map-picks',   label: 'Map Info',    icon: Map },
       { id: 'agent-picks',   label: 'Agent Picks',   icon: Users },
       { id: 'meta-shift',    label: 'Meta Shift',    icon: TrendingUp },
@@ -44,9 +45,9 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
   const [collapsed, setCollapsed] = useState(false);
 
   function navigate(section: string) {
-    // Stats Rank arranca siempre con su configuración por defecto (sin filtros heredados)
-    if (section === 'stats-rank') {
-      router.push('?section=stats-rank');
+    // Stats Rank y Maps Masters arrancan siempre con su configuración por defecto (sin filtros heredados)
+    if (section === 'stats-rank' || section === 'maps-masters') {
+      router.push(`?section=${section}`);
       return;
     }
 
