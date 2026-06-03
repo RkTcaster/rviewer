@@ -356,6 +356,62 @@ export async function getMapsMastersStats(
   return { stats, maps };
 }
 
+// Neon Dependency: misma lógica de filtro que Maps Masters (draft → series_ids),
+// pero por equipo y mapa devuelve cuántas veces el equipo llevó al agente Neon
+// (wins = picks de Neon) sobre cuántas veces jugó ese mapa (played).
+export async function getNeonDependencyStats(
+  filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
+): Promise<MapsMastersData> {
+  let idQuery = supabase.from('draft').select('series_id, bo');
+  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
+  if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
+  if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
+  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
+  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
+  if (filters.last && filters.last !== 'all') idQuery = (idQuery as any).order('date', { ascending: false }).limit(parseInt(filters.last));
+
+  const { data: idList } = await idQuery;
+  if (!idList || idList.length === 0) return { stats: {}, maps: [] };
+
+  const seriesIds = [...new Set(idList.map(x => x.series_id))];
+  const rows = await fetchAllPages<{ team: string; map: string; map_id: string; agent: string }>((from, to) =>
+    supabase.from('player_stats').select('team, map, map_id, agent').in('series_id', seriesIds).range(from, to)
+  );
+  if (!rows || rows.length === 0) return { stats: {}, maps: [] };
+
+  // Por equipo+mapa: set de map_id jugados y set de map_id donde llevó Neon.
+  const playedSets: Record<string, Set<string>> = {};
+  const neonSets: Record<string, Set<string>> = {};
+  const mapTotals: Record<string, Set<string>> = {};
+  for (const r of rows) {
+    const team = r.team?.trim();
+    const map = r.map?.trim();
+    const mapId = r.map_id;
+    if (!team || !map || !mapId) continue;
+    const key = `${team}__${map}`;
+    (playedSets[key] ??= new Set()).add(mapId);
+    (mapTotals[map] ??= new Set()).add(mapId);
+    if (r.agent === 'Neon') (neonSets[key] ??= new Set()).add(mapId);
+  }
+
+  const stats: Record<string, Record<string, MapWL>> = {};
+  for (const key of Object.keys(playedSets)) {
+    const sep = key.indexOf('__');
+    const team = key.slice(0, sep);
+    const map = key.slice(sep + 2);
+    if (!stats[team]) stats[team] = {};
+    stats[team][map] = {
+      wins: neonSets[key]?.size ?? 0,
+      played: playedSets[key].size,
+      bans: 0,
+    };
+  }
+
+  // Mapas ordenados por cantidad de instancias jugadas (desc)
+  const maps = Object.keys(mapTotals).sort((a, b) => mapTotals[b].size - mapTotals[a].size || a.localeCompare(b));
+  return { stats, maps };
+}
+
 export async function getAllTours(regId?: string[]): Promise<Tournament[]> {
   let query = supabase.from('tournament_played').select('tour_id, event, reg_id');
   if (regId && regId.length > 0) query = query.in('reg_id', regId);

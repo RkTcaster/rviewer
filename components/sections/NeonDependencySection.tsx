@@ -19,12 +19,13 @@ const REGION_ROWS: { id: string; label: string }[] = [
   { id: 'reg_3', label: 'Pacific' },
 ];
 
-function wr(wl: MapWL | undefined): number | null {
+// % de Neon = picks de Neon (wins) / veces jugado el mapa (played)
+function neonPct(wl: MapWL | undefined): number | null {
   if (!wl || wl.played === 0) return null;
   return Math.round((wl.wins / wl.played) * 100);
 }
 
-// Fondo en gradiente según win-rate (misma paleta que Playoff %)
+// Fondo en gradiente según % (misma paleta que Playoff % / Maps Masters)
 function heatmapBg(pct: number | null): string {
   if (pct === null) return 'transparent';
   const t = Math.min(1, Math.max(0, pct / 100));
@@ -57,9 +58,9 @@ function getCellRank(value: number | null, allValues: (number | null)[]): 'best'
   return null;
 }
 
-export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {} }: Props) {
+export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {} }: Props) {
   const router = useRouter();
-  const [sortCol, setSortCol] = useState<number | null>(null);
+  const [sortCol, setSortCol] = useState<number | 'overall' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [showDetail, setShowDetail] = useState(false);
 
@@ -99,7 +100,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
     setHiddenMaps(new Set(maps.filter(m => m.toLowerCase() === 'bind')));
     setSortCol(null);
     setSortDir('desc');
-    router.push('?section=maps-masters');
+    router.push('?section=neon-dependency');
   }
 
   if (baseTeams.length === 0 || maps.length === 0) {
@@ -110,25 +111,35 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
     );
   }
 
-  // Valores por columna (mapa visible) para colorear best/worst — siempre sobre el orden base
-  const mapAllValues = visibleMaps.map(m => baseTeams.map(t => wr(stats[t]?.[m])));
+  // Uso global de Neon por equipo: total picks de Neon / total mapas jugados (todos los mapas)
+  function overallUsage(team: string): MapWL {
+    const byMap = stats[team];
+    if (!byMap) return { wins: 0, played: 0, bans: 0 };
+    let wins = 0, played = 0;
+    for (const m in byMap) { wins += byMap[m].wins; played += byMap[m].played; }
+    return { wins, played, bans: 0 };
+  }
 
-  const teams = (sortCol === null || sortCol >= visibleMaps.length)
+  // Valores por columna (mapa visible) para colorear best/worst — siempre sobre el orden base
+  const mapAllValues = visibleMaps.map(m => baseTeams.map(t => neonPct(stats[t]?.[m])));
+  const overallAllValues = baseTeams.map(t => neonPct(overallUsage(t)));
+
+  const teams = (sortCol === null || (typeof sortCol === 'number' && sortCol >= visibleMaps.length))
     ? baseTeams
     : [...baseTeams].sort((a, b) => {
-        const valA = wr(stats[a]?.[visibleMaps[sortCol]]);
-        const valB = wr(stats[b]?.[visibleMaps[sortCol]]);
+        const valA = sortCol === 'overall' ? neonPct(overallUsage(a)) : neonPct(stats[a]?.[visibleMaps[sortCol]]);
+        const valB = sortCol === 'overall' ? neonPct(overallUsage(b)) : neonPct(stats[b]?.[visibleMaps[sortCol]]);
         if (valA === null && valB === null) return 0;
         if (valA === null) return 1;
         if (valB === null) return -1;
         return sortDir === 'asc' ? valA - valB : valB - valA;
       });
 
-  function handleColClick(mi: number) {
-    if (sortCol === mi) {
+  function handleColClick(col: number | 'overall') {
+    if (sortCol === col) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     } else {
-      setSortCol(mi);
+      setSortCol(col);
       setSortDir('desc');
     }
   }
@@ -136,7 +147,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
   return (
     <div className="flex flex-col gap-4">
 
-      {/* Filtros: equipos (2 columnas) a la izquierda + mapas a la derecha */}
+      {/* Filtros: equipos (por región) a la izquierda + mapas a la derecha */}
       {(() => {
         const renderTeamChip = (team: string) => {
           const active = !hiddenTeams.has(team);
@@ -260,6 +271,25 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
               >
                 Team
               </th>
+              {(() => {
+                const isActive = sortCol === 'overall';
+                return (
+                  <th
+                    onClick={() => handleColClick('overall')}
+                    className={`border-b border-r border-gray-800 cursor-pointer select-none transition-colors hover:bg-[#252a33] px-3 align-bottom pb-2 ${isActive ? 'bg-[#1e2430]' : 'bg-[#0f1115]'}`}
+                    style={{ minWidth: 72 }}
+                  >
+                    <div className="flex flex-col items-center justify-end gap-1">
+                      <span className={`text-[11px] font-bold uppercase tracking-wide text-center leading-tight ${isActive ? 'text-blue-400' : 'text-amber-400'}`}>
+                        Overall<br />Usage
+                      </span>
+                      <span className={`text-[9px] shrink-0 ${isActive ? 'text-blue-400' : 'text-gray-600'}`}>
+                        {isActive ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}
+                      </span>
+                    </div>
+                  </th>
+                );
+              })()}
               {visibleMaps.map((m, mi) => {
                 const isActive = sortCol === mi;
                 return (
@@ -296,15 +326,52 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
                     {team}
                   </div>
                 </td>
+                {(() => {
+                  const ov = overallUsage(team);
+                  const val = neonPct(ov);
+                  const color = getCellColor(val, overallAllValues);
+                  const cellRank = getCellRank(val, overallAllValues);
+                  const isActive = sortCol === 'overall';
+                  const ringColor =
+                    cellRank === 'best' ? 'rgba(74,222,128,0.9)' :
+                    cellRank === 'worst' ? '#181938' :
+                    isActive ? 'rgba(59,130,246,0.4)' : null;
+                  return (
+                    <td
+                      className="py-3 px-3 text-center border-r border-gray-800"
+                      style={{
+                        minWidth: 72,
+                        backgroundColor: val !== null ? heatmapBg(val) : (isActive ? '#1e2430' : '#1a1d23'),
+                        boxShadow: ringColor ? `inset 0 0 0 2px ${ringColor}` : undefined,
+                      }}
+                    >
+                      {val !== null ? (
+                        <>
+                          <div className={`text-sm ${color}`}>
+                            {val}%
+                            {showDetail && <span className="text-gray-200/80 font-normal whitespace-nowrap"> {ov.wins}/{ov.played}</span>}
+                          </div>
+                          {showDetail && (
+                            <div className="text-[13px] text-gray-200/80 whitespace-nowrap">
+                              {ov.wins} Neon
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-gray-700">—</span>
+                      )}
+                    </td>
+                  );
+                })()}
                 {visibleMaps.map((m, mi) => {
                   const wl = stats[team]?.[m];
-                  const val = wr(wl);
+                  const val = neonPct(wl);
                   const color = getCellColor(val, mapAllValues[mi]);
-                  const rank = getCellRank(val, mapAllValues[mi]);
+                  const cellRank = getCellRank(val, mapAllValues[mi]);
                   const isActive = sortCol === mi;
                   const ringColor =
-                    rank === 'best' ? 'rgba(74,222,128,0.9)' :
-                    rank === 'worst' ? '#181938' :
+                    cellRank === 'best' ? 'rgba(74,222,128,0.9)' :
+                    cellRank === 'worst' ? '#181938' :
                     isActive ? 'rgba(59,130,246,0.4)' : null;
                   return (
                     <td
@@ -320,18 +387,14 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
                         <>
                           <div className={`text-sm ${color}`}>
                             {val}%
-                            {showDetail && <span className="text-gray-200/80 font-normal whitespace-nowrap"> {wl.wins}W-{wl.played - wl.wins}L</span>}
+                            {showDetail && <span className="text-gray-200/80 font-normal whitespace-nowrap"> {wl.wins}/{wl.played}</span>}
                           </div>
                           {showDetail && (
                             <div className="text-[13px] text-gray-200/80 whitespace-nowrap">
-                              {wl.played} Ply - {wl.bans} Ban
+                              {wl.wins} Neon
                             </div>
                           )}
                         </>
-                      ) : showDetail && wl && wl.bans > 0 ? (
-                        <div className="text-[15px] text-gray-600 font-normal whitespace-nowrap">
-                          {wl.bans} Ban
-                        </div>
                       ) : (
                         <span className="text-gray-700">—</span>
                       )}

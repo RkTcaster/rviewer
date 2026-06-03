@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats } from '@/lib/data-service';
 import { STATS_RANK_DEFAULT_TOURS } from '@/lib/types';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
@@ -20,6 +20,7 @@ import { SkirmishSection } from '@/components/sections/SkirmishSection';
 import { PlayoffPctSection } from '@/components/sections/PlayoffPctSection';
 import { StatsRankSection } from '@/components/sections/StatsRankSection';
 import { MapsMastersSection } from '@/components/sections/MapsMastersSection';
+import { NeonDependencySection } from '@/components/sections/NeonDependencySection';
 
 export default async function Page({
   searchParams,
@@ -31,7 +32,7 @@ export default async function Page({
   const regArr = reg ? reg.split(',').filter(Boolean) : undefined;
   const reg2Arr = reg2 ? reg2.split(',').filter(Boolean) : undefined;
   // En Stats Rank y Maps Masters, si no hay torneo elegido, usar la selección por defecto
-  const effectiveTour = ((section === 'stats-rank' || section === 'maps-masters') && tour === undefined)
+  const effectiveTour = ((section === 'stats-rank' || section === 'maps-masters' || section === 'neon-dependency') && tour === undefined)
     ? STATS_RANK_DEFAULT_TOURS.join(',')
     : tour;
   const excludeTeamsA = excA ? excA.split(',') : [];
@@ -42,6 +43,7 @@ export default async function Page({
   const isMetaShift = section === 'meta-shift';
   const isStatsRank = section === 'stats-rank';
   const isMapsMasters = section === 'maps-masters';
+  const isNeonDependency = section === 'neon-dependency';
   const isEconomy = section === 'economy';
   const isCompareEconomy = section === 'compare-economy';
   const isRelevantInfo = section === 'relevant-info';
@@ -85,7 +87,7 @@ export default async function Page({
     ? await getOverallCompositions({ reg: regArr, tour, bo })
     : [];
 
-  const mapImages = (section === 'agent-picks' || section === 'maps-masters')
+  const mapImages = (section === 'agent-picks' || section === 'maps-masters' || section === 'neon-dependency')
     ? await getMapImages()
     : {};
 
@@ -93,12 +95,16 @@ export default async function Page({
     ? await getAgentImages()
     : {};
 
-  const [teamLogos, teamRegions] = (isStatsRank || isMapsMasters)
+  const [teamLogos, teamRegions] = (isStatsRank || isMapsMasters || isNeonDependency)
     ? await Promise.all([getTeamLogos(), getTeamRegions()])
     : [{}, {}];
 
   const mapsMasters = isMapsMasters
     ? await getMapsMastersStats({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
+    : { stats: {}, maps: [] };
+
+  const neonDep = isNeonDependency
+    ? await getNeonDependencyStats({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
     : { stats: {}, maps: [] };
 
   const mapFullStats = (section === 'agent-picks')
@@ -160,7 +166,7 @@ export default async function Page({
   const simulationScenarios = isPlayoffPct ? await getSimulationScenarios() : [];
 
   // Tours source differs by context
-  const tours = (isOverall || isMetaShift || isEconomy || isRelevantInfo || isStatsRank || isMapsMasters) ? await getAllTours(regArr) : await getTours(team, regArr);
+  const tours = (isOverall || isMetaShift || isEconomy || isRelevantInfo || isStatsRank || isMapsMasters || isNeonDependency) ? await getAllTours(regArr) : await getTours(team, regArr);
   const tours2 = isCompare
     ? await getTours(team2, regArr)
     : isMetaShift
@@ -202,6 +208,8 @@ export default async function Page({
         return <StatsRankSection rankings={rankings} teamLogos={teamLogos} teamRegions={teamRegions} />;
       case 'maps-masters':
         return <MapsMastersSection stats={mapsMasters.stats} maps={mapsMasters.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} />;
+      case 'neon-dependency':
+        return <NeonDependencySection stats={neonDep.stats} maps={neonDep.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} />;
       case 'charts':
         return <ChartsSection stats={stats} />;
       case 'draft':
@@ -262,6 +270,7 @@ export default async function Page({
           'playoff-pct': 'Playoff % (Number of possible results, not probability)',
           'stats-rank': 'Stats Rank',
           'maps-masters': 'Maps Masters',
+          'neon-dependency': 'Neon Dependency',
           }[section] ?? section}</h1>
           {regArr && regArr.length > 0 && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">
@@ -301,14 +310,14 @@ export default async function Page({
                 tours={tours}
                 tours2={tours2}
                 teams2={teams2}
-                mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : (isStatsRank || isMapsMasters) ? 'stats-rank' : 'team'}
+                mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : (isStatsRank || isMapsMasters || isNeonDependency) ? 'stats-rank' : 'team'}
               />
             </div>
           )}
         </header>
 
         <main className="p-8 pt-6">
-          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isStatsRank || isMapsMasters) ? (
+          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isStatsRank || isMapsMasters || isNeonDependency) ? (
             renderSection()
           ) : !team ? (
             <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
