@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Check, Minus, X } from 'lucide-react';
 import { MapWL, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 
 interface Props {
@@ -19,9 +20,20 @@ const REGION_ROWS: { id: string; label: string }[] = [
   { id: 'reg_3', label: 'Pacific' },
 ];
 
+const OVERALL_COL = -1;
+
 function wr(wl: MapWL | undefined): number | null {
   if (!wl || wl.played === 0) return null;
   return Math.round((wl.wins / wl.played) * 100);
+}
+
+// Ícono resumen por mapa según win-rate: verde >60, amarillo 40-60, rojo <40, gris sin datos
+function mapTick(pct: number | null, key: string) {
+  const cls = 'w-3 h-3 shrink-0';
+  if (pct === null) return <Minus key={key} className={`${cls} text-gray-600`} strokeWidth={3} />;
+  if (pct > 60)     return <Check key={key} className={`${cls} text-green-400`} strokeWidth={3} />;
+  if (pct < 40)     return <X     key={key} className={`${cls} text-red-400`} strokeWidth={3} />;
+  return            <Minus key={key} className={`${cls} text-yellow-400`} strokeWidth={3} />;
 }
 
 // Fondo en gradiente según win-rate (misma paleta que Playoff %)
@@ -113,11 +125,22 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
   // Valores por columna (mapa visible) para colorear best/worst — siempre sobre el orden base
   const mapAllValues = visibleMaps.map(m => baseTeams.map(t => wr(stats[t]?.[m])));
 
+  // Win-rate general de un equipo sumando todos los mapas visibles (columnas)
+  function overallWL(team: string): MapWL {
+    let wins = 0, played = 0, bans = 0;
+    for (const m of visibleMaps) {
+      const wl = stats[team]?.[m];
+      if (wl) { wins += wl.wins; played += wl.played; bans += wl.bans; }
+    }
+    return { wins, played, bans };
+  }
+  const overallAllValues = baseTeams.map(t => wr(overallWL(t)));
+
   const teams = (sortCol === null || sortCol >= visibleMaps.length)
     ? baseTeams
     : [...baseTeams].sort((a, b) => {
-        const valA = wr(stats[a]?.[visibleMaps[sortCol]]);
-        const valB = wr(stats[b]?.[visibleMaps[sortCol]]);
+        const valA = sortCol === OVERALL_COL ? wr(overallWL(a)) : wr(stats[a]?.[visibleMaps[sortCol]]);
+        const valB = sortCol === OVERALL_COL ? wr(overallWL(b)) : wr(stats[b]?.[visibleMaps[sortCol]]);
         if (valA === null && valB === null) return 0;
         if (valA === null) return 1;
         if (valB === null) return -1;
@@ -260,6 +283,25 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
               >
                 Team
               </th>
+              {(() => {
+                const isActive = sortCol === OVERALL_COL;
+                return (
+                  <th
+                    onClick={() => handleColClick(OVERALL_COL)}
+                    className={`border-b border-r border-gray-800 cursor-pointer select-none transition-colors hover:bg-[#252a33] px-3 align-bottom pb-2 ${isActive ? 'bg-[#1e2430]' : ''}`}
+                    style={{ minWidth: 64 }}
+                  >
+                    <div className="flex flex-col items-center justify-end gap-1">
+                      <span className={`text-[11px] font-bold uppercase tracking-wide ${isActive ? 'text-blue-400' : 'text-gray-400'}`}>
+                        Overall
+                      </span>
+                      <span className={`text-[9px] shrink-0 ${isActive ? 'text-blue-400' : 'text-gray-600'}`}>
+                        {isActive ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}
+                      </span>
+                    </div>
+                  </th>
+                );
+              })()}
               {visibleMaps.map((m, mi) => {
                 const isActive = sortCol === mi;
                 return (
@@ -296,6 +338,30 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
                     {team}
                   </div>
                 </td>
+                {(() => {
+                  const wl = overallWL(team);
+                  const val = wr(wl);
+                  return (
+                    <td
+                      className="py-3 px-3 text-center border-r border-gray-800"
+                      style={{ minWidth: 64 }}
+                    >
+                      {val !== null ? (
+                        <div className="text-sm font-bold" style={{ color: heatmapBg(val) }}>
+                          {val}%
+                          {showDetail && <span className="text-gray-200/80 font-normal whitespace-nowrap"> {wl.wins}W-{wl.played - wl.wins}L</span>}
+                        </div>
+                      ) : (
+                        <span className="text-gray-700">—</span>
+                      )}
+                      {showDetail && (
+                        <div className="flex flex-wrap justify-center items-center gap-0.5 mt-1">
+                          {visibleMaps.map(m => mapTick(wr(stats[team]?.[m]), m))}
+                        </div>
+                      )}
+                    </td>
+                  );
+                })()}
                 {visibleMaps.map((m, mi) => {
                   const wl = stats[team]?.[m];
                   const val = wr(wl);
