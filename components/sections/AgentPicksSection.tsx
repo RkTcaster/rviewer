@@ -60,6 +60,13 @@ function CustomTooltip({ active, payload }: any) {
 export function AgentPicksSection({ stats, compositions, mapImages, agentImages, mapFullStats }: Props) {
   const [selectedMaps, setSelectedMaps] = useState<Set<string>>(new Set());
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<'pickRate' | 'nmwr'>('pickRate');
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
+
+  const clickSort = (key: 'pickRate' | 'nmwr') => {
+    if (sortBy === key) setSortDir(d => (d === 'desc' ? 'asc' : 'desc'));
+    else { setSortBy(key); setSortDir('desc'); }
+  };
 
   const maps = useMemo(() => [...new Set(stats.map(s => s.map))].sort(), [stats]);
 
@@ -78,6 +85,18 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
     const nmwr = (wins?: number, played?: number) =>
       played && played > 0 ? Math.round((wins ?? 0) / played * 100) : undefined;
 
+    const dir = sortDir === 'desc' ? 1 : -1;
+    const cmp = (a: { pickRate: number; nmwr?: number }, b: { pickRate: number; nmwr?: number }) => {
+      if (sortBy === 'nmwr') {
+        const an = a.nmwr, bn = b.nmwr;
+        if (an === undefined && bn === undefined) return b.pickRate - a.pickRate;
+        if (an === undefined) return 1;   // no-data siempre al final
+        if (bn === undefined) return -1;
+        return an !== bn ? (bn - an) * dir : b.pickRate - a.pickRate;
+      }
+      return (b.pickRate - a.pickRate) * dir;
+    };
+
     if (single) {
       const mapFiltered = stats
         .filter(s => s.map === single)
@@ -89,7 +108,7 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
           mapFiltered.push({ agent, map: single, timesPlayed: 0, pickRate: 0, totalMaps, nonMirrorPlayed: 0, nonMirrorWins: 0, nmwr: undefined });
         }
       }
-      return mapFiltered.sort((a, b) => b.pickRate - a.pickRate);
+      return mapFiltered.sort(cmp);
     }
 
     const scope = stats.filter(s => inScope(s.map));
@@ -121,8 +140,8 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
         nonMirrorWins,
         nmwr: nmwr(nonMirrorWins, nonMirrorPlayed),
       }))
-      .sort((a, b) => b.pickRate - a.pickRate);
-  }, [stats, selectedMaps, agentImages]);
+      .sort(cmp);
+  }, [stats, selectedMaps, agentImages, sortBy, sortDir]);
 
   const mapCount = useMemo(() => {
     const seen = new Set<string>();
@@ -197,6 +216,27 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
                     ? img && <img src={img} alt={m} className={`w-[50px] h-[40px] object-cover rounded shrink-0 transition-opacity ${active ? '' : 'opacity-70'}`} />
                     : <div className="w-[50px] h-[40px] rounded shrink-0 flex items-center justify-center bg-[#252a33] text-gray-400">ALL</div>}
                   <span>{m || 'All'}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Sort by</label>
+          <div className="flex gap-2">
+            {([['pickRate', 'Pick Rate'], ['nmwr', 'NMWR']] as const).map(([key, label]) => {
+              const active = sortBy === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => clickSort(key)}
+                  className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+                    active
+                      ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                      : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                  }`}
+                >
+                  {label}{active && (sortDir === 'desc' ? ' ↓' : ' ↑')}
                 </button>
               );
             })}
