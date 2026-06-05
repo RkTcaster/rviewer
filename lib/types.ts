@@ -135,6 +135,8 @@ export type AgentPickStat = {
   timesPlayed: number;
   pickRate: number;
   totalMaps: number;
+  nonMirrorPlayed?: number;
+  nonMirrorWins?: number;
 };
 
 export type PlayerStat = {

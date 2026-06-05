@@ -42,85 +42,108 @@ function CompositionIcons({ composition, agentImages }: { composition: string; a
 
 function CustomTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
-  const d = payload[0].payload as AgentPickStat;
+  const d = payload[0].payload as AgentPickStat & { nmwr?: number };
+  const played = d.nonMirrorPlayed ?? 0;
+  const wins = d.nonMirrorWins ?? 0;
   return (
     <div className="bg-[#0f1115] border border-gray-700 rounded-lg px-3 py-2 text-sm shadow-xl">
       <p className="font-bold text-white mb-1">{d.agent}</p>
       <p className="text-green-400">Pick Rate: <span className="font-bold">{d.pickRate}%</span></p>
+      {d.nmwr !== undefined && (
+        <p className="text-amber-400">NMWR: <span className="font-bold">{d.nmwr}%</span> <span className="text-gray-400">({wins}-{played - wins})</span></p>
+      )}
       <p className="text-blue-400">Times Picked: <span className="font-bold">{d.timesPlayed}</span></p>
     </div>
   );
 }
 
 export function AgentPicksSection({ stats, compositions, mapImages, agentImages, mapFullStats }: Props) {
-  const [selectedMap, setSelectedMap] = useState<string>('');
+  const [selectedMaps, setSelectedMaps] = useState<Set<string>>(new Set());
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const maps = useMemo(() => [...new Set(stats.map(s => s.map))].sort(), [stats]);
 
+  const isAll = selectedMaps.size === 0;
+  const single = selectedMaps.size === 1 ? [...selectedMaps][0] : null;
+  const inScope = (map: string) => isAll || selectedMaps.has(map);
+
+  const toggleMap = (map: string) =>
+    setSelectedMaps(prev => {
+      const next = new Set(prev);
+      if (next.has(map)) next.delete(map); else next.add(map);
+      return next;
+    });
+
   const filtered = useMemo(() => {
-    if (selectedMap) {
+    const nmwr = (wins?: number, played?: number) =>
+      played && played > 0 ? Math.round((wins ?? 0) / played * 100) : undefined;
+
+    if (single) {
       const mapFiltered = stats
-        .filter(s => s.map === selectedMap)
-        .slice()
-        .sort((a, b) => b.pickRate - a.pickRate);
+        .filter(s => s.map === single)
+        .map(s => ({ ...s, nmwr: nmwr(s.nonMirrorWins, s.nonMirrorPlayed) }));
       const existingAgents = new Set(mapFiltered.map(s => s.agent));
       const totalMaps = mapFiltered[0]?.totalMaps ?? 0;
       for (const agent of Object.keys(agentImages)) {
         if (!existingAgents.has(agent)) {
-          mapFiltered.push({ agent, map: selectedMap, timesPlayed: 0, pickRate: 0, totalMaps });
+          mapFiltered.push({ agent, map: single, timesPlayed: 0, pickRate: 0, totalMaps, nonMirrorPlayed: 0, nonMirrorWins: 0, nmwr: undefined });
         }
       }
       return mapFiltered.sort((a, b) => b.pickRate - a.pickRate);
     }
 
+    const scope = stats.filter(s => inScope(s.map));
     const mapTotals: Record<string, number> = {};
-    for (const s of stats) {
+    for (const s of scope) {
       if (!(s.map in mapTotals)) mapTotals[s.map] = s.totalMaps;
     }
     const totalDenominator = Object.values(mapTotals).reduce((a, b) => a + b, 0) * 2;
 
-    const byAgent: Record<string, { timesPlayed: number }> = {};
-    for (const s of stats) {
-      if (!byAgent[s.agent]) byAgent[s.agent] = { timesPlayed: 0 };
+    const byAgent: Record<string, { timesPlayed: number; nonMirrorPlayed: number; nonMirrorWins: number }> = {};
+    for (const s of scope) {
+      if (!byAgent[s.agent]) byAgent[s.agent] = { timesPlayed: 0, nonMirrorPlayed: 0, nonMirrorWins: 0 };
       byAgent[s.agent].timesPlayed += s.timesPlayed;
+      byAgent[s.agent].nonMirrorPlayed += s.nonMirrorPlayed ?? 0;
+      byAgent[s.agent].nonMirrorWins += s.nonMirrorWins ?? 0;
     }
     for (const agent of Object.keys(agentImages)) {
-      if (!byAgent[agent]) byAgent[agent] = { timesPlayed: 0 };
+      if (!byAgent[agent]) byAgent[agent] = { timesPlayed: 0, nonMirrorPlayed: 0, nonMirrorWins: 0 };
     }
 
     return Object.entries(byAgent)
-      .map(([agent, { timesPlayed }]) => ({
+      .map(([agent, { timesPlayed, nonMirrorPlayed, nonMirrorWins }]) => ({
         agent,
         map: '',
         timesPlayed,
         pickRate: totalDenominator > 0 ? Math.round((timesPlayed / totalDenominator) * 100) : 0,
         totalMaps: 0,
+        nonMirrorPlayed,
+        nonMirrorWins,
+        nmwr: nmwr(nonMirrorWins, nonMirrorPlayed),
       }))
       .sort((a, b) => b.pickRate - a.pickRate);
-  }, [stats, selectedMap, agentImages]);
+  }, [stats, selectedMaps, agentImages]);
 
   const mapCount = useMemo(() => {
-    if (selectedMap) {
-      return stats.find(s => s.map === selectedMap)?.totalMaps ?? 0;
-    }
     const seen = new Set<string>();
     let total = 0;
     for (const s of stats) {
-      if (!seen.has(s.map)) { seen.add(s.map); total += s.totalMaps; }
+      if (inScope(s.map) && !seen.has(s.map)) { seen.add(s.map); total += s.totalMaps; }
     }
     return total;
-  }, [stats, selectedMap]);
+  }, [stats, selectedMaps]);
 
   // Compositions panel data
   const compositionPanel = useMemo(() => {
-    if (selectedMap) {
+    if (single) {
       return compositions
-        .filter(c => c.map === selectedMap)
+        .filter(c => c.map === single)
         .sort((a, b) => b.played - a.played);
     }
-    // All maps, top 2 each
+    // Scoped maps, top 3 each
     const byMap: Record<string, CompositionStat[]> = {};
     for (const c of compositions) {
+      if (!inScope(c.map)) continue;
       if (!byMap[c.map]) byMap[c.map] = [];
       byMap[c.map].push(c);
     }
@@ -130,7 +153,7 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
         map,
         comps: comps.sort((a, b) => b.played - a.played).slice(0, 3),
       }));
-  }, [compositions, selectedMap]);
+  }, [compositions, selectedMaps]);
 
   const chartHeight = Math.max(300, filtered.length * 36);
   const maxPickRate = Math.max(10, ...filtered.map(d => d.pickRate));
@@ -151,69 +174,97 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
         <KPICard
           title="Maps"
           value={String(mapCount)}
-          label={selectedMap || 'all maps'}
+          label={single ?? (isAll ? 'all maps' : `${selectedMaps.size} maps`)}
           variant="neutral"
         />
         <div className="flex flex-col gap-1">
           <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Map</label>
-          <select
-            value={selectedMap}
-            onChange={(e) => setSelectedMap(e.target.value)}
-            className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 text-sm outline-none focus:ring-2 focus:ring-blue-600 min-w-[160px]"
-          >
-            <option value="">All Maps</option>
-            {maps.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <div className="flex flex-wrap gap-2">
+            {[''].concat(maps).map(m => {
+              const active = m ? selectedMaps.has(m) : isAll;
+              const img = m ? mapImages[m] : undefined;
+              return (
+                <button
+                  key={m || 'all'}
+                  onClick={() => m ? toggleMap(m) : setSelectedMaps(new Set())}
+                  className={`flex flex-col items-center gap-1 p-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+                    active
+                      ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                      : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                  }`}
+                >
+                  {m
+                    ? img && <img src={img} alt={m} className={`w-[50px] h-[40px] object-cover rounded shrink-0 transition-opacity ${active ? '' : 'opacity-70'}`} />
+                    : <div className="w-[50px] h-[40px] rounded shrink-0 flex items-center justify-center bg-[#252a33] text-gray-400">ALL</div>}
+                  <span>{m || 'All'}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-        {selectedMap && (
-          <p className="text-[11px] text-gray-500 self-end pb-2 ml-auto">WR% for non mirror matchups</p>
-        )}
+        <p className="text-[11px] text-gray-500 self-end pb-2 ml-auto">NMWR = win rate excluding mirror picks</p>
       </div>
 
       {/* Main 50/50 layout */}
       <div className="flex gap-6 items-start">
         {/* Bar chart — left half */}
         <div className="flex-1 min-w-0 bg-[#1a1d23] rounded-xl border border-gray-800 p-6">
-          <ResponsiveContainer width="100%" height={chartHeight}>
-            <BarChart
-              data={filtered}
-              layout="vertical"
-              margin={{ top: 0, right: 40, left: 24, bottom: 0 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#2d3139" />
-              <XAxis
-                type="number"
-                domain={xDomain}
-                tickFormatter={(v) => `${v}%`}
-                stroke="#6b7280"
-                fontSize={11}
-                tickLine={false}
-              />
-              <YAxis
-                type="category"
-                dataKey="agent"
-                stroke="#9ca3af"
-                tickLine={false}
-                width={32}
-                tick={<AgentYTick agentImages={agentImages} />}
-              />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-              <Bar dataKey="pickRate" radius={[0, 4, 4, 0]} maxBarSize={22}>
-                {filtered.map((entry, i) => (
-                  <Cell key={i} fill={entry.pickRate >= 50 ? '#22c55e' : entry.pickRate >= 25 ? '#f59e0b' : entry.pickRate >= 5 ? '#1e3a8a' : '#fca5a5'} />
-                ))}
-                <LabelList dataKey="pickRate" position="right" formatter={(v: unknown) => `${v}%`} style={{ fill: '#9ca3af', fontSize: 11 }} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="flex">
+            <div className="flex-1 min-w-0">
+              <ResponsiveContainer width="100%" height={chartHeight}>
+                <BarChart
+                  data={filtered}
+                  layout="vertical"
+                  margin={{ top: 0, right: 40, left: 24, bottom: 0 }}
+                  onMouseMove={(s: any) => setHoveredIndex(typeof s?.activeTooltipIndex === 'number' ? s.activeTooltipIndex : null)}
+                  onMouseLeave={() => setHoveredIndex(null)}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#2d3139" />
+                  <XAxis
+                    type="number"
+                    domain={xDomain}
+                    tickFormatter={(v) => `${v}%`}
+                    stroke="#6b7280"
+                    fontSize={11}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="agent"
+                    stroke="#9ca3af"
+                    tickLine={false}
+                    width={32}
+                    tick={<AgentYTick agentImages={agentImages} />}
+                  />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                  <Bar dataKey="pickRate" radius={[0, 4, 4, 0]} maxBarSize={22}>
+                    {filtered.map((entry, i) => (
+                      <Cell key={i} fill={entry.pickRate >= 50 ? '#22c55e' : entry.pickRate >= 25 ? '#f59e0b' : entry.pickRate >= 5 ? '#1e3a8a' : '#fca5a5'} />
+                    ))}
+                    <LabelList dataKey="pickRate" position="right" formatter={(v: unknown) => `${v}%`} style={{ fill: '#9ca3af', fontSize: 11 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            {/* NMWR column — aligned per agent row (chart uses margin top/bottom: 0) */}
+            <div className="w-[90px] shrink-0 flex flex-col" style={{ height: chartHeight, paddingBottom: 30 }}>
+              {filtered.map((d, i) => (
+                <div key={i} className={`flex-1 flex items-center justify-end text-[11px] font-bold ${i === hoveredIndex ? 'bg-white/[0.04]' : ''}`}>
+                  {d.nmwr !== undefined
+                    ? <span className={d.nmwr >= 55 ? 'text-green-400' : d.nmwr <= 45 ? 'text-red-400' : 'text-gray-300'}>NMWR {d.nmwr}%</span>
+                    : <span className="text-gray-600">—</span>}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Compositions panel — right half */}
         <div className="flex-1 min-w-0 bg-[#1a1d23] rounded-xl border border-gray-800 p-6">
           {(() => {
             // Normalize to grouped format in both cases
-            const groups: { map: string; comps: CompositionStat[] }[] = selectedMap
-              ? [{ map: selectedMap, comps: compositionPanel as CompositionStat[] }]
+            const groups: { map: string; comps: CompositionStat[] }[] = single
+              ? [{ map: single, comps: compositionPanel as CompositionStat[] }]
               : compositionPanel as { map: string; comps: CompositionStat[] }[];
 
             if (groups.length === 0 || groups.every(g => g.comps.length === 0)) {
@@ -230,8 +281,8 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
                         <img src={mapImages[map]} alt={map} className="w-[100px] h-[55px] object-cover rounded opacity-80" />
                       )}
                       <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wide text-center leading-tight">{map}</span>
-                      {/* Stats below map image only when a map is selected */}
-                      {selectedMap && mapFullStats[map] && (() => {
+                      {/* Stats below map image only when a single map is selected */}
+                      {single && mapFullStats[map] && (() => {
                         const s = mapFullStats[map];
                         const atk = s.attTotal > 0 ? Math.round(s.attWins / s.attTotal * 100) : 0;
                         const def = s.defTotal > 0 ? Math.round(s.defWins / s.defTotal * 100) : 0;
@@ -250,12 +301,12 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
                         <div key={i} className="flex items-center gap-1.5 flex-wrap">
                           <CompositionIcons composition={c.composition} agentImages={agentImages} />
                           <span className="text-gray-500 text-xs shrink-0">({c.played})</span>
-                          {selectedMap && c.winRate !== undefined && (
+                          {single && c.winRate !== undefined && (
                             <span className={`text-xs font-bold shrink-0 ${c.winRate >= 55 ? 'text-green-400' : c.winRate <= 45 ? 'text-red-400' : 'text-gray-300'}`}>
                               {c.winRate}% WR
                             </span>
                           )}
-                          {selectedMap && c.teams && c.teams.length > 0 && (
+                          {single && c.teams && c.teams.length > 0 && (
                             <span className="text-[10px] text-gray-400 leading-tight">
                               {c.teams.map((t, j) => (
                                 <span key={j}>
@@ -268,8 +319,8 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
                         </div>
                       ))}
                     </div>
-                    {/* Stats column (all-maps view only) */}
-                    {!selectedMap && mapFullStats[map] && (() => {
+                    {/* Stats column (grouped view only) */}
+                    {!single && mapFullStats[map] && (() => {
                       const s = mapFullStats[map];
                       const atk = s.attTotal > 0 ? Math.round(s.attWins / s.attTotal * 100) : 0;
                       const def = s.defTotal > 0 ? Math.round(s.defWins / s.defTotal * 100) : 0;

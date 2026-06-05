@@ -525,8 +525,8 @@ export async function getAgentPickStats(
     fetchAllPages<{ map_id: string; map: string }>((from, to) =>
       applyFilters(supabase.from('maps_id').select('map_id, map')).range(from, to)
     ),
-    fetchAllPages<{ map: string; agent: string }>((from, to) => {
-      let q = applyFilters(supabase.from('player_stats').select('map, agent'));
+    fetchAllPages<{ team: string; map: string; series_id: string; map_id: string; agent: string }>((from, to) => {
+      let q = applyFilters(supabase.from('player_stats').select('team, map, series_id, map_id, agent'));
       if (filters.excludeTeams && filters.excludeTeams.length > 0) {
         q = q.not('team', 'in', `(${filters.excludeTeams.join(',')})`);
       }
@@ -544,12 +544,53 @@ export async function getAgentPickStats(
     uniqueMapIds[row.map].add(row.map_id);
   }
 
-  // Count agent plays per (map, agent)
+  // Count agent plays per (map, agent) + build per-instance agent sets per team
   const agentCounts: Record<string, number> = {};
+  const instanceAgents: Record<string, Record<string, Set<string>>> = {};
   for (const row of agentRows ?? []) {
     if (!row.map || !row.agent) continue;
     const key = `${row.map}__${row.agent}`;
     agentCounts[key] = (agentCounts[key] || 0) + 1;
+    if (!row.team || !row.series_id || !row.map_id) continue;
+    const instKey = `${row.series_id}__${row.map_id}`;
+    if (!instanceAgents[instKey]) instanceAgents[instKey] = {};
+    if (!instanceAgents[instKey][row.team]) instanceAgents[instKey][row.team] = new Set();
+    instanceAgents[instKey][row.team].add(row.agent);
+  }
+
+  // Fetch round_info to determine map winners (same pattern as getOverallCompositions)
+  const allSeriesIds = [...new Set((agentRows ?? []).map(r => r.series_id).filter(Boolean))];
+  const winnerByMapId: Record<string, string> = {};
+  if (allSeriesIds.length > 0) {
+    const roundRows = await fetchAllPages<any>((from, to) =>
+      supabase.from('round_info')
+        .select('series_id, map_id, round, teamA, teamB, rndA, rndB')
+        .in('series_id', allSeriesIds)
+        .range(from, to)
+    );
+    const finalRoundByMapId: Record<string, any> = {};
+    for (const r of roundRows) {
+      const prev = finalRoundByMapId[r.map_id];
+      if (!prev || Number(r.round) > Number(prev.round)) finalRoundByMapId[r.map_id] = r;
+    }
+    for (const [map_id, r] of Object.entries(finalRoundByMapId)) {
+      winnerByMapId[map_id] = Number((r as any).rndA) === 1 ? (r as any).teamA?.trim() : (r as any).teamB?.trim();
+    }
+  }
+
+  // Per-agent non-mirror played/wins: a pick is mirror if the opponent also picked that agent
+  const nmStats: Record<string, { nonMirrorPlayed: number; nonMirrorWins: number }> = {};
+  for (const row of agentRows ?? []) {
+    if (!row.map || !row.agent || !row.team || !row.series_id || !row.map_id) continue;
+    const instKey = `${row.series_id}__${row.map_id}`;
+    const instance = instanceAgents[instKey] ?? {};
+    const isMirror = Object.entries(instance).some(([t, set]) => t !== row.team && set.has(row.agent));
+    if (isMirror) continue;
+    const key = `${row.map}__${row.agent}`;
+    if (!nmStats[key]) nmStats[key] = { nonMirrorPlayed: 0, nonMirrorWins: 0 };
+    nmStats[key].nonMirrorPlayed++;
+    const winner = winnerByMapId[row.map_id];
+    if (winner && winner.toLowerCase() === row.team.toLowerCase()) nmStats[key].nonMirrorWins++;
   }
 
   const results: AgentPickStat[] = [];
@@ -557,7 +598,16 @@ export async function getAgentPickStats(
     const [mapName, agent] = key.split('__');
     const totalMaps = uniqueMapIds[mapName]?.size ?? 0;
     const pickRate = totalMaps > 0 ? Math.round((count / (totalMaps * 2)) * 100) : 0;
-    results.push({ agent, map: mapName, timesPlayed: count, pickRate, totalMaps });
+    const nm = nmStats[key];
+    results.push({
+      agent,
+      map: mapName,
+      timesPlayed: count,
+      pickRate,
+      totalMaps,
+      nonMirrorPlayed: nm?.nonMirrorPlayed ?? 0,
+      nonMirrorWins: nm?.nonMirrorWins ?? 0,
+    });
   }
 
   return results.sort((a, b) => {
