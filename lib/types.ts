@@ -54,6 +54,7 @@ export const STATS_RANK_DEFAULT_TOURS = [
   'vct_2026_emea_stage_1',
   'vct_2026_pacific_stage_1',
   'vct_2026_china_stage_1',
+  'valorant_masters_london_2026',
 ];
 
 // Equipos visibles por defecto en la tabla de Stats Rank

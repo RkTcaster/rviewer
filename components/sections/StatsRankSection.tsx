@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { TeamRankStats, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { useNavigation } from '../NavigationContext';
 
 interface Props {
   rankings: Record<string, TeamRankStats>;
@@ -64,7 +64,7 @@ function getCellColor(value: number | null, allValues: (number | null)[], lowerI
 }
 
 export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }: Props) {
-  const router = useRouter();
+  const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -91,10 +91,11 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
     setHiddenTeams(new Set(allTeams.filter(t => !STATS_RANK_DEFAULT_TEAMS.includes(t))));
     setSortCol(null);
     setSortDir('desc');
-    router.push('?section=stats-rank');
+    navigate('?section=stats-rank');
   }
 
-  if (baseTeams.length === 0) {
+  // Sin datos de torneos no hay chips que mostrar: placeholder completo.
+  if (allTeams.length === 0) {
     return (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
         Select a region and tournament to see the ranking...
@@ -152,7 +153,7 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
           <button
             key={team}
             onClick={() => toggleTeam(team)}
-            className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+            className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl text-[16px] font-bold uppercase tracking-wide transition-colors border ${
               active
                 ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
                 : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
@@ -162,7 +163,7 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
               <img
                 src={logo}
                 alt={team}
-                className={`w-4 h-4 object-contain shrink-0 transition-opacity ${active ? '' : 'opacity-40 grayscale'}`}
+                className={`w-6 h-6 object-contain shrink-0 transition-opacity ${active ? '' : 'opacity-40 grayscale'}`}
               />
             )}
             <span className={active ? '' : 'line-through'}>{team}</span>
@@ -214,6 +215,11 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
       </button>
     </div>
 
+    {baseTeams.length === 0 ? (
+      <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
+        Select at least one team to see the ranking...
+      </div>
+    ) : (
     <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-x-auto">
       <table className="border-separate w-full" style={{ borderSpacing: '1px 2px' }}>
         <thead className="bg-[#0f1115]">
@@ -310,7 +316,7 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
                     className={`py-3 text-center ${isActive ? 'bg-[#1e2430]' : 'bg-[#1a1d23]'} ${isFirstOfGroup ? 'border-l-2 border-l-gray-700' : ''}`}
                     style={{ minWidth: 48 }}
                   >
-                    <span className={`text-sm ${color}`}>
+                    <span className={`text-[16px] ${color}`}>
                       {val !== null
                         ? m.countOnly ? val : `${val}%`
                         : <span className="text-gray-700">—</span>}
@@ -318,7 +324,7 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
                     {showDetail && val !== null && m.getWL && (() => {
                       const { wins, total } = m.getWL(rankings[team]);
                       return total > 0 ? (
-                        <div className="text-[9px] text-gray-600 whitespace-nowrap">
+                        <div className="text-[11px] text-gray-600 whitespace-nowrap">
                           {wins}W-{total - wins}L
                         </div>
                       ) : null;
@@ -331,6 +337,7 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
         </tbody>
       </table>
     </div>
+    )}
     </div>
   );
 }

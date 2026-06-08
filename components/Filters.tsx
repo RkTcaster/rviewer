@@ -1,6 +1,7 @@
 "use client";
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Region, Tournament, STATS_RANK_DEFAULT_TOURS } from '@/lib/types';
+import { useNavigation } from './NavigationContext';
 import { MultiSelect } from "./MultiSelect";
 import { SearchableSelect } from "./SearchableSelect";
 import { SearchableMultiSelect } from "./SearchableMultiSelect";
@@ -17,7 +18,7 @@ interface FiltersProps {
 }
 
 export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode = 'team' }: FiltersProps) {
-  const router = useRouter();
+  const { navigate } = useNavigation();
   const searchParams = useSearchParams();
   const section = searchParams.get('section') || 'compare-maps';
   const isCompare = section === 'compare-maps' || section === 'compare-stats' || section === 'compare-economy';
@@ -36,7 +37,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     if (key === 'team') { params.delete('tour'); if (value) params.delete('excA'); }
     if (key === 'team2') { params.delete('tour2'); if (value) params.delete('excB'); }
 
-    router.push(`?${params.toString()}`);
+    navigate(`?${params.toString()}`);
   };
 
   const updateRegFilter = (key: 'reg' | 'reg2', values: string[]) => {
@@ -44,7 +45,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     if (values.length > 0) params.set(key, values.join(',')); else params.delete(key);
     if (key === 'reg') { params.delete('team'); params.delete('tour'); params.delete('team2'); params.delete('tour2'); params.delete('excA'); }
     if (key === 'reg2') { params.delete('team2'); params.delete('tour2'); params.delete('excB'); }
-    router.push(`?${params.toString()}`);
+    navigate(`?${params.toString()}`);
   };
 
   const updateMultiFilter = (key: string, values: string[]) => {
@@ -54,7 +55,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     } else {
       params.delete(key);
     }
-    router.push(`?${params.toString()}`);
+    navigate(`?${params.toString()}`);
   };
 
   if (isMetaShift) {
@@ -73,7 +74,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     const resetAllFilters = () => {
       const params = new URLSearchParams(searchParams.toString());
       ['reg', 'team', 'tour', 'excA', 'dateFrom', 'dateTo', 'reg2', 'team2', 'tour2', 'excB', 'dateFrom2', 'dateTo2'].forEach(k => params.delete(k));
-      router.push(`?${params.toString()}`);
+      navigate(`?${params.toString()}`);
     };
 
     return (
@@ -197,7 +198,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         <div className="flex flex-col gap-1 justify-end">
           <label className="text-[11px] font-bold text-transparent uppercase tracking-wider">Reset</label>
           <button
-            onClick={() => router.push(`?section=economy`)}
+            onClick={() => navigate(`?section=economy`)}
             className="px-4 py-2 rounded bg-[#252a33] border border-gray-700 text-sm font-semibold text-gray-400 hover:text-gray-200 hover:border-gray-500 transition-colors"
           >
             Reset

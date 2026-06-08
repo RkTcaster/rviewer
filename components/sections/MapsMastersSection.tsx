@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Check, Minus, X } from 'lucide-react';
 import { MapWL, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { useNavigation } from '../NavigationContext';
 
 interface Props {
   stats: Record<string, Record<string, MapWL>>;
@@ -70,7 +70,7 @@ function getCellRank(value: number | null, allValues: (number | null)[]): 'best'
 }
 
 export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {} }: Props) {
-  const router = useRouter();
+  const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [showDetail, setShowDetail] = useState(false);
@@ -111,10 +111,11 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
     setHiddenMaps(new Set(maps.filter(m => m.toLowerCase() === 'bind')));
     setSortCol(null);
     setSortDir('desc');
-    router.push('?section=maps-masters');
+    navigate('?section=maps-masters');
   }
 
-  if (baseTeams.length === 0 || maps.length === 0) {
+  // Sin datos de torneos no hay chips que mostrar: placeholder completo.
+  if (allTeams.length === 0 || maps.length === 0) {
     return (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
         Select a region and tournament to see the maps...
@@ -168,7 +169,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
             <button
               key={team}
               onClick={() => toggleTeam(team)}
-              className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+              className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl text-[16px] font-bold uppercase tracking-wide transition-colors border ${
                 active
                   ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
                   : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
@@ -178,7 +179,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
                 <img
                   src={logo}
                   alt={team}
-                  className={`w-4 h-4 object-contain shrink-0 transition-opacity ${active ? '' : 'opacity-40 grayscale'}`}
+                  className={`w-6 h-6 object-contain shrink-0 transition-opacity ${active ? '' : 'opacity-40 grayscale'}`}
                 />
               )}
               <span className={active ? '' : 'line-through'}>{team}</span>
@@ -270,6 +271,11 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
         </button>
       </div>
 
+      {baseTeams.length === 0 ? (
+        <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
+          Select at least one team to see the maps...
+        </div>
+      ) : (
       <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-x-auto">
         <table className="border-separate w-full" style={{ borderSpacing: '1px 2px' }}>
           <thead className="bg-[#0f1115]">
@@ -409,6 +415,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

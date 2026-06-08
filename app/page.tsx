@@ -3,6 +3,7 @@ import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, get
 import { STATS_RANK_DEFAULT_TOURS } from '@/lib/types';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
+import { ContentOverlay } from '@/components/ContentOverlay';
 import { MapsSection } from '@/components/sections/MapsSection';
 import { EconomySection } from '@/components/sections/EconomySection';
 import { ChartsSection } from '@/components/sections/ChartsSection';
@@ -316,7 +317,8 @@ export default async function Page({
           )}
         </header>
 
-        <main className="p-8 pt-6">
+        <main className="relative p-8 pt-6">
+          <ContentOverlay />
           {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isStatsRank || isMapsMasters || isNeonDependency) ? (
             renderSection()
           ) : !team ? (

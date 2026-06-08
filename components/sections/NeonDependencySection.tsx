@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { MapWL, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { useNavigation } from '../NavigationContext';
 
 interface Props {
   stats: Record<string, Record<string, MapWL>>;
@@ -59,7 +59,7 @@ function getCellRank(value: number | null, allValues: (number | null)[]): 'best'
 }
 
 export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {} }: Props) {
-  const router = useRouter();
+  const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<number | 'overall' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [showDetail, setShowDetail] = useState(false);
@@ -100,7 +100,7 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
     setHiddenMaps(new Set(maps.filter(m => m.toLowerCase() === 'bind')));
     setSortCol(null);
     setSortDir('desc');
-    router.push('?section=neon-dependency');
+    navigate('?section=neon-dependency');
   }
 
   if (baseTeams.length === 0 || maps.length === 0) {

@@ -1,10 +1,24 @@
 // lib/data-service.ts
+import { unstable_cache } from 'next/cache';
 import { supabase } from './supabase';
 
 // --- TYPES ---
 import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, LongestMapEntry, MapCompositionStat, MapsMastersData, MapWL, MapStat, OverallMapFullStat, OverallMapStat, PlayerMatchPoint, PlayerStat, PlayerTimelineData, Region, SimulationRow, SkirmishStats, SkirmishTeamStat, SkirmishPlayerStat, TeamEconomyCompare, TeamRankStats, TopPlayerPerformance, Tournament, TournamentPlayerAvg } from './types';
 
 // --- HELPERS ---
+
+// Envuelve una función de datos con unstable_cache, invalidando cuando cambia la
+// última actualización (getLastUpdateDate, cacheada 5min). La key combina keyBase +
+// versión + los argumentos serializados de la llamada. revalidate diario como red.
+function versioned<A extends unknown[], R>(
+  keyBase: string,
+  fn: (...args: A) => Promise<R>
+): (...args: A) => Promise<R> {
+  return async (...args: A): Promise<R> => {
+    const version = (await getLastUpdateDate()) ?? 'none';
+    return unstable_cache(fn, [keyBase, version], { revalidate: 86400, tags: ['vct-data'] })(...args);
+  };
+}
 
 async function fetchAllPages<T>(
   buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
@@ -24,7 +38,8 @@ async function fetchAllPages<T>(
 
 // --- FILTERS  ---
 
-export async function getRegions(): Promise<Region[]> {
+export const getRegions = versioned('regions', getRegions_impl);
+async function getRegions_impl(): Promise<Region[]> {
   const { data, error } = await supabase
     .from('regions')
     .select('reg_id, region')
@@ -75,7 +90,8 @@ export async function getTours(teamName?: string, regId?: string[]): Promise<Tou
   return (unique || []).sort((a, b) => a.event.localeCompare(b.event));
 }
 
-export async function getTournamentRankings(
+export const getTournamentRankings = versioned('tournament-rankings', getTournamentRankings_impl);
+async function getTournamentRankings_impl(
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<Record<string, TeamRankStats>> {
   let idQuery = supabase.from('draft').select('series_id');
@@ -283,7 +299,8 @@ export async function getTournamentRankings(
 
 // Maps Masters: usa la misma lógica de filtro que Stats Rank (draft → series → round_info)
 // y devuelve, por equipo y por mapa, victorias/jugados.
-export async function getMapsMastersStats(
+export const getMapsMastersStats = versioned('maps-masters-stats', getMapsMastersStats_impl);
+async function getMapsMastersStats_impl(
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<MapsMastersData> {
   let idQuery = supabase.from('draft').select('series_id, team, rival, bo, team_1_select_1, team_1_select_3, team_2_select_1, team_2_select_3');
@@ -359,7 +376,8 @@ export async function getMapsMastersStats(
 // Neon Dependency: misma lógica de filtro que Maps Masters (draft → series_ids),
 // pero por equipo y mapa devuelve cuántas veces el equipo llevó al agente Neon
 // (wins = picks de Neon) sobre cuántas veces jugó ese mapa (played).
-export async function getNeonDependencyStats(
+export const getNeonDependencyStats = versioned('neon-dependency-stats', getNeonDependencyStats_impl);
+async function getNeonDependencyStats_impl(
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<MapsMastersData> {
   let idQuery = supabase.from('draft').select('series_id, bo');
@@ -412,7 +430,8 @@ export async function getNeonDependencyStats(
   return { stats, maps };
 }
 
-export async function getAllTours(regId?: string[]): Promise<Tournament[]> {
+export const getAllTours = versioned('all-tours', getAllTours_impl);
+async function getAllTours_impl(regId?: string[]): Promise<Tournament[]> {
   let query = supabase.from('tournament_played').select('tour_id, event, reg_id');
   if (regId && regId.length > 0) query = query.in('reg_id', regId);
   const { data } = await query;
@@ -465,7 +484,8 @@ export async function getOverallMapPicks(
   return Object.values(stats).sort((a, b) => b.picks - a.picks);
 }
 
-export async function getAgentPickStats(
+export const getAgentPickStats = versioned('agent-pick-stats', getAgentPickStats_impl);
+async function getAgentPickStats_impl(
   filters: { reg?: string[]; tour?: string; team?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<AgentPickStat[]> {
   // Pre-fetch series_ids from draft when date filters are active
@@ -616,7 +636,8 @@ export async function getAgentPickStats(
   });
 }
 
-export async function getOverallCompositions(
+export const getOverallCompositions = versioned('overall-compositions', getOverallCompositions_impl);
+async function getOverallCompositions_impl(
   filters: { team?: string; reg?: string[]; tour?: string; bo?: string; last?: string }
 ): Promise<CompositionStat[]> {
   const rows = await fetchAllPages<any>((from, to) => {
@@ -1375,7 +1396,8 @@ export async function getPlayerTimeline(
   return result;
 }
 
-export async function getOverallMapFullStats(
+export const getOverallMapFullStats = versioned('overall-map-full-stats', getOverallMapFullStats_impl);
+async function getOverallMapFullStats_impl(
   filters: { reg?: string[]; tour?: string; bo?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<Record<string, OverallMapFullStat>> {
   let draftQuery = supabase.from('draft').select('*');
@@ -1448,7 +1470,8 @@ export async function getOverallMapFullStats(
   return stats;
 }
 
-export async function getAgentImages(): Promise<Record<string, string>> {
+export const getAgentImages = versioned('agent-images', getAgentImages_impl);
+async function getAgentImages_impl(): Promise<Record<string, string>> {
   const { data } = await supabase.from('agent_info').select('agent_name, agent_path');
   if (!data) return {};
   return Object.fromEntries(
@@ -1456,7 +1479,8 @@ export async function getAgentImages(): Promise<Record<string, string>> {
   );
 }
 
-export async function getTeamRegions(): Promise<Record<string, string>> {
+export const getTeamRegions = versioned('team-regions', getTeamRegions_impl);
+async function getTeamRegions_impl(): Promise<Record<string, string>> {
   // Map each team to its home region (reg_0..reg_3), ignoring reg_4 (international events).
   // If a team appears in multiple regions, the most frequent one wins.
   const { data } = await supabase.from('tournament_played').select('teamA, reg_id');
@@ -1473,7 +1497,8 @@ export async function getTeamRegions(): Promise<Record<string, string>> {
   return result;
 }
 
-export async function getTeamLogos(): Promise<Record<string, string>> {
+export const getTeamLogos = versioned('team-logos', getTeamLogos_impl);
+async function getTeamLogos_impl(): Promise<Record<string, string>> {
   const { data } = await supabase.from('teams').select('team_id, team_path');
   if (!data) return {};
   return Object.fromEntries(
@@ -1483,12 +1508,14 @@ export async function getTeamLogos(): Promise<Record<string, string>> {
   );
 }
 
-export async function getLastUpdateDate(): Promise<string | null> {
+async function getLastUpdateDate_impl(): Promise<string | null> {
   const { data } = await supabase.from('draft').select('date').order('date', { ascending: false }).limit(1);
   return data?.[0]?.date ?? null;
 }
+export const getLastUpdateDate = unstable_cache(getLastUpdateDate_impl, ['last-update-date'], { revalidate: 300 });
 
-export async function getMapImages(): Promise<Record<string, string>> {
+export const getMapImages = versioned('map-images', getMapImages_impl);
+async function getMapImages_impl(): Promise<Record<string, string>> {
   const { data } = await supabase.from('maps_name_ids').select('map, image_path');
   if (!data) return {};
   return Object.fromEntries(

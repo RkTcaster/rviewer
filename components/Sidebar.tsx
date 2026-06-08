@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap } from 'lucide-react';
+import { useNavigation } from './NavigationContext';
 
 const NAV_SECTIONS = [
   
@@ -40,15 +41,15 @@ const NAV_SECTIONS = [
 ];
 
 export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) {
-  const router = useRouter();
+  const { navigate } = useNavigation();
   const searchParams = useSearchParams();
   const currentSection = searchParams.get('section') || 'stats-rank';
   const [collapsed, setCollapsed] = useState(false);
 
-  function navigate(section: string) {
+  function goToSection(section: string) {
     // Stats Rank y Maps Masters arrancan siempre con su configuración por defecto (sin filtros heredados)
     if (section === 'stats-rank' || section === 'maps-masters' || section === 'neon-dependency') {
-      router.push(`?section=${section}`);
+      navigate(`?section=${section}`);
       return;
     }
 
@@ -69,7 +70,7 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
       params.delete('dateTo2');
     }
 
-    router.push(`?${params.toString()}`);
+    navigate(`?${params.toString()}`);
   }
 
   return (
@@ -113,7 +114,7 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
                 return (
                   <button
                     key={id}
-                    onClick={() => navigate(id)}
+                    onClick={() => goToSection(id)}
                     title={label}
                     className={`flex items-center rounded-lg text-sm font-semibold transition-all
                       ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5 text-left'}
