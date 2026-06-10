@@ -17,6 +17,7 @@ interface Props {
   teamAName: string;
   teamBName: string;
   rankings: Record<string, TeamRankStats>;
+  teamLogos?: Record<string, string>;
 }
 
 type MetricKey = 'map' | 'round' | 'atk' | 'def' | 'pistol' | 'antiEco' | 'recovery' | 'pab' | 'pabAtk' | 'pabDef' | 'first3Lost' | 'timeout' | 'retake' | 'postPlant' | 'plantAtk' | 'plantDef';
@@ -98,7 +99,7 @@ function RankBadge({ rankInfo }: { rankInfo: { rank: number; total: number } | n
   );
 }
 
-const thBase = 'px-4 py-3 text-[10px] uppercase tracking-widest text-gray-500 font-bold border-b border-gray-800';
+const thBase = 'sticky top-[70px] z-10 bg-[#0f1115] px-4 py-3 text-[10px] uppercase tracking-widest text-gray-500 font-bold border-b border-gray-800';
 
 function StatRow({ row, teamAName, teamBName, rankings }: {
   row: RowData;
@@ -165,7 +166,7 @@ function StatRow({ row, teamAName, teamBName, rankings }: {
 export function CompareStatsSection({
   statsA, statsB, pistolsA, pistolsB,
   antiEcoA, antiEcoB, recoveryA, recoveryB,
-  pabA, pabB, teamAName, teamBName, rankings,
+  pabA, pabB, teamAName, teamBName, rankings, teamLogos = {},
 }: Props) {
   const timeoutA = rankings[teamAName]?.timeoutLosses ?? 0;
   const timeoutB = rankings[teamBName]?.timeoutLosses ?? 0;
@@ -311,17 +312,27 @@ export function CompareStatsSection({
   ];
 
   return (
-    <div className="bg-[#1a1d23] rounded-xl shadow-2xl overflow-hidden border border-gray-800">
+    <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800">
       <table className="w-full border-collapse">
         <thead className="bg-[#0f1115]">
           {/* Team name row */}
           <tr>
-            <th colSpan={3} className="py-3 text-center text-blue-300 text-sm font-bold tracking-wider border-b border-gray-700">
-              {teamAName}
+            <th colSpan={3} className="sticky top-0 z-20 bg-[#0f1115] py-3 text-center text-blue-300 text-3xl font-bold tracking-wider border-b border-gray-700">
+              <div className="flex items-center justify-center gap-3">
+                {teamLogos[teamAName] && (
+                  <img src={teamLogos[teamAName]} alt={teamAName} className="w-12 h-12 object-contain shrink-0" />
+                )}
+                {teamAName}
+              </div>
             </th>
-            <th className="py-3 border-b border-gray-700" />
-            <th colSpan={3} className="py-3 text-center text-orange-300 text-sm font-bold tracking-wider border-b border-gray-700">
-              {teamBName}
+            <th className="sticky top-0 z-20 bg-[#0f1115] py-3 border-b border-gray-700" />
+            <th colSpan={3} className="sticky top-0 z-20 bg-[#0f1115] py-3 text-center text-orange-300 text-3xl font-bold tracking-wider border-b border-gray-700">
+              <div className="flex items-center justify-center gap-3">
+                {teamLogos[teamBName] && (
+                  <img src={teamLogos[teamBName]} alt={teamBName} className="w-12 h-12 object-contain shrink-0" />
+                )}
+                {teamBName}
+              </div>
             </th>
           </tr>
           {/* Column header row */}

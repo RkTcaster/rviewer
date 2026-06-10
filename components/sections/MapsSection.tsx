@@ -11,9 +11,10 @@ interface Props {
   stats: MapStat[];
   compositions: CompositionStat[];
   agentImages: Record<string, string>;
+  mapImages?: Record<string, string>;
 }
 
-export function MapsSection({ stats, compositions, agentImages }: Props) {
+export function MapsSection({ stats, compositions, agentImages, mapImages = {} }: Props) {
   const compsByMap = compositions.reduce<Record<string, CompositionStat[]>>((acc, c) => {
     if (!acc[c.map]) acc[c.map] = [];
     acc[c.map].push(c);
@@ -21,6 +22,20 @@ export function MapsSection({ stats, compositions, agentImages }: Props) {
   }, {});
   const [sortKey, setSortKey] = useState<SortKey>('mapName');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  const allMaps = stats.map(s => s.mapName).sort((a, b) => a.localeCompare(b));
+  // Map filter chips — por defecto todos los mapas visibles excepto Abyss, Bind y Corrode
+  const DEFAULT_HIDDEN_MAPS = ['abyss', 'bind', 'corrode'];
+  const [hiddenMaps, setHiddenMaps] = useState<Set<string>>(
+    () => new Set(allMaps.filter(m => DEFAULT_HIDDEN_MAPS.includes(m.toLowerCase())))
+  );
+  function toggleMap(map: string) {
+    setHiddenMaps(prev => {
+      const next = new Set(prev);
+      if (next.has(map)) next.delete(map); else next.add(map);
+      return next;
+    });
+  }
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {
@@ -31,7 +46,7 @@ export function MapsSection({ stats, compositions, agentImages }: Props) {
     }
   }
 
-  const sortedStats = stats.slice().sort((a, b) => {
+  const sortedStats = stats.filter(s => !hiddenMaps.has(s.mapName)).sort((a, b) => {
     let cmp: number;
     if (sortKey === 'mapName') {
       cmp = a.mapName.localeCompare(b.mapName);
@@ -60,6 +75,38 @@ export function MapsSection({ stats, compositions, agentImages }: Props) {
   }
 
   return (
+    <div className="flex flex-col gap-4">
+    {/* Map filter chips */}
+    <div className="flex flex-col gap-2">
+      <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Maps</span>
+      <div className="flex flex-wrap gap-2 px-1">
+        {allMaps.map(map => {
+          const active = !hiddenMaps.has(map);
+          const img = mapImages[map];
+          return (
+            <button
+              key={map}
+              onClick={() => toggleMap(map)}
+              className={`flex flex-col items-center gap-1 p-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+                active
+                  ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                  : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
+              }`}
+            >
+              {img && (
+                <img
+                  src={img}
+                  alt={map}
+                  className={`w-[50px] h-[40px] object-cover rounded shrink-0 transition-opacity ${active ? '' : 'opacity-40 grayscale'}`}
+                />
+              )}
+              <span className={active ? '' : 'line-through'}>{map}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+
     <div className="bg-[#1a1d23] rounded-xl shadow-2xl overflow-hidden border border-gray-800">
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
@@ -158,6 +205,7 @@ export function MapsSection({ stats, compositions, agentImages }: Props) {
           </tbody>
         </table>
       </div>
+    </div>
     </div>
   );
 }

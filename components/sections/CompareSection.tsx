@@ -11,6 +11,8 @@ interface Props {
   agentImages: Record<string, string>;
   teamAName: string;
   teamBName: string;
+  teamLogos?: Record<string, string>;
+  mapImages?: Record<string, string>;
 }
 
 const EMPTY: MapStat = {
@@ -201,7 +203,7 @@ function CompCells({
   );
 }
 
-export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, teamAName, teamBName }: Props) {
+export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, teamAName, teamBName, teamLogos = {}, mapImages = {} }: Props) {
   const [expandedMap, setExpandedMap] = useState<string | null>(null);
 
   // Build joined map index
@@ -211,7 +213,22 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
     if (!mapIndex[s.mapName]) mapIndex[s.mapName] = { a: null, b: s };
     else mapIndex[s.mapName].b = s;
   });
-  const rows = Object.entries(mapIndex).sort(([a], [b]) => a.localeCompare(b));
+  const allRows = Object.entries(mapIndex).sort(([a], [b]) => a.localeCompare(b));
+  const allMaps = allRows.map(([m]) => m);
+
+  // Map filter chips — por defecto todos los mapas visibles excepto Abyss, Bind y Corrode
+  const DEFAULT_HIDDEN_MAPS = ['abyss', 'bind', 'corrode'];
+  const [hiddenMaps, setHiddenMaps] = useState<Set<string>>(
+    () => new Set(allMaps.filter(m => DEFAULT_HIDDEN_MAPS.includes(m.toLowerCase())))
+  );
+  function toggleMap(map: string) {
+    setHiddenMaps(prev => {
+      const next = new Set(prev);
+      if (next.has(map)) next.delete(map); else next.add(map);
+      return next;
+    });
+  }
+  const rows = allRows.filter(([m]) => !hiddenMaps.has(m));
 
   const compsAByMap: Record<string, MapCompositionStat[]> = {};
   for (const c of compsA) {
@@ -233,6 +250,38 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
           Choose Team B in the filters above to compare...
         </div>
       ) : (
+        <div className="flex flex-col gap-4">
+        {/* Map filter chips */}
+        <div className="flex flex-col gap-2">
+          <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Maps</span>
+          <div className="flex flex-wrap gap-2 px-1">
+            {allMaps.map(map => {
+              const active = !hiddenMaps.has(map);
+              const img = mapImages[map];
+              return (
+                <button
+                  key={map}
+                  onClick={() => toggleMap(map)}
+                  className={`flex flex-col items-center gap-1 p-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+                    active
+                      ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                      : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
+                  }`}
+                >
+                  {img && (
+                    <img
+                      src={img}
+                      alt={map}
+                      className={`w-[50px] h-[40px] object-cover rounded shrink-0 transition-opacity ${active ? '' : 'opacity-40 grayscale'}`}
+                    />
+                  )}
+                  <span className={active ? '' : 'line-through'}>{map}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800">
           <div>
             <table className="w-full text-left border-collapse text-[13.8px]">
@@ -240,11 +289,21 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
                 {/* Team name labels */}
                 <tr>
                   <th colSpan={6} className="sticky top-0 z-20 bg-[#0f1115] py-2 text-center text-blue-300 border-b border-gray-700 font-bold tracking-wider text-[23px]">
-                    {teamAName}
+                    <div className="flex items-center justify-center gap-2.5">
+                      {teamLogos[teamAName] && (
+                        <img src={teamLogos[teamAName]} alt={teamAName} className="w-8 h-8 object-contain shrink-0" />
+                      )}
+                      {teamAName}
+                    </div>
                   </th>
                   <th className="sticky top-0 z-20 bg-[#0f1115] py-2 border-b border-gray-700" />
                   <th colSpan={6} className="sticky top-0 z-20 bg-[#0f1115] py-2 text-center text-orange-300 border-b border-gray-700 font-bold tracking-wider text-[23px]">
-                    {teamBName}
+                    <div className="flex items-center justify-center gap-2.5">
+                      {teamLogos[teamBName] && (
+                        <img src={teamLogos[teamBName]} alt={teamBName} className="w-8 h-8 object-contain shrink-0" />
+                      )}
+                      {teamBName}
+                    </div>
                   </th>
                 </tr>
                 {/* Column headers */}
@@ -385,6 +444,7 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
               </tbody>
             </table>
           </div>
+        </div>
         </div>
       )}
     </div>

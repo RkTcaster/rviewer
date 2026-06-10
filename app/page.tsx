@@ -88,7 +88,7 @@ export default async function Page({
     ? await getOverallCompositions({ reg: regArr, tour, bo })
     : [];
 
-  const mapImages = (section === 'agent-picks' || section === 'maps-masters' || section === 'neon-dependency')
+  const mapImages = (section === 'agent-picks' || section === 'maps-masters' || section === 'neon-dependency' || section === 'compare-maps' || section === 'maps')
     ? await getMapImages()
     : {};
 
@@ -96,7 +96,7 @@ export default async function Page({
     ? await getAgentImages()
     : {};
 
-  const [teamLogos, teamRegions] = (isStatsRank || isMapsMasters || isNeonDependency)
+  const [teamLogos, teamRegions] = (isStatsRank || isMapsMasters || isNeonDependency || section === 'compare-maps' || section === 'compare-stats')
     ? await Promise.all([getTeamLogos(), getTeamRegions()])
     : [{}, {}];
 
@@ -225,6 +225,8 @@ export default async function Page({
             agentImages={agentImages}
             teamAName={team || ''}
             teamBName={team2 || ''}
+            teamLogos={teamLogos}
+            mapImages={mapImages}
           />
         );
       case 'compare-stats':
@@ -243,10 +245,11 @@ export default async function Page({
             teamAName={team || ''}
             teamBName={team2 || ''}
             rankings={rankings}
+            teamLogos={teamLogos}
           />
         );
       default:
-        return <MapsSection stats={stats} compositions={compositionsData} agentImages={agentImages} />;
+        return <MapsSection stats={stats} compositions={compositionsData} agentImages={agentImages} mapImages={mapImages} />;
     }
   }
 
