@@ -140,6 +140,18 @@ export type AgentPickStat = {
   nonMirrorWins?: number;
 };
 
+export type AgentMatchDetail = {
+  agent: string;        // agente jugado (para filtrar)
+  map: string;
+  team: string;         // equipo que jugó el agente
+  opponent: string;
+  won: boolean;
+  date: string;
+  url?: string;         // source_url (vlr)
+  composition: string[];   // agentes del equipo en ese mapa (ordenados)
+  oppComposition: string[];// agentes del rival en ese mapa (ordenados)
+};
+
 export type PlayerStat = {
   player: string;
   agent: string;

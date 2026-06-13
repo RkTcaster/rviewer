@@ -3,7 +3,7 @@ import { unstable_cache } from 'next/cache';
 import { supabase } from './supabase';
 
 // --- TYPES ---
-import { AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, LongestMapEntry, MapCompositionStat, MapsMastersData, MapWL, MapStat, OverallMapFullStat, OverallMapStat, PlayerMatchPoint, PlayerStat, PlayerTimelineData, Region, SimulationRow, SkirmishStats, SkirmishTeamStat, SkirmishPlayerStat, TeamEconomyCompare, TeamRankStats, TopPlayerPerformance, Tournament, TournamentPlayerAvg } from './types';
+import { AgentMatchDetail, AgentPickStat, CompositionStat, DashboardData, EconomyBin, EconomyCategoryStats, LongestMapEntry, MapCompositionStat, MapsMastersData, MapWL, MapStat, OverallMapFullStat, OverallMapStat, PlayerMatchPoint, PlayerStat, PlayerTimelineData, Region, SimulationRow, SkirmishStats, SkirmishTeamStat, SkirmishPlayerStat, TeamEconomyCompare, TeamRankStats, TopPlayerPerformance, Tournament, TournamentPlayerAvg } from './types';
 
 // --- HELPERS ---
 
@@ -634,6 +634,99 @@ async function getAgentPickStats_impl(
     const mapCmp = a.map.localeCompare(b.map);
     return mapCmp !== 0 ? mapCmp : b.pickRate - a.pickRate;
   });
+}
+
+export const getAgentNonMirrorMatches = versioned('agent-nonmirror-matches', getAgentNonMirrorMatches_impl);
+async function getAgentNonMirrorMatches_impl(
+  filters: { reg?: string[]; tour?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
+): Promise<AgentMatchDetail[]> {
+  // Pre-fetch series_ids + dates from draft (date filters + always for date lookup)
+  let draftQuery = supabase.from('draft').select('series_id, date');
+  if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
+  if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
+  if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
+  if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
+  const { data: draftData } = await draftQuery;
+  if (!draftData || draftData.length === 0) return [];
+  const dateBySeriesId: Record<string, string> = {};
+  for (const d of draftData as any[]) {
+    if (d.series_id && d.date && !dateBySeriesId[d.series_id]) dateBySeriesId[d.series_id] = d.date;
+  }
+  const seriesIds = [...new Set(draftData.map((d: any) => d.series_id))];
+
+  const agentRows = await fetchAllPages<{ team: string; map: string; series_id: string; map_id: string; agent: string; source_url: string }>((from, to) => {
+    let q = supabase.from('player_stats')
+      .select('team, map, series_id, map_id, agent, source_url')
+      .in('series_id', seriesIds);
+    if (filters.tour) q = q.in('tour_id', filters.tour.split(','));
+    if (filters.reg)  q = q.in('reg_id', filters.reg!);
+    if (filters.excludeTeams && filters.excludeTeams.length > 0) {
+      q = q.not('team', 'in', `(${filters.excludeTeams.join(',')})`);
+    }
+    return q.range(from, to);
+  });
+  if (!agentRows || agentRows.length === 0) return [];
+
+  // Per-instance agent sets per team + map/url
+  const instanceAgents: Record<string, Record<string, Set<string>>> = {};
+  const mapByInstance: Record<string, string> = {};
+  const urlByInstance: Record<string, string> = {};
+  const seriesByInstance: Record<string, string> = {};
+  for (const row of agentRows) {
+    if (!row.team || !row.series_id || !row.map_id || !row.agent) continue;
+    const instKey = `${row.series_id}__${row.map_id}`;
+    if (!instanceAgents[instKey]) instanceAgents[instKey] = {};
+    if (!instanceAgents[instKey][row.team]) instanceAgents[instKey][row.team] = new Set();
+    instanceAgents[instKey][row.team].add(row.agent);
+    if (row.map && !mapByInstance[instKey]) mapByInstance[instKey] = row.map;
+    if (row.source_url && !urlByInstance[instKey]) urlByInstance[instKey] = row.source_url;
+    if (!seriesByInstance[instKey]) seriesByInstance[instKey] = row.series_id;
+  }
+
+  // Winner per map_id from round_info (same pattern as getAgentPickStats)
+  const allSeriesIds = [...new Set(agentRows.map(r => r.series_id).filter(Boolean))];
+  const winnerByMapId: Record<string, string> = {};
+  if (allSeriesIds.length > 0) {
+    const roundRows = await fetchAllPages<any>((from, to) =>
+      supabase.from('round_info')
+        .select('series_id, map_id, round, teamA, teamB, rndA, rndB')
+        .in('series_id', allSeriesIds)
+        .range(from, to)
+    );
+    const finalRoundByMapId: Record<string, any> = {};
+    for (const r of roundRows) {
+      const prev = finalRoundByMapId[r.map_id];
+      if (!prev || Number(r.round) > Number(prev.round)) finalRoundByMapId[r.map_id] = r;
+    }
+    for (const [map_id, r] of Object.entries(finalRoundByMapId)) {
+      winnerByMapId[map_id] = Number((r as any).rndA) === 1 ? (r as any).teamA?.trim() : (r as any).teamB?.trim();
+    }
+  }
+
+  // Emit one record per non-mirror agent of each team in each instance
+  const result: AgentMatchDetail[] = [];
+  for (const [instKey, teams] of Object.entries(instanceAgents)) {
+    const teamNames = Object.keys(teams);
+    const [, map_id] = instKey.split('__');
+    const seriesId = seriesByInstance[instKey];
+    const map = mapByInstance[instKey] ?? '';
+    const url = urlByInstance[instKey];
+    const date = dateBySeriesId[seriesId] ?? '';
+    const winner = winnerByMapId[map_id];
+    for (const team of teamNames) {
+      const opponent = teamNames.find(t => t !== team) ?? '';
+      const oppAgents = opponent ? teams[opponent] : new Set<string>();
+      const teamAgents = teams[team];
+      const composition = [...teamAgents].sort((a, b) => a.localeCompare(b));
+      const oppComposition = [...oppAgents].sort((a, b) => a.localeCompare(b));
+      const won = !!winner && winner.toLowerCase() === team.toLowerCase();
+      for (const agent of teamAgents) {
+        if (oppAgents.has(agent)) continue; // mirror → excluir
+        result.push({ agent, map, team, opponent, won, date, url, composition, oppComposition });
+      }
+    }
+  }
+  return result;
 }
 
 export const getOverallCompositions = versioned('overall-compositions', getOverallCompositions_impl);

@@ -2,12 +2,13 @@
 
 import { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
-import { AgentPickStat, CompositionStat, OverallMapFullStat } from '@/lib/types';
+import { AgentMatchDetail, AgentPickStat, CompositionStat, OverallMapFullStat } from '@/lib/types';
 import { KPICard } from '@/components/KPICard';
 
 interface Props {
   stats: AgentPickStat[];
   compositions: CompositionStat[];
+  agentMatches: AgentMatchDetail[];
   mapImages: Record<string, string>;
   agentImages: Record<string, string>;
   mapFullStats: Record<string, OverallMapFullStat>;
@@ -40,6 +41,17 @@ function CompositionIcons({ composition, agentImages }: { composition: string; a
   return <span className="text-gray-300 text-xs leading-snug">{composition}</span>;
 }
 
+function formatDateDMY(raw?: string): string | null {
+  if (!raw) return null;
+  const [datePart] = raw.split(/[T ]/);
+  const parts = datePart.split('-');
+  if (parts.length !== 3) return null;
+  const yy = parts[0].slice(-2);
+  const mm = parts[1].padStart(2, '0');
+  const dd = parts[2].padStart(2, '0');
+  return `${dd}-${mm}-${yy}`;
+}
+
 function CustomTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload as AgentPickStat & { nmwr?: number };
@@ -57,11 +69,13 @@ function CustomTooltip({ active, payload }: any) {
   );
 }
 
-export function AgentPicksSection({ stats, compositions, mapImages, agentImages, mapFullStats }: Props) {
+export function AgentPicksSection({ stats, compositions, agentMatches, mapImages, agentImages, mapFullStats }: Props) {
   const [selectedMaps, setSelectedMaps] = useState<Set<string>>(new Set());
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<'pickRate' | 'nmwr'>('pickRate');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
+  const [rightMode, setRightMode] = useState<'comps' | 'detail'>('comps');
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
 
   const clickSort = (key: 'pickRate' | 'nmwr') => {
     if (sortBy === key) setSortDir(d => (d === 'desc' ? 'asc' : 'desc'));
@@ -174,6 +188,19 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
       }));
   }, [compositions, selectedMaps]);
 
+  // Detail mode: agent shown = explicit selection, or top NMWR agent in current view
+  const detailAgent = useMemo(() => {
+    if (selectedAgent && filtered.some(d => d.agent === selectedAgent)) return selectedAgent;
+    return filtered.find(d => d.nmwr !== undefined)?.agent ?? null;
+  }, [selectedAgent, filtered]);
+
+  const matchList = useMemo(() => {
+    if (!detailAgent) return [];
+    return agentMatches
+      .filter(m => m.agent === detailAgent && inScope(m.map))
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  }, [agentMatches, detailAgent, selectedMaps]);
+
   const chartHeight = Math.max(300, filtered.length * 36);
   const maxPickRate = Math.max(10, ...filtered.map(d => d.pickRate));
   const xDomain: [number, number] = [0, maxPickRate];
@@ -242,6 +269,27 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
             })}
           </div>
         </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Detail info</label>
+          <div className="flex gap-2">
+            {([['comps', 'Compositions'], ['detail', 'NMWR Detail']] as const).map(([key, label]) => {
+              const active = rightMode === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setRightMode(key)}
+                  className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+                    active
+                      ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                      : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <p className="text-[11px] text-gray-500 self-end pb-2 ml-auto">NMWR = win rate excluding mirror picks</p>
       </div>
 
@@ -287,21 +335,76 @@ export function AgentPicksSection({ stats, compositions, mapImages, agentImages,
               </ResponsiveContainer>
             </div>
             {/* NMWR column — aligned per agent row (chart uses margin top/bottom: 0) */}
-            <div className="w-[90px] shrink-0 flex flex-col" style={{ height: chartHeight, paddingBottom: 30 }}>
-              {filtered.map((d, i) => (
-                <div key={i} className={`flex-1 flex items-center justify-end text-[11px] font-bold ${i === hoveredIndex ? 'bg-white/[0.04]' : ''}`}>
-                  {d.nmwr !== undefined
-                    ? <span className={d.nmwr >= 55 ? 'text-green-400' : d.nmwr <= 45 ? 'text-red-400' : 'text-gray-300'}>NMWR {d.nmwr}%</span>
-                    : <span className="text-gray-600">—</span>}
-                </div>
-              ))}
+            <div className="w-[120px] shrink-0 flex flex-col" style={{ height: chartHeight, paddingBottom: 30 }}>
+              {filtered.map((d, i) => {
+                const clickable = rightMode === 'detail' && d.nmwr !== undefined;
+                const isSelected = rightMode === 'detail' && d.agent === detailAgent;
+                return (
+                  <div
+                    key={i}
+                    onClick={clickable ? () => setSelectedAgent(d.agent) : undefined}
+                    className={`flex-1 flex items-center justify-end gap-1.5 text-[11px] font-bold ${clickable ? 'cursor-pointer' : ''} ${isSelected ? 'bg-blue-500/15' : i === hoveredIndex ? 'bg-white/[0.04]' : ''}`}
+                  >
+                    {d.nmwr !== undefined
+                      ? <>
+                          <span className={d.nmwr >= 55 ? 'text-green-400' : d.nmwr <= 45 ? 'text-red-400' : 'text-gray-300'}>NMWR {d.nmwr}%</span>
+                          <span className="text-gray-500 font-normal">({d.nonMirrorPlayed ?? 0})</span>
+                        </>
+                      : <span className="text-gray-600">—</span>}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
 
-        {/* Compositions panel — right half */}
+        {/* Right half — Compositions or NMWR Detail */}
         <div className="flex-1 min-w-0 bg-[#1a1d23] rounded-xl border border-gray-800 p-6">
-          {(() => {
+          {rightMode === 'detail' ? (
+            !detailAgent ? (
+              <p className="text-gray-600 text-sm">Click an agent to see its non-mirror matches</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  {agentImages[detailAgent] && <img src={agentImages[detailAgent]} alt={detailAgent} className="w-6 h-6 rounded" />}
+                  <span className="font-bold text-white">{detailAgent}</span>
+                  {(() => {
+                    const nmwr = filtered.find(d => d.agent === detailAgent)?.nmwr;
+                    return nmwr !== undefined && (
+                      <span className={`font-bold text-sm ${nmwr >= 55 ? 'text-green-400' : nmwr <= 45 ? 'text-red-400' : 'text-gray-300'}`}>NMWR {nmwr}%</span>
+                    );
+                  })()}
+                  <span className="text-gray-500 text-xs">
+                    {matchList.length} non-mirror · {matchList.filter(m => m.won).length}W-{matchList.filter(m => !m.won).length}L
+                  </span>
+                </div>
+                {matchList.length === 0 ? (
+                  <p className="text-gray-600 text-sm">No matches in scope</p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {matchList.map((m, i) => (
+                      <div key={i} className="flex items-center gap-2 py-1 border-b border-gray-800/60 last:border-0">
+                        <span className={`text-[11px] font-bold w-5 shrink-0 ${m.won ? 'text-green-400' : 'text-red-400'}`}>{m.won ? 'W' : 'L'}</span>
+                        <span className="text-[11px] font-bold text-blue-400 w-[70px] shrink-0 truncate" title={m.map}>{m.map}</span>
+                        <div className="w-[135px] shrink-0 flex justify-end">
+                          <CompositionIcons composition={m.composition.join(', ')} agentImages={agentImages} />
+                        </div>
+                        <span className="text-xs text-gray-200 shrink-0 w-[150px] truncate text-center" title={`${m.team} vs ${m.opponent}`}>
+                          {m.team} <span className="text-gray-600">vs</span> {m.opponent}
+                        </span>
+                        <div className="w-[135px] shrink-0 flex justify-start">
+                          <CompositionIcons composition={m.oppComposition.join(', ')} agentImages={agentImages} />
+                        </div>
+                        {m.url
+                          ? <a href={m.url} target="_blank" rel="noopener noreferrer" className="ml-auto text-[11px] font-bold text-blue-400 hover:text-blue-300 shrink-0">{formatDateDMY(m.date) ?? m.date} ↗</a>
+                          : <span className="ml-auto text-[11px] text-gray-400 shrink-0">{formatDateDMY(m.date) ?? m.date}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          ) : (() => {
             // Normalize to grouped format in both cases
             const groups: { map: string; comps: CompositionStat[] }[] = single
               ? [{ map: single, comps: compositionPanel as CompositionStat[] }]
