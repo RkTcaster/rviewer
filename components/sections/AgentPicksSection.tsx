@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, ReferenceLine } from 'recharts';
 import { AgentMatchDetail, AgentPickStat, CompositionStat, OverallMapFullStat } from '@/lib/types';
 import { KPICard } from '@/components/KPICard';
 
@@ -65,6 +65,19 @@ function CustomTooltip({ active, payload }: any) {
         <p className="text-amber-400">NMWR: <span className="font-bold">{d.nmwr}%</span> <span className="text-gray-400">({wins}-{played - wins})</span></p>
       )}
       <p className="text-blue-400">Times Picked: <span className="font-bold">{d.timesPlayed}</span></p>
+    </div>
+  );
+}
+
+function MapWLTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload as { map: string; wins: number; losses: number; nmwr: number };
+  return (
+    <div className="bg-[#0f1115] border border-gray-700 rounded-lg px-3 py-2 text-sm shadow-xl">
+      <p className="font-bold text-white mb-1">{d.map}</p>
+      <p className="text-amber-400">NMWR: <span className="font-bold">{d.nmwr}%</span></p>
+      <p className="text-green-400">Wins: <span className="font-bold">{d.wins}</span></p>
+      <p className="text-red-400">Losses: <span className="font-bold">{-d.losses}</span></p>
     </div>
   );
 }
@@ -200,6 +213,23 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
       .filter(m => m.agent === detailAgent && inScope(m.map))
       .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   }, [agentMatches, detailAgent, selectedMaps]);
+
+  const mapWL = useMemo(() => {
+    const by: Record<string, { wins: number; losses: number }> = {};
+    for (const m of matchList) {
+      if (!by[m.map]) by[m.map] = { wins: 0, losses: 0 };
+      if (m.won) by[m.map].wins++; else by[m.map].losses++;
+    }
+    return Object.entries(by)
+      .map(([map, { wins, losses }]) => ({
+        map,
+        wins,                // positivo
+        losses: -losses,     // negativo (hacia abajo)
+        total: wins + losses,
+        nmwr: Math.round((wins / (wins + losses)) * 100),
+      }))
+      .sort((a, b) => a.map.localeCompare(b.map));
+  }, [matchList]);
 
   const chartHeight = Math.max(300, filtered.length * 36);
   const maxPickRate = Math.max(10, ...filtered.map(d => d.pickRate));
@@ -378,6 +408,50 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
                     {matchList.length} non-mirror · {matchList.filter(m => m.won).length}W-{matchList.filter(m => !m.won).length}L
                   </span>
                 </div>
+                {mapWL.length > 0 && (
+                  <div className="bg-[#1a1d23] rounded-lg border border-gray-800 p-3">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={mapWL} margin={{ top: 20, right: 8, left: 0, bottom: 0 }} stackOffset="sign">
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2d3139" />
+                        <XAxis
+                          type="category"
+                          dataKey="map"
+                          stroke="#6b7280"
+                          fontSize={10}
+                          tickLine={false}
+                          interval={0}
+                        />
+                        <YAxis
+                          type="number"
+                          stroke="#6b7280"
+                          fontSize={10}
+                          tickLine={false}
+                          allowDecimals={false}
+                          tickFormatter={(v) => String(Math.abs(v))}
+                        />
+                        <Tooltip content={<MapWLTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                        <ReferenceLine y={0} stroke="#4b5563" />
+                        <Bar dataKey="wins" stackId="wl" fill="#22c55e" maxBarSize={48}>
+                          <LabelList
+                            dataKey="wins"
+                            position="top"
+                            content={(props: any) => {
+                              const { x, y, width, index } = props;
+                              const d = mapWL[index];
+                              if (!d) return null;
+                              return (
+                                <text x={x + width / 2} y={y - 4} textAnchor="middle" fill="#9ca3af" fontSize={10} fontWeight="bold">
+                                  {d.nmwr}% ({d.wins}-{-d.losses})
+                                </text>
+                              );
+                            }}
+                          />
+                        </Bar>
+                        <Bar dataKey="losses" stackId="wl" fill="#fca5a5" maxBarSize={48} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
                 {matchList.length === 0 ? (
                   <p className="text-gray-600 text-sm">No matches in scope</p>
                 ) : (
