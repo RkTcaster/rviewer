@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats } from '@/lib/data-service';
 import { STATS_RANK_DEFAULT_TOURS } from '@/lib/types';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
@@ -69,6 +69,10 @@ export default async function Page({
 
   const rankings = (section === 'compare-stats' || section === 'graphs' || section === 'stats-rank')
     ? await getTournamentRankings({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
+    : {};
+
+  const economy = isStatsRank
+    ? await getTournamentEconomy({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
     : {};
 
   // Overall data (only for overall sections)
@@ -210,7 +214,7 @@ export default async function Page({
       case 'playoff-pct':
         return <PlayoffPctSection scenarios={simulationScenarios} />;
       case 'stats-rank':
-        return <StatsRankSection rankings={rankings} teamLogos={teamLogos} teamRegions={teamRegions} />;
+        return <StatsRankSection rankings={rankings} economy={economy} teamLogos={teamLogos} teamRegions={teamRegions} />;
       case 'maps-masters':
         return <MapsMastersSection stats={mapsMasters.stats} maps={mapsMasters.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} />;
       case 'neon-dependency':

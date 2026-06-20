@@ -2032,6 +2032,59 @@ export async function getEconomyCompare(filters: {
   return stats;
 }
 
+export const getTournamentEconomy = versioned('tournament-economy', getTournamentEconomy_impl);
+async function getTournamentEconomy_impl(filters: {
+  tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string;
+}): Promise<Record<string, TeamEconomyCompare>> {
+  let idQuery = supabase.from('draft').select('series_id');
+  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
+  if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
+  if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
+  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
+  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
+  if (filters.last && filters.last !== 'all') idQuery = (idQuery as any).order('date', { ascending: false }).limit(parseInt(filters.last));
+
+  const { data: idList } = await idQuery;
+  if (!idList || idList.length === 0) return {};
+  const seriesIds = [...new Set(idList.map((x: any) => x.series_id))];
+
+  const rows = await fetchAllPages<{
+    team_a: string; team_b: string;
+    team_a_economy: number; team_b_economy: number;
+    win_A: number; round: number;
+  }>((from, to) =>
+    supabase
+      .from('team_economy')
+      .select('team_a,team_b,team_a_economy,team_b_economy,win_A,round')
+      .in('series_id', seriesIds)
+      .range(from, to)
+  );
+
+  const result: Record<string, TeamEconomyCompare> = {};
+  const ensure = (team: string) => (result[team] ??= emptyTeamEconomyCompare());
+
+  for (const row of rows) {
+    if (row.round === 1 || row.round === 13) continue;
+    if (row.team_a_economy == null || row.team_b_economy == null) continue;
+
+    for (const { team, teamEco, oppEco, won } of [
+      { team: row.team_a, teamEco: row.team_a_economy, oppEco: row.team_b_economy, won: row.win_A === 1 },
+      { team: row.team_b, teamEco: row.team_b_economy, oppEco: row.team_a_economy, won: row.win_A === 0 },
+    ]) {
+      if (!team) continue;
+      const teamCat = classifyEconomy(teamEco);
+      const vsKey   = vsMap[classifyEconomy(oppEco)];
+      const stats = ensure(team);
+      stats[teamCat].total.played++;
+      if (won) stats[teamCat].total.wins++;
+      stats[teamCat][vsKey].played++;
+      if (won) stats[teamCat][vsKey].wins++;
+    }
+  }
+
+  return result;
+}
+
 export async function getTopPlayerPerformances(filters: {
   reg?: string[];
   tour?: string;

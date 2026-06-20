@@ -1,13 +1,41 @@
 'use client';
 
 import { useState } from 'react';
-import { TeamRankStats, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { TeamRankStats, TeamEconomyCompare, EconomyCategoryStats, EconomyMatchup, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 
 interface Props {
   rankings: Record<string, TeamRankStats>;
+  economy?: Record<string, TeamEconomyCompare>;
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
+}
+
+const ECO_CATEGORIES: { key: keyof TeamEconomyCompare; label: string; range: string }[] = [
+  { key: 'eco',     label: 'Eco',      range: '0-5k'   },
+  { key: 'semiEco', label: 'Semi-Eco', range: '5-15k'  },
+  { key: 'semiBuy', label: 'Semi-Buy', range: '15-20k' },
+  { key: 'fullBuy', label: 'Full Buy', range: '20k+'   },
+];
+const ECO_VS: { key: keyof EconomyCategoryStats; label: string }[] = [
+  { key: 'total',     label: 'Overall'     },
+  { key: 'vsEco',     label: 'vs Eco'      },
+  { key: 'vsSemiEco', label: 'vs Semi-Eco' },
+  { key: 'vsSemiBuy', label: 'vs Semi-Buy' },
+  { key: 'vsFullBuy', label: 'vs Full-Buy' },
+];
+// Toggleable column groups (chips). 'overall' + 'first3' come from METRICS; the rest are economy categories.
+const COLUMN_GROUPS: { id: string; label: string }[] = [
+  { id: 'overall', label: 'Overall' },
+  { id: 'first3',  label: 'First 3 rounds performance' },
+  ...ECO_CATEGORIES.map(c => ({ id: c.key as string, label: c.label })),
+];
+const ecoColKey = (cat: keyof TeamEconomyCompare, vs: keyof EconomyCategoryStats) => `${cat}:${vs}`;
+function ecoMatchup(economy: Record<string, TeamEconomyCompare>, team: string, cat: keyof TeamEconomyCompare, vs: keyof EconomyCategoryStats): EconomyMatchup | undefined {
+  return economy[team]?.[cat]?.[vs];
+}
+function ecoValue(m: EconomyMatchup | undefined): number | null {
+  return m && m.played > 0 ? Math.round((m.wins / m.played) * 100) : null;
 }
 
 const REGION_ROWS: { id: string; label: string }[] = [
@@ -63,9 +91,9 @@ function getCellColor(value: number | null, allValues: (number | null)[], lowerI
   return 'text-gray-300';
 }
 
-export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }: Props) {
+export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamRegions = {} }: Props) {
   const { navigate } = useNavigation();
-  const [sortCol, setSortCol] = useState<number | null>(null);
+  const [sortCol, setSortCol] = useState<number | string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const [showDetail, setShowDetail] = useState(false);
@@ -78,6 +106,11 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
 
   const baseTeams = allTeams.filter(t => !hiddenTeams.has(t));
 
+  // Column-group visibility (chips). Default: Overall + First 3 visible, economy groups hidden.
+  const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(
+    () => new Set(ECO_CATEGORIES.map(c => c.key))
+  );
+
   function toggleTeam(team: string) {
     setHiddenTeams(prev => {
       const next = new Set(prev);
@@ -86,9 +119,18 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
     });
   }
 
+  function toggleGroup(id: string) {
+    setHiddenGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
   function resetFilters() {
     // Vuelve al estado inicial: 4 torneos por defecto (sin params) y equipos filtrados
     setHiddenTeams(new Set(allTeams.filter(t => !STATS_RANK_DEFAULT_TEAMS.includes(t))));
+    setHiddenGroups(new Set(ECO_CATEGORIES.map(c => c.key)));
     setSortCol(null);
     setSortDir('desc');
     navigate('?section=stats-rank');
@@ -114,26 +156,45 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
   const firstGroupCount = separatorIdx;
   const secondGroupCount = metricDefs.length - firstGroupCount;
 
+  // Group visibility helpers (chips). Metric group is 'overall' before the separator, 'first3' after.
+  const metricGroupId = (mi: number) => (mi < firstGroupCount ? 'overall' : 'first3');
+  const showOverall = !hiddenGroups.has('overall');
+  const showFirst3 = !hiddenGroups.has('first3');
+  const visibleEcoCats = ECO_CATEGORIES.filter(c => !hiddenGroups.has(c.key));
+
   // Pre-compute per-metric values for all teams (for coloring, always uses base alphabetical order)
   const metricAllValues = metricDefs.map(m => baseTeams.map(t => m.getValue(rankings[t])));
+
+  // Pre-compute per-economy-column values for all teams (keyed by "cat:vs")
+  const ecoAllValues: Record<string, (number | null)[]> = {};
+  for (const c of ECO_CATEGORIES) for (const v of ECO_VS) {
+    ecoAllValues[ecoColKey(c.key, v.key)] = baseTeams.map(t => ecoValue(ecoMatchup(economy, t, c.key, v.key)));
+  }
+
+  // Resolve the sortable value for a team given the current sort column (metric index or eco "cat:vs" key)
+  const sortValue = (t: string): number | null => {
+    if (typeof sortCol === 'number') return metricDefs[sortCol].getValue(rankings[t]);
+    const [cat, vs] = (sortCol as string).split(':') as [keyof TeamEconomyCompare, keyof EconomyCategoryStats];
+    return ecoValue(ecoMatchup(economy, t, cat, vs));
+  };
 
   // Sort teams by selected column
   const teams = sortCol === null
     ? baseTeams
     : [...baseTeams].sort((a, b) => {
-        const valA = metricDefs[sortCol].getValue(rankings[a]);
-        const valB = metricDefs[sortCol].getValue(rankings[b]);
+        const valA = sortValue(a);
+        const valB = sortValue(b);
         if (valA === null && valB === null) return 0;
         if (valA === null) return 1;
         if (valB === null) return -1;
         return sortDir === 'asc' ? valA - valB : valB - valA;
       });
 
-  function handleColClick(mi: number) {
-    if (sortCol === mi) {
+  function handleColClick(col: number | string) {
+    if (sortCol === col) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     } else {
-      setSortCol(mi);
+      setSortCol(col);
       setSortDir('desc');
     }
   }
@@ -195,6 +256,27 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
       );
     })()}
 
+    {/* Table info subtitle + group filter chips */}
+    <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Table info</span>
+    <div className="flex flex-wrap gap-2 px-1">
+      {COLUMN_GROUPS.map(g => {
+        const active = !hiddenGroups.has(g.id);
+        return (
+          <button
+            key={g.id}
+            onClick={() => toggleGroup(g.id)}
+            className={`px-3 py-1.5 rounded-xl text-[12px] font-bold uppercase tracking-wide transition-colors border ${
+              active
+                ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
+            }`}
+          >
+            <span className={active ? '' : 'line-through'}>{g.label}</span>
+          </button>
+        );
+      })}
+    </div>
+
     {/* Controls */}
     <div className="flex justify-start gap-2 px-1">
       <button
@@ -238,22 +320,38 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
             >
               Team
             </th>
-            <th
-              colSpan={firstGroupCount}
-              className="px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-widest text-gray-600 border-b border-gray-700"
-            />
-            <th
-              colSpan={secondGroupCount}
-              className="px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-widest text-gray-500 border-b border-l-2 border-gray-700"
-            >
-              {separatorLabel}
-            </th>
+            {showOverall && (
+              <th
+                colSpan={firstGroupCount}
+                className="px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-widest text-gray-500 border-b border-gray-700"
+              >
+                Overall
+              </th>
+            )}
+            {showFirst3 && (
+              <th
+                colSpan={secondGroupCount}
+                className="px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-widest text-gray-500 border-b border-l-2 border-gray-700"
+              >
+                {separatorLabel}
+              </th>
+            )}
+            {visibleEcoCats.map(c => (
+              <th
+                key={c.key}
+                colSpan={ECO_VS.length}
+                className="px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-widest text-gray-500 border-b border-l-2 border-gray-700"
+              >
+                {c.label} <span className="text-gray-600 normal-case">{c.range}</span>
+              </th>
+            ))}
           </tr>
           {/* Metric label row — rotated vertical text, clickable */}
           <tr>
             {metricDefs.map((m, mi) => {
+              if (hiddenGroups.has(metricGroupId(mi))) return null;
               const isFirstOfGroup = afterSeparatorLabels.has(m.label) &&
-                metricDefs[mi - 1] && !afterSeparatorLabels.has(metricDefs[mi - 1].label);
+                metricDefs[mi - 1] && !afterSeparatorLabels.has(metricDefs[mi - 1].label) && showOverall;
               const isActive = sortCol === mi;
               return (
                 <th
@@ -288,6 +386,32 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
                 </th>
               );
             })}
+            {visibleEcoCats.map(c => ECO_VS.map((v, vi) => {
+              const colKey = ecoColKey(c.key, v.key);
+              const isActive = sortCol === colKey;
+              const isFirstOfGroup = vi === 0;
+              const w = v.label.split(' ');
+              return (
+                <th
+                  key={colKey}
+                  onClick={() => handleColClick(colKey)}
+                  className={`border-b border-gray-800 cursor-pointer select-none transition-colors hover:bg-[#252a33] ${isFirstOfGroup ? 'border-l-2 border-l-gray-600' : ''} ${isActive ? 'bg-[#1e2430]' : ''}`}
+                  style={{ minWidth: 48 }}
+                >
+                  <div className="flex flex-col items-center justify-end pb-2 pt-1 gap-1" style={{ height: 64 }}>
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wide text-center leading-tight ${isActive ? 'text-blue-400' : 'text-gray-400'}`}
+                      style={{ whiteSpace: 'pre' }}
+                    >
+                      {`${w[0]}\n${w.slice(1).join(' ')}`}
+                    </span>
+                    <span className={`text-[9px] shrink-0 ${isActive ? 'text-blue-400' : 'text-gray-600'}`}>
+                      {isActive ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}
+                    </span>
+                  </div>
+                </th>
+              );
+            }))}
           </tr>
         </thead>
         <tbody>
@@ -305,10 +429,11 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
                 </div>
               </td>
               {metricDefs.map((m, mi) => {
+                if (hiddenGroups.has(metricGroupId(mi))) return null;
                 const val = m.getValue(rankings[team]);
                 const color = getCellColor(val, metricAllValues[mi], m.lowerIsBetter ?? false);
                 const isFirstOfGroup = afterSeparatorLabels.has(m.label) &&
-                  metricDefs[mi - 1] && !afterSeparatorLabels.has(metricDefs[mi - 1].label);
+                  metricDefs[mi - 1] && !afterSeparatorLabels.has(metricDefs[mi - 1].label) && showOverall;
                 const isActive = sortCol === mi;
                 return (
                   <td
@@ -332,6 +457,30 @@ export function StatsRankSection({ rankings, teamLogos = {}, teamRegions = {} }:
                   </td>
                 );
               })}
+              {visibleEcoCats.map(c => ECO_VS.map((v, vi) => {
+                const colKey = ecoColKey(c.key, v.key);
+                const mu = ecoMatchup(economy, team, c.key, v.key);
+                const val = ecoValue(mu);
+                const color = getCellColor(val, ecoAllValues[colKey], false);
+                const isFirstOfGroup = vi === 0;
+                const isActive = sortCol === colKey;
+                return (
+                  <td
+                    key={colKey}
+                    className={`py-3 text-center ${isActive ? 'bg-[#1e2430]' : 'bg-[#1a1d23]'} ${isFirstOfGroup ? 'border-l-2 border-l-gray-700' : ''}`}
+                    style={{ minWidth: 48 }}
+                  >
+                    <span className={`text-[16px] ${color}`}>
+                      {val !== null ? `${val}%` : <span className="text-gray-700">—</span>}
+                    </span>
+                    {showDetail && mu && mu.played > 0 && (
+                      <div className="text-[11px] text-gray-600 whitespace-nowrap">
+                        {mu.wins}W-{mu.played - mu.wins}L
+                      </div>
+                    )}
+                  </td>
+                );
+              }))}
             </tr>
           ))}
         </tbody>
