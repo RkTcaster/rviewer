@@ -50,6 +50,7 @@ export type Tournament = {
 
 // Torneos seleccionados por defecto al entrar a la solapa Stats Rank
 export const STATS_RANK_DEFAULT_TOURS = [
+  'esports_world_cup_2026',
   'vct_2026_americas_stage_1',
   'vct_2026_emea_stage_1',
   'vct_2026_pacific_stage_1',
@@ -59,7 +60,7 @@ export const STATS_RANK_DEFAULT_TOURS = [
 
 // Equipos visibles por defecto en la tabla de Stats Rank
 export const STATS_RANK_DEFAULT_TEAMS = [
-  'G2', 'LEV', 'NRG', 'TH', 'VIT', 'FUT', 'FS', 'GE', 'DRG', 'XLG', 'EDG', 'PRX',
+  'G2', 'MIBR', 'NRG', 'TH', 'VIT', 'KC', 'M8', 'GE', 'NS', 'XLG', 'EDG', 'PRX','AG','RRQ','100T','BBL'
 ];
 
 export type OverallMapStat = {

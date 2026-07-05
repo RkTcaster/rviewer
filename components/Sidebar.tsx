@@ -11,8 +11,8 @@ const NAV_SECTIONS = [
     title: 'Overall',
     items: [
       { id: 'stats-rank',    label: 'Stats Rank',    icon: BarChart2 },
-      { id: 'maps-masters',  label: 'Maps Masters',  icon: LayoutGrid },
-      { id: 'neon-dependency', label: 'Neon Dependency', icon: Zap },
+      { id: 'maps-masters',  label: 'Maps Rank',  icon: LayoutGrid },
+      // { id: 'neon-dependency', label: 'Neon Dependency', icon: Zap },
       { id: 'map-picks',   label: 'Map Info',    icon: Map },
       { id: 'agent-picks',   label: 'Agent Picks',   icon: Users },
       { id: 'meta-shift',    label: 'Meta Shift',    icon: TrendingUp },
@@ -43,7 +43,7 @@ const NAV_SECTIONS = [
 export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) {
   const { navigate } = useNavigation();
   const searchParams = useSearchParams();
-  const currentSection = searchParams.get('section') || 'stats-rank';
+  const currentSection = searchParams.get('section') || 'compare-maps';
   const [collapsed, setCollapsed] = useState(false);
 
   function goToSection(section: string) {
