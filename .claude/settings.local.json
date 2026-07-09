@@ -13,7 +13,10 @@
       "Bash(node *)",
       "Bash(curl *)",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(sorted\\(set\\(x['reg_id'] for x in d\\)\\)\\)\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(npx next *)",
+      "Skill(dataviz)",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap } from 'lucide-react';
+import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap, ListOrdered, Activity } from 'lucide-react';
 import { useNavigation } from './NavigationContext';
 
 const NAV_SECTIONS = [
@@ -26,6 +26,8 @@ const NAV_SECTIONS = [
       { id: 'compare-maps',  label: 'Compare Maps',  icon: GitCompareArrows },
       { id: 'compare-stats',    label: 'Compare Stats',    icon: AlignCenterVertical },
       { id: 'compare-economy', label: 'Compare Economy', icon: Scale },
+      { id: 'veto', label: 'Veto Draft', icon: ListOrdered },
+      { id: 'form', label: 'Form Timeline', icon: Activity },
     ],
   },
   {

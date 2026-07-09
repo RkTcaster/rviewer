@@ -294,6 +294,25 @@ export type SimulationRow = {
   tournament: string;
 };
 
+// Secuencia de veto de un equipo en una serie (Bo3: ban → pick → ban; Bo5: ban → pick)
+export type VetoFlow = {
+  ban1: string;
+  pick: string;
+  ban2: string | null; // solo Bo3; en Bo5 el select_3 es un pick y no se usa acá
+  bo: number;
+};
+
+// Un mapa jugado por el equipo, en orden cronológico (para la timeline de forma)
+export type FormMapPoint = {
+  date: string;
+  rival: string;
+  event: string;
+  map: string;
+  roundsWon: number;
+  roundsLost: number;
+  won: boolean;
+};
+
 export type DashboardData = {
   mapStats: MapStat[];
   draftOrder: {
