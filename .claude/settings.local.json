@@ -16,7 +16,13 @@
       "Bash(python -c ' *)",
       "Bash(npx next *)",
       "Skill(dataviz)",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(break)",
+      "Bash(awk 'NR % 16 == 1')",
+      "Bash(grep -oE 'width:[0-9.]+%;background-color:hsla\\\\\\([0-9]+, [0-9]+%, 48%, 0.4\\\\\\)[^%]{0,220}?>[0-9]+%' /c/Users/lrktl/AppData/Local/Temp/claude/C--Users-lrktl-OneDrive-Escritorio-Programacion-No-python-rktdata-rviewer/0bc78678-d0c3-40de-bea4-3414ea6c1c7b/scratchpad/cm.html)",
+      "Bash(grep -oE 'width:[0-9.]+%;background-color:hsla\\\\\\([0-9]+, [0-9]+%, 48%, 0.4\\\\\\).{0,300}' /c/Users/lrktl/AppData/Local/Temp/claude/C--Users-lrktl-OneDrive-Escritorio-Programacion-No-python-rktdata-rviewer/0bc78678-d0c3-40de-bea4-3414ea6c1c7b/scratchpad/cm.html)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "PowerShell(Get-Process *)"
     ]
   }
 }
