@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Check, Minus, X } from 'lucide-react';
-import { MapWL, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { MapWL } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
   mapImages?: Record<string, string>;
+  hasTour?: boolean;
 }
 
 const REGION_ROWS: { id: string; label: string }[] = [
@@ -69,19 +70,17 @@ function getCellRank(value: number | null, allValues: (number | null)[]): 'best'
   return null;
 }
 
-export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {} }: Props) {
+export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, hasTour = false }: Props) {
   const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [showDetail, setShowDetail] = useState(false);
 
   const allTeams = Object.keys(stats).sort();
-  // Por defecto se muestran solo los equipos de STATS_RANK_DEFAULT_TEAMS (el resto ocultos)
-  const [hiddenTeams, setHiddenTeams] = useState<Set<string>>(
-    () => new Set(allTeams.filter(t => !STATS_RANK_DEFAULT_TEAMS.includes(t)))
-  );
+  // Por defecto no hay ningún equipo seleccionado: el usuario elige cuáles ver
+  const [selectedTeams, setSelectedTeams] = useState<Set<string>>(() => new Set());
 
-  const baseTeams = allTeams.filter(t => !hiddenTeams.has(t));
+  const baseTeams = allTeams.filter(t => selectedTeams.has(t));
 
   // Por defecto todos los mapas visibles excepto Bind
   const [hiddenMaps, setHiddenMaps] = useState<Set<string>>(
@@ -90,7 +89,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
   const visibleMaps = maps.filter(m => !hiddenMaps.has(m));
 
   function toggleTeam(team: string) {
-    setHiddenTeams(prev => {
+    setSelectedTeams(prev => {
       const next = new Set(prev);
       if (next.has(team)) next.delete(team); else next.add(team);
       return next;
@@ -107,7 +106,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
   }
 
   function resetFilters() {
-    setHiddenTeams(new Set(allTeams.filter(t => !STATS_RANK_DEFAULT_TEAMS.includes(t))));
+    setSelectedTeams(new Set());
     setHiddenMaps(new Set(maps.filter(m => m.toLowerCase() === 'bind')));
     setSortCol(null);
     setSortDir('desc');
@@ -118,7 +117,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
   if (allTeams.length === 0 || maps.length === 0) {
     return (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
-        Select a region and tournament to see the maps...
+        {hasTour ? 'No data for the selected filters' : 'Select a tournament to see the maps...'}
       </div>
     );
   }
@@ -157,13 +156,16 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
     }
   }
 
+  // El botón alterna entre agregar todos los equipos del torneo y limpiar la selección
+  const allTeamsSelected = allTeams.every(t => selectedTeams.has(t));
+
   return (
     <div className="flex flex-col gap-4">
 
       {/* Filtros: equipos (2 columnas) a la izquierda + mapas a la derecha */}
       {(() => {
         const renderTeamChip = (team: string) => {
-          const active = !hiddenTeams.has(team);
+          const active = selectedTeams.has(team);
           const logo = teamLogos[team];
           return (
             <button
@@ -225,7 +227,15 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
           <div className="flex flex-wrap gap-x-10 gap-y-4">
             {/* Teams — columna izquierda */}
             <div className="flex flex-col gap-2">
-              <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Teams</span>
+              <div className="flex items-center gap-3 px-1">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Teams</span>
+                <button
+                  onClick={() => setSelectedTeams(allTeamsSelected ? new Set() : new Set(allTeams))}
+                  className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200"
+                >
+                  {allTeamsSelected ? 'Clear' : 'Add all'}
+                </button>
+              </div>
               <div className="flex flex-col gap-2 px-1">
                 {visibleRows.map(row => (
                   <div key={row.label} className="flex items-center gap-3">

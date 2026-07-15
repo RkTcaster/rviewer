@@ -251,7 +251,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
       <SearchableMultiSelect
         label="Tournament"
         options={tours}
-        selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || (isStatsRank ? STATS_RANK_DEFAULT_TOURS : [])}
+        selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || (section === 'neon-dependency' ? STATS_RANK_DEFAULT_TOURS : [])}
         onChange={(values) => updateMultiFilter('tour', values)}
         disabled={!isOverall && !isEconomy && !isRelevantInfo && !isStatsRank && !searchParams.get('team')}
       />

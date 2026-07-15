@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { TeamRankStats, TeamEconomyCompare, EconomyCategoryStats, EconomyMatchup, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { TeamRankStats, TeamEconomyCompare, EconomyCategoryStats, EconomyMatchup } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
   economy?: Record<string, TeamEconomyCompare>;
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
+  hasTour?: boolean;
 }
 
 const ECO_CATEGORIES: { key: keyof TeamEconomyCompare; label: string; range: string }[] = [
@@ -91,7 +92,7 @@ function getCellColor(value: number | null, allValues: (number | null)[], lowerI
   return 'text-gray-300';
 }
 
-export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamRegions = {} }: Props) {
+export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamRegions = {}, hasTour = false }: Props) {
   const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<number | string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -99,12 +100,10 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   const [showDetail, setShowDetail] = useState(false);
 
   const allTeams = Object.keys(rankings).sort();
-  // Por defecto se muestran solo los equipos de STATS_RANK_DEFAULT_TEAMS (el resto ocultos)
-  const [hiddenTeams, setHiddenTeams] = useState<Set<string>>(
-    () => new Set(allTeams.filter(t => !STATS_RANK_DEFAULT_TEAMS.includes(t)))
-  );
+  // Por defecto no hay ningún equipo seleccionado: el usuario elige cuáles ver
+  const [selectedTeams, setSelectedTeams] = useState<Set<string>>(() => new Set());
 
-  const baseTeams = allTeams.filter(t => !hiddenTeams.has(t));
+  const baseTeams = allTeams.filter(t => selectedTeams.has(t));
 
   // Column-group visibility (chips). Default: Overall + First 3 visible, economy groups hidden.
   const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(
@@ -112,7 +111,7 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   );
 
   function toggleTeam(team: string) {
-    setHiddenTeams(prev => {
+    setSelectedTeams(prev => {
       const next = new Set(prev);
       if (next.has(team)) next.delete(team); else next.add(team);
       return next;
@@ -128,8 +127,8 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   }
 
   function resetFilters() {
-    // Vuelve al estado inicial: 4 torneos por defecto (sin params) y equipos filtrados
-    setHiddenTeams(new Set(allTeams.filter(t => !STATS_RANK_DEFAULT_TEAMS.includes(t))));
+    // Vuelve al estado inicial: torneos por defecto (sin params) y sin equipos seleccionados
+    setSelectedTeams(new Set());
     setHiddenGroups(new Set(ECO_CATEGORIES.map(c => c.key)));
     setSortCol(null);
     setSortDir('desc');
@@ -140,7 +139,7 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   if (allTeams.length === 0) {
     return (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
-        Select a region and tournament to see the ranking...
+        {hasTour ? 'No data for the selected filters' : 'Select a tournament to see the ranking...'}
       </div>
     );
   }
@@ -199,16 +198,27 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
     }
   }
 
+  // El botón alterna entre agregar todos los equipos del torneo y limpiar la selección
+  const allTeamsSelected = allTeams.every(t => selectedTeams.has(t));
+
   return (
     <div className="flex flex-col gap-4">
 
     {/* Teams subtitle */}
-    <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Teams</span>
+    <div className="flex items-center gap-3 px-1">
+      <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Teams</span>
+      <button
+        onClick={() => setSelectedTeams(allTeamsSelected ? new Set() : new Set(allTeams))}
+        className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200"
+      >
+        {allTeamsSelected ? 'Clear' : 'Add all'}
+      </button>
+    </div>
 
     {/* Team filter chips — one row per region */}
     {(() => {
       const renderChip = (team: string) => {
-        const active = !hiddenTeams.has(team);
+        const active = selectedTeams.has(team);
         const logo = teamLogos[team];
         return (
           <button

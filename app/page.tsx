@@ -34,10 +34,12 @@ export default async function Page({
   const { reg, team, tour, bo, last, section = 'compare-maps', team2, tour2, reg2, dateFrom, dateTo, dateFrom2, dateTo2, excA, excB } = params;
   const regArr = reg ? reg.split(',').filter(Boolean) : undefined;
   const reg2Arr = reg2 ? reg2.split(',').filter(Boolean) : undefined;
-  // En Stats Rank y Maps Masters, si no hay torneo elegido, usar la selección por defecto
-  const effectiveTour = ((section === 'stats-rank' || section === 'maps-masters' || section === 'neon-dependency') && tour === undefined)
+  // Solo Neon Dependency conserva la selección de torneos por defecto
+  const effectiveTour = (section === 'neon-dependency' && tour === undefined)
     ? STATS_RANK_DEFAULT_TOURS.join(',')
     : tour;
+  // Stats Rank y Maps Masters arrancan sin torneo: sin torneo no se consulta nada
+  const hasTour = (tour?.split(',').filter(Boolean).length ?? 0) > 0;
   const excludeTeamsA = excA ? excA.split(',') : [];
   const excludeTeamsB = excB ? excB.split(',') : [];
 
@@ -72,11 +74,11 @@ export default async function Page({
     ? getTeamMapCompositions({ team: team2, tour: tour2, bo, reg: regArr, last, dateFrom: dateFrom2, dateTo: dateTo2 })
     : Promise.resolve([]);
 
-  const rankingsP = (section === 'compare-stats' || section === 'graphs' || section === 'stats-rank')
+  const rankingsP = (section === 'compare-stats' || section === 'graphs' || (isStatsRank && hasTour))
     ? getTournamentRankings({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
     : Promise.resolve<Record<string, TeamRankStats>>({});
 
-  const economyP = isStatsRank
+  const economyP = (isStatsRank && hasTour)
     ? getTournamentEconomy({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
     : Promise.resolve({});
 
@@ -113,7 +115,7 @@ export default async function Page({
   const teamLogosP = needsLogos ? getTeamLogos() : Promise.resolve({});
   const teamRegionsP = needsLogos ? getTeamRegions() : Promise.resolve({});
 
-  const mapsMastersP = isMapsMasters
+  const mapsMastersP = (isMapsMasters && hasTour)
     ? getMapsMastersStats({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
     : Promise.resolve({ stats: {}, maps: [] });
 
@@ -249,9 +251,9 @@ export default async function Page({
       case 'playoff-pct':
         return <PlayoffPctSection scenarios={simulationScenarios} />;
       case 'stats-rank':
-        return <StatsRankSection rankings={rankings} economy={economy} teamLogos={teamLogos} teamRegions={teamRegions} />;
+        return <StatsRankSection rankings={rankings} economy={economy} teamLogos={teamLogos} teamRegions={teamRegions} hasTour={hasTour} />;
       case 'maps-masters':
-        return <MapsMastersSection stats={mapsMasters.stats} maps={mapsMasters.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} />;
+        return <MapsMastersSection stats={mapsMasters.stats} maps={mapsMasters.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} hasTour={hasTour} />;
       case 'neon-dependency':
         return <NeonDependencySection stats={neonDep.stats} maps={neonDep.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} />;
       case 'veto':
