@@ -12,9 +12,10 @@ interface Props {
   compositions: CompositionStat[];
   agentImages: Record<string, string>;
   mapImages?: Record<string, string>;
+  defaultHiddenMaps?: string[];
 }
 
-export function MapsSection({ stats, compositions, agentImages, mapImages = {} }: Props) {
+export function MapsSection({ stats, compositions, agentImages, mapImages = {}, defaultHiddenMaps = [] }: Props) {
   const compsByMap = compositions.reduce<Record<string, CompositionStat[]>>((acc, c) => {
     if (!acc[c.map]) acc[c.map] = [];
     acc[c.map].push(c);
@@ -24,10 +25,9 @@ export function MapsSection({ stats, compositions, agentImages, mapImages = {} }
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   const allMaps = stats.map(s => s.mapName).sort((a, b) => a.localeCompare(b));
-  // Map filter chips — por defecto todos los mapas visibles excepto Abyss, Bind y Corrode
-  const DEFAULT_HIDDEN_MAPS = ['abyss', 'bind', 'corrode'];
+  // Map filter chips — por defecto ocultos los mapas fuera de rotación (in_rotation en maps_name_ids)
   const [hiddenMaps, setHiddenMaps] = useState<Set<string>>(
-    () => new Set(allMaps.filter(m => DEFAULT_HIDDEN_MAPS.includes(m.toLowerCase())))
+    () => new Set(allMaps.filter(m => defaultHiddenMaps.includes(m.toLowerCase())))
   );
   function toggleMap(map: string) {
     setHiddenMaps(prev => {

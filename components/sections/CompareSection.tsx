@@ -13,6 +13,7 @@ interface Props {
   teamBName: string;
   teamLogos?: Record<string, string>;
   mapImages?: Record<string, string>;
+  defaultHiddenMaps?: string[];
 }
 
 const EMPTY: MapStat = {
@@ -203,7 +204,7 @@ function CompCells({
   );
 }
 
-export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, teamAName, teamBName, teamLogos = {}, mapImages = {} }: Props) {
+export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, teamAName, teamBName, teamLogos = {}, mapImages = {}, defaultHiddenMaps = [] }: Props) {
   const [expandedMap, setExpandedMap] = useState<string | null>(null);
 
   // Build joined map index
@@ -216,10 +217,9 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
   const allRows = Object.entries(mapIndex).sort(([a], [b]) => a.localeCompare(b));
   const allMaps = allRows.map(([m]) => m);
 
-  // Map filter chips — por defecto todos los mapas visibles excepto Abyss, Bind y Corrode
-  const DEFAULT_HIDDEN_MAPS = ['abyss', 'bind', 'corrode'];
+  // Map filter chips — por defecto ocultos los mapas fuera de rotación (in_rotation en maps_name_ids)
   const [hiddenMaps, setHiddenMaps] = useState<Set<string>>(
-    () => new Set(allMaps.filter(m => DEFAULT_HIDDEN_MAPS.includes(m.toLowerCase())))
+    () => new Set(allMaps.filter(m => defaultHiddenMaps.includes(m.toLowerCase())))
   );
   function toggleMap(map: string) {
     setHiddenMaps(prev => {

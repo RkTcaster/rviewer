@@ -10,6 +10,7 @@ interface Props {
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
   mapImages?: Record<string, string>;
+  defaultHiddenMaps?: string[];
 }
 
 const REGION_ROWS: { id: string; label: string }[] = [
@@ -58,7 +59,7 @@ function getCellRank(value: number | null, allValues: (number | null)[]): 'best'
   return null;
 }
 
-export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {} }: Props) {
+export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, defaultHiddenMaps = [] }: Props) {
   const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<number | 'overall' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -72,9 +73,9 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
 
   const baseTeams = allTeams.filter(t => !hiddenTeams.has(t));
 
-  // Por defecto todos los mapas visibles excepto Bind
+  // Por defecto ocultos los mapas fuera de rotación (in_rotation en maps_name_ids)
   const [hiddenMaps, setHiddenMaps] = useState<Set<string>>(
-    () => new Set(maps.filter(m => m.toLowerCase() === 'bind'))
+    () => new Set(maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase())))
   );
   const visibleMaps = maps.filter(m => !hiddenMaps.has(m));
 

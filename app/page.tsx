@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getVetoFlows, getTeamFormTimeline } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getVetoFlows, getTeamFormTimeline } from '@/lib/data-service';
 import { STATS_RANK_DEFAULT_TOURS, OverallMapFullStat, TeamRankStats } from '@/lib/types';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
@@ -107,6 +107,11 @@ export default async function Page({
     ? getMapImages()
     : Promise.resolve({});
 
+  // Mapas fuera de rotación (default oculto en los filtros de mapas)
+  const defaultHiddenMapsP = (section === 'maps' || section === 'compare-maps' || isMapsMasters || isNeonDependency)
+    ? getOutOfRotationMaps()
+    : Promise.resolve<string[]>([]);
+
   const agentImagesP = (section === 'agent-picks' || section === 'maps' || section === 'compare-maps' || isMetaShift)
     ? getAgentImages()
     : Promise.resolve({});
@@ -193,7 +198,7 @@ export default async function Page({
   const [
     result, resultB, compsA, compsB, rankings, economy, mapPicksFullStatsRaw,
     compositionsData, agentPickStats, agentCompositions, agentMatches,
-    mapImages, agentImages, teamLogos, teamRegions, mapsMasters, neonDep,
+    mapImages, defaultHiddenMaps, agentImages, teamLogos, teamRegions, mapsMasters, neonDep,
     mapFullStats, agentPickStatsLeft, agentPickStatsRight,
     playerStats, tournamentPlayerAvg, playerTimeline,
     regions, teams, lastUpdateDate, teams2,
@@ -202,7 +207,7 @@ export default async function Page({
   ] = await Promise.all([
     resultP, resultBP, compsAP, compsBP, rankingsP, economyP, mapPicksFullStatsP,
     compositionsDataP, agentPickStatsP, agentCompositionsP, agentMatchesP,
-    mapImagesP, agentImagesP, teamLogosP, teamRegionsP, mapsMastersP, neonDepP,
+    mapImagesP, defaultHiddenMapsP, agentImagesP, teamLogosP, teamRegionsP, mapsMastersP, neonDepP,
     mapFullStatsP, agentPickStatsLeftP, agentPickStatsRightP,
     playerStatsP, tournamentPlayerAvgP, playerTimelineP,
     getRegions(), getTeams(regArr), getLastUpdateDate(), teams2P,
@@ -253,9 +258,9 @@ export default async function Page({
       case 'stats-rank':
         return <StatsRankSection rankings={rankings} economy={economy} teamLogos={teamLogos} teamRegions={teamRegions} hasTour={hasTour} />;
       case 'maps-masters':
-        return <MapsMastersSection stats={mapsMasters.stats} maps={mapsMasters.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} hasTour={hasTour} />;
+        return <MapsMastersSection stats={mapsMasters.stats} maps={mapsMasters.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} />;
       case 'neon-dependency':
-        return <NeonDependencySection stats={neonDep.stats} maps={neonDep.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} />;
+        return <NeonDependencySection stats={neonDep.stats} maps={neonDep.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} defaultHiddenMaps={defaultHiddenMaps} />;
       case 'veto':
         return <VetoSection flows={vetoFlows} teamName={team || ''} />;
       case 'form':
@@ -276,6 +281,7 @@ export default async function Page({
             teamBName={team2 || ''}
             teamLogos={teamLogos}
             mapImages={mapImages}
+            defaultHiddenMaps={defaultHiddenMaps}
           />
         );
       case 'compare-stats':
@@ -298,7 +304,7 @@ export default async function Page({
           />
         );
       default:
-        return <MapsSection stats={stats} compositions={compositionsData} agentImages={agentImages} mapImages={mapImages} />;
+        return <MapsSection stats={stats} compositions={compositionsData} agentImages={agentImages} mapImages={mapImages} defaultHiddenMaps={defaultHiddenMaps} />;
     }
   }
 

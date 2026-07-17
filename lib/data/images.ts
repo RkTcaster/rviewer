@@ -1,4 +1,5 @@
 // lib/data/images.ts — assets e info estática (logos, imágenes, región por equipo)
+import { unstable_cache } from 'next/cache';
 import { supabase } from '../supabase';
 import { versioned } from './helpers';
 
@@ -40,6 +41,15 @@ async function getTeamLogos_impl(): Promise<Record<string, string>> {
       .filter((r: { team_id: string; team_path: string | null }) => r.team_path)
       .map((r: { team_id: string; team_path: string }) => [r.team_id, `/${r.team_path}`])
   );
+}
+
+// Mapas fuera de rotación (in_rotation = false en maps_name_ids): defaults de los
+// filtros de mapas. Cache propio con revalidate corto (no versioned) para que un
+// cambio de rotación en el dashboard se refleje sin necesitar una carga de datos.
+export const getOutOfRotationMaps = unstable_cache(getOutOfRotationMaps_impl, ['out-of-rotation-maps'], { revalidate: 300, tags: ['vct-data'] });
+async function getOutOfRotationMaps_impl(): Promise<string[]> {
+  const { data } = await supabase.from('maps_name_ids').select('map').eq('in_rotation', false);
+  return (data ?? []).map((r: { map: string }) => r.map.toLowerCase());
 }
 
 export const getMapImages = versioned('map-images', getMapImages_impl);
