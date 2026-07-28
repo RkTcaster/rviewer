@@ -312,8 +312,21 @@ async function getAgentNonMirrorMatches_impl(
 
 export const getOverallCompositions = versioned('overall-compositions', getOverallCompositions_impl);
 async function getOverallCompositions_impl(
-  filters: { team?: string; reg?: string[]; tour?: string; bo?: string; last?: string }
+  filters: { team?: string; reg?: string[]; tour?: string; bo?: string; last?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<CompositionStat[]> {
+  // Pre-fetch series_ids from draft when date filters are active
+  let dateSeriesIds: string[] | null = null;
+  if (filters.dateFrom || filters.dateTo) {
+    let draftQuery = supabase.from('draft').select('series_id');
+    if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
+    if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
+    if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
+    if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
+    const { data: draftData } = await draftQuery;
+    if (!draftData || draftData.length === 0) return [];
+    dateSeriesIds = [...new Set(draftData.map((d: { series_id: string }) => d.series_id))];
+  }
+
   const rows = await fetchAllPages<Pick<PlayerStatsRow, 'team' | 'map' | 'series_id' | 'map_id' | 'agent' | 'reg_id' | 'tour_id'>>((from, to) => {
     let q = supabase
       .from('player_stats')
@@ -321,6 +334,10 @@ async function getOverallCompositions_impl(
     if (filters.team) q = q.eq('team', filters.team);
     if (filters.tour) q = q.in('tour_id', filters.tour.split(','));
     if (filters.reg)  q = q.in('reg_id', filters.reg!);
+    if (dateSeriesIds) q = q.in('series_id', dateSeriesIds);
+    if (filters.excludeTeams && filters.excludeTeams.length > 0) {
+      q = q.not('team', 'in', `(${filters.excludeTeams.join(',')})`);
+    }
     return q.range(from, to);
   });
   if (!rows || rows.length === 0) return [];

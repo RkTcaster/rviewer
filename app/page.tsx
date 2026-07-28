@@ -88,7 +88,7 @@ export default async function Page({
     : Promise.resolve<Record<string, OverallMapFullStat>>({});
 
   const compositionsDataP = (section === 'maps' && team)
-    ? getOverallCompositions({ team, reg: regArr, tour, bo, last })
+    ? getOverallCompositions({ team, reg: regArr, tour, bo, last, dateFrom, dateTo })
     : Promise.resolve([]);
 
   const agentPickStatsP = (section === 'agent-picks')
@@ -96,7 +96,7 @@ export default async function Page({
     : Promise.resolve([]);
 
   const agentCompositionsP = (section === 'agent-picks')
-    ? getOverallCompositions({ reg: regArr, tour, bo })
+    ? getOverallCompositions({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
     : Promise.resolve([]);
 
   const agentMatchesP = (section === 'agent-picks')
@@ -129,7 +129,7 @@ export default async function Page({
     : Promise.resolve({ stats: {}, maps: [] });
 
   const mapFullStatsP = (section === 'agent-picks')
-    ? getOverallMapFullStats({ reg: regArr, tour, bo })
+    ? getOverallMapFullStats({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
     : Promise.resolve({});
 
   const agentPickStatsLeftP = isMetaShift
