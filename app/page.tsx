@@ -282,6 +282,8 @@ export default async function Page({
             teamLogos={teamLogos}
             mapImages={mapImages}
             defaultHiddenMaps={defaultHiddenMaps}
+            draftOrderA={draftOrder}
+            draftOrderB={resultB?.draftOrder || { a: 0, b: 0 }}
           />
         );
       case 'compare-stats':

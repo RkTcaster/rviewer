@@ -14,6 +14,8 @@ interface Props {
   teamLogos?: Record<string, string>;
   mapImages?: Record<string, string>;
   defaultHiddenMaps?: string[];
+  draftOrderA: { a: number; b: number };
+  draftOrderB: { a: number; b: number };
 }
 
 const EMPTY: MapStat = {
@@ -204,7 +206,7 @@ function CompCells({
   );
 }
 
-export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, teamAName, teamBName, teamLogos = {}, mapImages = {}, defaultHiddenMaps = [] }: Props) {
+export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, teamAName, teamBName, teamLogos = {}, mapImages = {}, defaultHiddenMaps = [], draftOrderA, draftOrderB }: Props) {
   const [expandedMap, setExpandedMap] = useState<string | null>(null);
 
   // Build joined map index
@@ -229,6 +231,19 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
     });
   }
   const rows = allRows.filter(([m]) => !hiddenMaps.has(m));
+
+  // Fila Overall: suma de los mapas visibles (los chips ocultos no cuentan)
+  const totals = (side: 'a' | 'b') => rows.reduce((acc, [, r]) => {
+    const s = r[side];
+    if (s) {
+      acc.wins += s.wins; acc.played += s.played;
+      acc.attWins += s.attWins; acc.attTotal += s.attTotal;
+      acc.defWins += s.defWins; acc.defTotal += s.defTotal;
+    }
+    return acc;
+  }, { wins: 0, played: 0, attWins: 0, attTotal: 0, defWins: 0, defTotal: 0 });
+  const totalsA = totals('a');
+  const totalsB = totals('b');
 
   const compsAByMap: Record<string, MapCompositionStat[]> = {};
   for (const c of compsA) {
@@ -342,6 +357,38 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800">
+                <tr className="bg-[#1f242c] border-b-2 border-b-gray-700">
+                  {/* Team A */}
+                  <td className="p-3 text-center text-blue-400 font-bold bg-blue-900/10">{totalsA.played}</td>
+                  <td className="p-3 text-center bg-green-900/10">
+                    <div className="text-[11px] uppercase tracking-wider text-gray-500">Team A</div>
+                    <div className="font-bold text-gray-200">{draftOrderA.a}</div>
+                  </td>
+                  <td className="p-3 text-center bg-red-900/10">
+                    <div className="text-[11px] uppercase tracking-wider text-gray-500">Team B</div>
+                    <div className="font-bold text-gray-200">{draftOrderA.b}</div>
+                  </td>
+                  <td className="p-3 text-center"><SideCell wins={totalsA.attWins} total={totalsA.attTotal} /></td>
+                  <td className="p-3 text-center"><SideCell wins={totalsA.defWins} total={totalsA.defTotal} /></td>
+                  <td className="p-3 text-center"><WrCell wins={totalsA.wins} played={totalsA.played} /></td>
+
+                  {/* Label (center) */}
+                  <td className="p-3 text-center font-bold text-white bg-[#252a33] uppercase tracking-wider">Overall</td>
+
+                  {/* Team B (mirrored) */}
+                  <td className="p-3 text-center"><WrCell wins={totalsB.wins} played={totalsB.played} /></td>
+                  <td className="p-3 text-center"><SideCell wins={totalsB.defWins} total={totalsB.defTotal} /></td>
+                  <td className="p-3 text-center"><SideCell wins={totalsB.attWins} total={totalsB.attTotal} /></td>
+                  <td className="p-3 text-center bg-red-900/10">
+                    <div className="text-[11px] uppercase tracking-wider text-gray-500">Team B</div>
+                    <div className="font-bold text-gray-200">{draftOrderB.b}</div>
+                  </td>
+                  <td className="p-3 text-center bg-green-900/10">
+                    <div className="text-[11px] uppercase tracking-wider text-gray-500">Team A</div>
+                    <div className="font-bold text-gray-200">{draftOrderB.a}</div>
+                  </td>
+                  <td className="p-3 text-center text-blue-400 font-bold bg-blue-900/10">{totalsB.played}</td>
+                </tr>
                 {rows.map(([mapName, { a, b }]) => {
                   const sa = a ?? EMPTY;
                   const sb = b ?? EMPTY;
