@@ -208,12 +208,13 @@ function procesarTodo(drafts: DraftRow[], rounds: RoundInfoRow[], targetTeam: st
     const boType = Number(m.bo);
     if (m.team === targetTeam) orderA++;
     else if (m.rival === targetTeam) orderB++;
-    // Picks Equipo
+    // Picks Equipo — 1st/2nd según la posición en el draft: el equipo A pickea
+    // antes que el B, así que sus picks son "1st pick" y los del B "2nd pick".
     const p1 = isTeam1 ? m.team_1_select_2 : m.team_2_select_2;
-    if (p1) { initMap(p1); stats[p1].picks++; stats[p1].pick1++; }
+    if (p1) { initMap(p1); stats[p1].picks++; if (isTeam1) stats[p1].pick1++; else stats[p1].pick2++; }
     if (boType === 5) {
       const p2 = isTeam1 ? m.team_1_select_3 : m.team_2_select_3;
-      if (p2) { initMap(p2); stats[p2].picks++; stats[p2].pick2++; }
+      if (p2) { initMap(p2); stats[p2].picks++; if (isTeam1) stats[p2].pick1++; else stats[p2].pick2++; }
     }
 
     // Bans Equipo
