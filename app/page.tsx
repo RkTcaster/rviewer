@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getVetoFlows, getTeamFormTimeline } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getVetoFlows, getTeamFormTimeline } from '@/lib/data-service';
 import { STATS_RANK_DEFAULT_TOURS, OverallMapFullStat, TeamRankStats } from '@/lib/types';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
@@ -116,6 +116,10 @@ export default async function Page({
     ? getAgentImages()
     : Promise.resolve({});
 
+  const agentRolesP = (section === 'agent-picks')
+    ? getAgentRoles()
+    : Promise.resolve({});
+
   const needsLogos = isStatsRank || isMapsMasters || isNeonDependency || section === 'compare-maps' || section === 'compare-stats';
   const teamLogosP = needsLogos ? getTeamLogos() : Promise.resolve({});
   const teamRegionsP = needsLogos ? getTeamRegions() : Promise.resolve({});
@@ -198,7 +202,7 @@ export default async function Page({
   const [
     result, resultB, compsA, compsB, rankings, economy, mapPicksFullStatsRaw,
     compositionsData, agentPickStats, agentCompositions, agentMatches,
-    mapImages, defaultHiddenMaps, agentImages, teamLogos, teamRegions, mapsMasters, neonDep,
+    mapImages, defaultHiddenMaps, agentImages, agentRoles, teamLogos, teamRegions, mapsMasters, neonDep,
     mapFullStats, agentPickStatsLeft, agentPickStatsRight,
     playerStats, tournamentPlayerAvg, playerTimeline,
     regions, teams, lastUpdateDate, teams2,
@@ -207,7 +211,7 @@ export default async function Page({
   ] = await Promise.all([
     resultP, resultBP, compsAP, compsBP, rankingsP, economyP, mapPicksFullStatsP,
     compositionsDataP, agentPickStatsP, agentCompositionsP, agentMatchesP,
-    mapImagesP, defaultHiddenMapsP, agentImagesP, teamLogosP, teamRegionsP, mapsMastersP, neonDepP,
+    mapImagesP, defaultHiddenMapsP, agentImagesP, agentRolesP, teamLogosP, teamRegionsP, mapsMastersP, neonDepP,
     mapFullStatsP, agentPickStatsLeftP, agentPickStatsRightP,
     playerStatsP, tournamentPlayerAvgP, playerTimelineP,
     getRegions(), getTeams(regArr), getLastUpdateDate(), teams2P,
@@ -229,7 +233,7 @@ export default async function Page({
       case 'map-picks':
         return <MapPicksSection stats={mapPicksFullStats} />;
       case 'agent-picks':
-        return <AgentPicksSection stats={agentPickStats} compositions={agentCompositions} agentMatches={agentMatches} mapImages={mapImages} agentImages={agentImages} mapFullStats={mapFullStats} />;
+        return <AgentPicksSection stats={agentPickStats} compositions={agentCompositions} agentMatches={agentMatches} mapImages={mapImages} agentImages={agentImages} agentRoles={agentRoles} mapFullStats={mapFullStats} />;
       case 'meta-shift':
         return <MetaShiftSection statsLeft={agentPickStatsLeft} statsRight={agentPickStatsRight} agentImages={agentImages} />;
       case 'graphs':

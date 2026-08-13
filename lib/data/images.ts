@@ -14,6 +14,17 @@ async function getAgentImages_impl(): Promise<Record<string, string>> {
   );
 }
 
+export const getAgentRoles = versioned('agent-roles', getAgentRoles_impl);
+async function getAgentRoles_impl(): Promise<Record<string, string>> {
+  const { data } = await supabase.from('agent_info').select('agent_name, rol');
+  if (!data) return {};
+  return Object.fromEntries(
+    data
+      .filter((r: { agent_name: string; rol: string | null }) => r.rol)
+      .map((r: { agent_name: string; rol: string }) => [r.agent_name, r.rol])
+  );
+}
+
 export const getTeamRegions = versioned('team-regions', getTeamRegions_impl);
 async function getTeamRegions_impl(): Promise<Record<string, string>> {
   // Map each team to its home region (reg_0..reg_3), ignoring reg_4 (international events).
