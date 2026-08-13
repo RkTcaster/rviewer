@@ -5,6 +5,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { AgentMatchDetail, AgentPickStat, CompositionStat, OverallMapFullStat } from '@/lib/types';
 import { KPICard } from '@/components/KPICard';
 
+const MAX_AGENTS = 5;
+
 interface Props {
   stats: AgentPickStat[];
   compositions: CompositionStat[];
@@ -84,6 +86,7 @@ function MapWLTooltip({ active, payload }: any) {
 
 export function AgentPicksSection({ stats, compositions, agentMatches, mapImages, agentImages, mapFullStats }: Props) {
   const [selectedMaps, setSelectedMaps] = useState<Set<string>>(new Set());
+  const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<'pickRate' | 'nmwr'>('pickRate');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
@@ -96,6 +99,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
   };
 
   const maps = useMemo(() => [...new Set(stats.map(s => s.map))].sort(), [stats]);
+  const agentList = useMemo(() => Object.keys(agentImages).sort(), [agentImages]);
 
   const isAll = selectedMaps.size === 0;
   const single = selectedMaps.size === 1 ? [...selectedMaps][0] : null;
@@ -107,6 +111,22 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
       if (next.has(map)) next.delete(map); else next.add(map);
       return next;
     });
+
+  const toggleAgent = (agent: string) =>
+    setSelectedAgents(prev => {
+      const next = new Set(prev);
+      if (next.has(agent)) next.delete(agent);
+      else if (next.size < MAX_AGENTS) next.add(agent);
+      return next;
+    });
+
+  // Solo aplica al panel de composiciones (lado derecho): la comp debe contener TODOS los agentes elegidos
+  const compHasAgents = (composition: string) => {
+    if (selectedAgents.size === 0) return true;
+    const inComp = new Set(composition.split(', '));
+    for (const a of selectedAgents) if (!inComp.has(a)) return false;
+    return true;
+  };
 
   const filtered = useMemo(() => {
     const nmwr = (wins?: number, played?: number) =>
@@ -183,23 +203,23 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
   const compositionPanel = useMemo(() => {
     if (single) {
       return compositions
-        .filter(c => c.map === single)
+        .filter(c => c.map === single && compHasAgents(c.composition))
         .sort((a, b) => b.played - a.played);
     }
-    // Scoped maps, top 3 each
+    // Scoped maps, top 3 each (todas las coincidencias si hay filtro de agentes)
     const byMap: Record<string, CompositionStat[]> = {};
     for (const c of compositions) {
-      if (!inScope(c.map)) continue;
+      if (!inScope(c.map) || !compHasAgents(c.composition)) continue;
       if (!byMap[c.map]) byMap[c.map] = [];
       byMap[c.map].push(c);
     }
     return Object.entries(byMap)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([map, comps]) => ({
-        map,
-        comps: comps.sort((a, b) => b.played - a.played).slice(0, 3),
-      }));
-  }, [compositions, selectedMaps]);
+      .map(([map, comps]) => {
+        const sorted = comps.sort((a, b) => b.played - a.played);
+        return { map, comps: selectedAgents.size > 0 ? sorted : sorted.slice(0, 3) };
+      });
+  }, [compositions, selectedMaps, selectedAgents]);
 
   // Detail mode: agent shown = explicit selection, or top NMWR agent in current view
   const detailAgent = useMemo(() => {
@@ -321,6 +341,46 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
           </div>
         </div>
         <p className="text-[11px] text-gray-500 self-end pb-2 ml-auto">NMWR = win rate excluding mirror picks</p>
+      </div>
+
+      {/* Agent filter — only affects the compositions panel */}
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+          Agents in comps <span className="text-gray-600 font-normal normal-case">· max {MAX_AGENTS} ({selectedAgents.size}/{MAX_AGENTS})</span>
+        </label>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setSelectedAgents(new Set())}
+            className={`p-1 rounded-lg border transition-colors ${
+              selectedAgents.size === 0
+                ? 'bg-blue-900/40 border-blue-700 hover:bg-blue-900/60'
+                : 'bg-transparent border-gray-700 hover:border-gray-500'
+            }`}
+          >
+            <div className="w-[34px] h-[34px] rounded flex items-center justify-center bg-[#252a33] text-[10px] font-bold uppercase tracking-wide text-gray-400">All</div>
+          </button>
+          {agentList.map(agent => {
+            const active = selectedAgents.has(agent);
+            const capped = !active && selectedAgents.size >= MAX_AGENTS;
+            return (
+              <button
+                key={agent}
+                onClick={() => toggleAgent(agent)}
+                disabled={capped}
+                title={agent}
+                className={`p-1 rounded-lg border transition-colors ${
+                  active
+                    ? 'bg-blue-900/40 border-blue-700 hover:bg-blue-900/60'
+                    : capped
+                      ? 'bg-transparent border-gray-800 opacity-30 cursor-not-allowed'
+                      : 'bg-transparent border-gray-700 hover:border-gray-500'
+                }`}
+              >
+                <img src={agentImages[agent]} alt={agent} className={`w-[34px] h-[34px] rounded transition-opacity ${active ? '' : 'opacity-70'}`} />
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Main 50/50 layout */}
