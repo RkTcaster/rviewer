@@ -7,6 +7,7 @@ import { KPICard } from '@/components/KPICard';
 
 // Una composición son 5 agentes: es el tope tanto de agentes elegidos como de la suma de roles
 const MAX_PICKS = 5;
+const MAX_COMP_ROWS = 3;             // filas de composiciones visibles por mapa; el resto queda tras el "…"
 const CHIPS_COL_WIDTH = 'w-[400px]'; // 8 chips de 44px + gaps, alinea los steppers entre filas
 const ROLE_COL_WIDTH = 'w-[76px]';   // nombre del rol más largo (INITIATOR) bajo su logo
 // Roles con símbolo en public/roles; cualquier otro cae al nombre en texto
@@ -338,9 +339,30 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([map, comps]) => {
         const sorted = comps.sort((a, b) => b.played - a.played);
-        return { map, comps: isFiltered ? sorted : sorted.slice(0, 3) };
+        return { map, comps: isFiltered ? sorted : sorted.slice(0, MAX_COMP_ROWS) };
       });
   }, [compositions, selectedMaps, selectedAgents, roleCounts]);
+
+  // Rendimiento agregado de las comps que pasan el filtro, solo con un mapa elegido.
+  // ATK/DEF son rondas del lado propio del equipo que llevó la comp (≠ del ATK/DEF overall del mapa).
+  const compPerf = useMemo(() => {
+    if (!single || !compFilterActive) return null;
+    const comps = compositionPanel as CompositionStat[];
+    let played = 0, attWins = 0, attTotal = 0, defWins = 0, defTotal = 0;
+    for (const c of comps) {
+      played += c.played;
+      attWins += c.attWins ?? 0;
+      attTotal += c.attTotal ?? 0;
+      defWins += c.defWins ?? 0;
+      defTotal += c.defTotal ?? 0;
+    }
+    if (attTotal + defTotal === 0) return null;
+    return {
+      played,
+      atk: attTotal > 0 ? Math.round(attWins / attTotal * 100) : null,
+      def: defTotal > 0 ? Math.round(defWins / defTotal * 100) : null,
+    };
+  }, [compositionPanel, single, compFilterActive]);
 
   // Resumen del filtro de comps: agentes elegidos + cupos de rol sin agente + slots libres.
   // Un rol con cupo > 0 queda fijado a esa cantidad exacta, así que los libres solo pueden ser de los roles sin cupo.
@@ -793,16 +815,25 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
                         const def = s.defTotal > 0 ? Math.round(s.defWins / s.defTotal * 100) : 0;
                         return (
                           <div className="flex flex-col items-center gap-0.5 w-full mt-1">
+                            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider text-center leading-tight">Overall</span>
                             <span className="text-[11px] font-bold text-green-400">ATK {atk}%</span>
                             <span className="text-[11px] font-bold text-red-400">DEF {def}%</span>
                             <span className="text-[10px] text-gray-400">P {s.picks} · B {s.bans}</span>
                           </div>
                         );
                       })()}
+                      {compPerf && (
+                        <div className="flex flex-col items-center gap-0.5 w-full mt-1 pt-1 border-t border-gray-800">
+                          <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider text-center leading-tight">Comp performance</span>
+                          <span className="text-[11px] font-bold text-green-400">ATK {compPerf.atk === null ? '—' : `${compPerf.atk}%`}</span>
+                          <span className="text-[11px] font-bold text-red-400">DEF {compPerf.def === null ? '—' : `${compPerf.def}%`}</span>
+                          <span className="text-[10px] text-gray-400">Played: {compPerf.played}</span>
+                        </div>
+                      )}
                     </div>
                     {/* Compositions column */}
                     <div className="flex flex-col gap-1.5 justify-center flex-1 min-w-0">
-                      {comps.map((c, i) => (
+                      {(compFilterActive ? comps.slice(0, MAX_COMP_ROWS) : comps).map((c, i) => (
                         <div key={i} className="flex items-center gap-1.5 flex-wrap">
                           <CompositionIcons composition={c.composition} agentImages={agentImages} />
                           <span className="text-gray-500 text-xs shrink-0">({c.played})</span>
@@ -823,6 +854,14 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
                           )}
                         </div>
                       ))}
+                      {compFilterActive && comps.length > MAX_COMP_ROWS && (
+                        <span
+                          className="text-gray-500 text-sm leading-none"
+                          title={`+${comps.length - MAX_COMP_ROWS} more (included in Comp performance)`}
+                        >
+                          …
+                        </span>
+                      )}
                     </div>
                     {/* Stats column (grouped view only) */}
                     {!single && mapFullStats[map] && (() => {

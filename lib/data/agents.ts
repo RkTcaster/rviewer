@@ -310,7 +310,7 @@ async function getAgentNonMirrorMatches_impl(
   return result;
 }
 
-export const getOverallCompositions = versioned('overall-compositions', getOverallCompositions_impl);
+export const getOverallCompositions = versioned('overall-compositions-v2', getOverallCompositions_impl);
 async function getOverallCompositions_impl(
   filters: { team?: string; reg?: string[]; tour?: string; bo?: string; last?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<CompositionStat[]> {
@@ -352,6 +352,7 @@ async function getOverallCompositions_impl(
 
   // Build compoByInstance: for each (series_id, map_id) → which team played which composition
   const compoByInstance: Record<string, Record<string, string>> = {};
+  const mapByInstance: Record<string, string> = {};
   for (const [key, agents] of Object.entries(grouped)) {
     if (agents.length === 0) continue;
     const parts = key.split('__');
@@ -361,13 +362,14 @@ async function getOverallCompositions_impl(
     const instKey = `${series_id}__${map_id}`;
     if (!compoByInstance[instKey]) compoByInstance[instKey] = {};
     compoByInstance[instKey][team] = agents.slice().sort().join(', ');
+    if (!mapByInstance[instKey]) mapByInstance[instKey] = parts[1];
   }
 
   // Fetch round_info to determine map winners
   const allSeriesIds = [...new Set(Object.keys(grouped).map(k => k.split('__')[2]))];
-  const roundRows = await fetchAllPages<RoundWinnerRow>((from, to) =>
+  const roundRows = await fetchAllPages<RoundWinnerRow & Pick<RoundInfoRow, 'side'>>((from, to) =>
     supabase.from('round_info')
-      .select('series_id, map_id, round, teamA, teamB, rndA, rndB')
+      .select('series_id, map_id, round, side, teamA, teamB, rndA, rndB')
       .in('series_id', allSeriesIds)
       .range(from, to)
   );
@@ -384,6 +386,43 @@ async function getOverallCompositions_impl(
   const winnerByMapId: Record<string, string | undefined> = {};
   for (const [map_id, r] of Object.entries(finalRoundByMapId)) {
     winnerByMapId[map_id] = Number(r.rndA) === 1 ? r.teamA?.trim() : r.teamB?.trim();
+  }
+
+  // Rondas por (map, composition) según el lado que jugó el equipo que llevó esa comp.
+  // side viene desde la perspectiva de teamA, así que para teamB se invierte.
+  type SideAcc = { attWins: number; attTotal: number; defWins: number; defTotal: number };
+  const sideAcc: Record<string, SideAcc> = {};
+  for (const r of roundRows) {
+    const instKey = `${r.series_id}__${r.map_id}`;
+    const instance = compoByInstance[instKey];
+    const mapName = mapByInstance[instKey];
+    if (!instance || !mapName) continue;
+
+    const rawSide = r.side?.trim().toLowerCase();
+    if (rawSide !== 'atk' && rawSide !== 'def') continue;
+    const flipped = rawSide === 'atk' ? 'def' : 'atk';
+
+    // player_stats.team y round_info.teamA/teamB vienen de tablas distintas → comparar normalizado
+    const byName: Record<string, string> = {};
+    for (const [team, composition] of Object.entries(instance)) {
+      byName[team.trim().toLowerCase()] = composition;
+    }
+
+    for (const [name, side, won] of [
+      [r.teamA, rawSide, Number(r.rndA) === 1],
+      [r.teamB, flipped, Number(r.rndB) === 1],
+    ] as const) {
+      const composition = byName[name?.trim().toLowerCase() ?? ''];
+      if (!composition) continue;
+      const acc = (sideAcc[`${mapName}__${composition}`] ??= { attWins: 0, attTotal: 0, defWins: 0, defTotal: 0 });
+      if (side === 'atk') {
+        acc.attTotal++;
+        if (won) acc.attWins++;
+      } else {
+        acc.defTotal++;
+        if (won) acc.defWins++;
+      }
+    }
   }
 
   // Build (map, composition) counts + teams + win rate (excluding mirror matches)
@@ -415,8 +454,9 @@ async function getOverallCompositions_impl(
     }
   }
 
-  return Object.values(countMap).map(({ teamCounts, nonMirrorWins, nonMirrorPlayed, ...rest }) => ({
+  return Object.entries(countMap).map(([countKey, { teamCounts, nonMirrorWins, nonMirrorPlayed, ...rest }]) => ({
     ...rest,
+    ...(sideAcc[countKey] ?? {}),
     nonMirrorPlayed,
     nonMirrorWins,
     winRate: nonMirrorPlayed && nonMirrorPlayed > 0

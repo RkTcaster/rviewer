@@ -115,6 +115,11 @@ export type CompositionStat = {
   nonMirrorWins?: number;
   winRate?: number;
   teams?: { team: string; played: number }[];
+  // Rondas del equipo que llevó la comp, por lado propio
+  attWins?: number;
+  attTotal?: number;
+  defWins?: number;
+  defTotal?: number;
 };
 
 export type MapCompositionStat = {
