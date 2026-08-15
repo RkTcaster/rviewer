@@ -92,7 +92,7 @@ export default async function Page({
     : Promise.resolve([]);
 
   const agentPickStatsP = (section === 'agent-picks')
-    ? getAgentPickStats({ reg: regArr, tour, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
+    ? getAgentPickStats({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
     : Promise.resolve([]);
 
   const agentCompositionsP = (section === 'agent-picks')
@@ -100,7 +100,7 @@ export default async function Page({
     : Promise.resolve([]);
 
   const agentMatchesP = (section === 'agent-picks')
-    ? getAgentNonMirrorMatches({ reg: regArr, tour, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
+    ? getAgentNonMirrorMatches({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
     : Promise.resolve([]);
 
   const mapImagesP = (section === 'agent-picks' || section === 'maps-masters' || section === 'neon-dependency' || section === 'compare-maps' || section === 'maps')

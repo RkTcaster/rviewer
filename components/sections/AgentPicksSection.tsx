@@ -818,7 +818,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
                             <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider text-center leading-tight">Overall</span>
                             <span className="text-[11px] font-bold text-green-400">ATK {atk}%</span>
                             <span className="text-[11px] font-bold text-red-400">DEF {def}%</span>
-                            <span className="text-[10px] text-gray-400">P {s.picks} · B {s.bans}</span>
+                            <span className="text-[10px] text-gray-400">P {s.picks} · B {s.bans} · D {s.deciders}</span>
                           </div>
                         );
                       })()}
@@ -872,7 +872,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
                         <div className="flex flex-col justify-center gap-1 shrink-0">
                           <span className="text-[12.5px] font-bold text-green-400">ATK {atk}%</span>
                           <span className="text-[12.5px] font-bold text-red-400">DEF {def}%</span>
-                          <span className="text-[12.5px] text-gray-400">Picks {s.picks} · Bans {s.bans}</span>
+                          <span className="text-[12.5px] text-gray-400">Picks {s.picks} · Bans {s.bans} · Deciders {s.deciders}</span>
                         </div>
                       );
                     })()}

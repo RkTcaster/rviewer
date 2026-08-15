@@ -67,16 +67,18 @@ async function getNeonDependencyStats_impl(
 
 export const getAgentPickStats = versioned('agent-pick-stats', getAgentPickStats_impl);
 async function getAgentPickStats_impl(
-  filters: { reg?: string[]; tour?: string; team?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
+  filters: { reg?: string[]; tour?: string; team?: string; bo?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<AgentPickStat[]> {
-  // Pre-fetch series_ids from draft when date filters are active
+  // Pre-fetch series_ids from draft cuando hay filtros que solo viven ahí (fecha y bo)
+  const bo = filters.bo && filters.bo !== 'all' ? parseInt(filters.bo) : null;
   let seriesIds: string[] | null = null;
-  if (filters.dateFrom || filters.dateTo) {
+  if (filters.dateFrom || filters.dateTo || bo !== null) {
     let draftQuery = supabase.from('draft').select('series_id');
     if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
     if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
     if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
     if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
+    if (bo !== null)      draftQuery = draftQuery.eq('bo', bo);
     const { data: draftData } = await draftQuery;
     if (!draftData || draftData.length === 0) return [];
     seriesIds = [...new Set(draftData.map((d: { series_id: string }) => d.series_id))];
@@ -219,14 +221,16 @@ async function getAgentPickStats_impl(
 
 export const getAgentNonMirrorMatches = versioned('agent-nonmirror-matches', getAgentNonMirrorMatches_impl);
 async function getAgentNonMirrorMatches_impl(
-  filters: { reg?: string[]; tour?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
+  filters: { reg?: string[]; tour?: string; bo?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<AgentMatchDetail[]> {
   // Pre-fetch series_ids + dates from draft (date filters + always for date lookup)
+  const bo = filters.bo && filters.bo !== 'all' ? parseInt(filters.bo) : null;
   let draftQuery = supabase.from('draft').select('series_id, date');
   if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
   if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
   if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
   if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
+  if (bo !== null)      draftQuery = draftQuery.eq('bo', bo);
   const { data: draftData } = await draftQuery;
   if (!draftData || draftData.length === 0) return [];
   const dateBySeriesId: Record<string, string> = {};
@@ -314,17 +318,19 @@ export const getOverallCompositions = versioned('overall-compositions-v2', getOv
 async function getOverallCompositions_impl(
   filters: { team?: string; reg?: string[]; tour?: string; bo?: string; last?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<CompositionStat[]> {
-  // Pre-fetch series_ids from draft when date filters are active
-  let dateSeriesIds: string[] | null = null;
-  if (filters.dateFrom || filters.dateTo) {
+  // Pre-fetch series_ids from draft cuando hay filtros que solo viven ahí (fecha y bo)
+  const bo = filters.bo && filters.bo !== 'all' ? parseInt(filters.bo) : null;
+  let seriesIds: string[] | null = null;
+  if (filters.dateFrom || filters.dateTo || bo !== null) {
     let draftQuery = supabase.from('draft').select('series_id');
     if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
     if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
     if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
     if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
+    if (bo !== null)      draftQuery = draftQuery.eq('bo', bo);
     const { data: draftData } = await draftQuery;
     if (!draftData || draftData.length === 0) return [];
-    dateSeriesIds = [...new Set(draftData.map((d: { series_id: string }) => d.series_id))];
+    seriesIds = [...new Set(draftData.map((d: { series_id: string }) => d.series_id))];
   }
 
   const rows = await fetchAllPages<Pick<PlayerStatsRow, 'team' | 'map' | 'series_id' | 'map_id' | 'agent' | 'reg_id' | 'tour_id'>>((from, to) => {
@@ -334,7 +340,7 @@ async function getOverallCompositions_impl(
     if (filters.team) q = q.eq('team', filters.team);
     if (filters.tour) q = q.in('tour_id', filters.tour.split(','));
     if (filters.reg)  q = q.in('reg_id', filters.reg!);
-    if (dateSeriesIds) q = q.in('series_id', dateSeriesIds);
+    if (seriesIds) q = q.in('series_id', seriesIds);
     if (filters.excludeTeams && filters.excludeTeams.length > 0) {
       q = q.not('team', 'in', `(${filters.excludeTeams.join(',')})`);
     }
