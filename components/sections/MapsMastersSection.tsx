@@ -172,7 +172,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
             <button
               key={team}
               onClick={() => toggleTeam(team)}
-              className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl text-[16px] font-bold uppercase tracking-wide transition-colors border ${
+              className={`w-[72px] flex flex-col items-center gap-1.5 px-2 py-2 rounded-xl text-[16px] font-bold uppercase tracking-wide transition-colors border ${
                 active
                   ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
                   : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
@@ -216,12 +216,13 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
         };
 
         const knownRegions = new Set(REGION_ROWS.map(r => r.id));
-        const rows = REGION_ROWS.map(r => ({
+        const rows: { label: string; logo: string | null; teams: string[] }[] = REGION_ROWS.map(r => ({
           label: r.label,
+          logo: `/region/${r.label.toLowerCase()}.png`,
           teams: allTeams.filter(t => teamRegions[t] === r.id),
         }));
         const otherTeams = allTeams.filter(t => !knownRegions.has(teamRegions[t]));
-        if (otherTeams.length > 0) rows.push({ label: 'Other', teams: otherTeams });
+        if (otherTeams.length > 0) rows.push({ label: 'Other', logo: null, teams: otherTeams });
         const visibleRows = rows.filter(row => row.teams.length > 0);
 
         return (
@@ -240,8 +241,11 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
               <div className="flex flex-col gap-2 px-1">
                 {visibleRows.map(row => (
                   <div key={row.label} className="flex items-center gap-3">
-                    <span className="w-16 shrink-0 text-right text-[10px] font-bold uppercase tracking-widest text-gray-600">
-                      {row.label}
+                    <span className="w-12 shrink-0 flex items-center justify-end text-[10px] font-bold uppercase tracking-widest text-gray-600">
+                      {/* El logo reemplaza al nombre; 'Other' no tiene logo y cae al texto */}
+                      {row.logo
+                        ? <img src={row.logo} alt={row.label} title={row.label} className="w-[30px] h-[30px] object-contain shrink-0" />
+                        : row.label}
                     </span>
                     <div className="flex flex-wrap gap-2">
                       {row.teams.map(renderTeamChip)}

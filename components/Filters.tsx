@@ -6,7 +6,7 @@ import { MultiSelect } from "./MultiSelect";
 import { SearchableSelect } from "./SearchableSelect";
 import { SearchableMultiSelect } from "./SearchableMultiSelect";
 import { StringMultiSelect } from "./StringMultiSelect";
-import { RegionMultiSelect } from "./RegionMultiSelect";
+import { RegionChips } from "./RegionChips";
 
 interface FiltersProps {
   regions: Region[];
@@ -87,7 +87,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         </button>
         {/* LEFT side */}
         <div className="flex flex-wrap items-start gap-4">
-          <RegionMultiSelect
+          <RegionChips
             label="Region A"
             options={regions}
             selected={searchParams.get('reg')?.split(',').filter(Boolean) || []}
@@ -126,7 +126,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
 
         {/* RIGHT side */}
         <div className="flex flex-wrap items-start gap-4">
-          <RegionMultiSelect
+          <RegionChips
             label="Region B"
             options={regions}
             selected={searchParams.get('reg2')?.split(',').filter(Boolean) || []}
@@ -172,27 +172,42 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     {/* FILA 1: Region, Serie, Last X */}
     <div className="flex flex-wrap items-start gap-6">
 
-      <RegionMultiSelect
+      <RegionChips
         label="Region"
         options={regions}
         selected={searchParams.get('reg')?.split(',').filter(Boolean) || []}
         onChange={(values) => updateRegFilter('reg', values)}
       />
 
-      {!isEconomy && (
-        <div className="flex flex-col gap-1">
-          <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Serie</label>
-          <select
-            value={searchParams.get('bo') || "all"}
-            onChange={(e) => updateFilter('bo', e.target.value)}
-            className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
-          >
-            <option value="all">BO3 & BO5</option>
-            <option value="3">Solo BO3</option>
-            <option value="5">Solo BO5</option>
-          </select>
-        </div>
-      )}
+      {!isEconomy && (() => {
+        // Sin filtro (o 'all') = ambos formatos: los dos chips activos.
+        // Con uno solo activo, cualquier click vuelve a 'ambos'.
+        const bo = searchParams.get('bo') || 'all';
+        const isBoth = bo === 'all';
+        return (
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Serie</label>
+            <div className="flex flex-col gap-2 pt-1">
+              {['3', '5'].map(v => {
+                const active = isBoth || bo === v;
+                return (
+                  <button
+                    key={v}
+                    onClick={() => updateFilter('bo', isBoth ? v : '')}
+                    className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+                      active
+                        ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                        : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                    }`}
+                  >
+                    BO{v}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {isEconomy && (
         <div className="flex flex-col gap-1 justify-end">

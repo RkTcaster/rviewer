@@ -219,10 +219,30 @@ async function getAgentPickStats_impl(
   });
 }
 
-export const getAgentNonMirrorMatches = versioned('agent-nonmirror-matches', getAgentNonMirrorMatches_impl);
-async function getAgentNonMirrorMatches_impl(
+// Se cachea una fila por equipo+mapa en vez de una por agente: expandido, el mismo
+// composition/oppComposition/url se repetía por cada agente y superaba el límite de 2MB
+// de unstable_cache. Los agentes no-mirror se derivan de composition menos oppComposition.
+type NonMirrorInstance = Omit<AgentMatchDetail, 'agent'>;
+
+const getNonMirrorInstances = versioned('agent-nonmirror-instances', getNonMirrorInstances_impl);
+
+export async function getAgentNonMirrorMatches(
   filters: { reg?: string[]; tour?: string; bo?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<AgentMatchDetail[]> {
+  const instances = await getNonMirrorInstances(filters);
+  const result: AgentMatchDetail[] = [];
+  for (const inst of instances) {
+    for (const agent of inst.composition) {
+      if (inst.oppComposition.includes(agent)) continue; // mirror → excluir
+      result.push({ agent, ...inst });
+    }
+  }
+  return result;
+}
+
+async function getNonMirrorInstances_impl(
+  filters: { reg?: string[]; tour?: string; bo?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
+): Promise<NonMirrorInstance[]> {
   // Pre-fetch series_ids + dates from draft (date filters + always for date lookup)
   const bo = filters.bo && filters.bo !== 'all' ? parseInt(filters.bo) : null;
   let draftQuery = supabase.from('draft').select('series_id, date');
@@ -288,8 +308,8 @@ async function getAgentNonMirrorMatches_impl(
     }
   }
 
-  // Emit one record per non-mirror agent of each team in each instance
-  const result: AgentMatchDetail[] = [];
+  // Emit one record per team in each instance
+  const result: NonMirrorInstance[] = [];
   for (const [instKey, teams] of Object.entries(instanceAgents)) {
     const teamNames = Object.keys(teams);
     const [, map_id] = instKey.split('__');
@@ -301,14 +321,10 @@ async function getAgentNonMirrorMatches_impl(
     for (const team of teamNames) {
       const opponent = teamNames.find(t => t !== team) ?? '';
       const oppAgents = opponent ? teams[opponent] : new Set<string>();
-      const teamAgents = teams[team];
-      const composition = [...teamAgents].sort((a, b) => a.localeCompare(b));
+      const composition = [...teams[team]].sort((a, b) => a.localeCompare(b));
       const oppComposition = [...oppAgents].sort((a, b) => a.localeCompare(b));
       const won = !!winner && winner.toLowerCase() === team.toLowerCase();
-      for (const agent of teamAgents) {
-        if (oppAgents.has(agent)) continue; // mirror → excluir
-        result.push({ agent, map, team, opponent, won, date, url, composition, oppComposition });
-      }
+      result.push({ map, team, opponent, won, date, url, composition, oppComposition });
     }
   }
   return result;
