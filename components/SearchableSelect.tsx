@@ -6,11 +6,12 @@ interface Props {
   options: string[];
   selected: string;
   onChange: (value: string) => void;
+  onClose?: () => void;
   placeholder: string;
   label: string;
 }
 
-export function SearchableSelect({ options, selected, onChange, placeholder, label }: Props) {
+export function SearchableSelect({ options, selected, onChange, onClose, placeholder, label }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -19,21 +20,26 @@ export function SearchableSelect({ options, selected, onChange, placeholder, lab
     opt.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Cerrar el dropdown es la señal de "terminé de elegir": aplica sin esperar el debounce.
+  const close = () => { setIsOpen(false); onClose?.(); };
+
   useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
+        onClose?.();
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [isOpen, onClose]);
 
   return (
     <div className="flex flex-col gap-1 relative" ref={containerRef}>
       <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">{label}</label>
       <div 
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => { if (isOpen) close(); else setIsOpen(true); }}
         className="flex items-center justify-between border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-1 focus:ring-blue-600">
         <span className={selected ? "text-gray-200 font-medium" : "text-gray-400"}>
           {selected || placeholder}
@@ -56,7 +62,7 @@ export function SearchableSelect({ options, selected, onChange, placeholder, lab
           </div>
           <div className="max-h-[200px] overflow-y-auto">
             <div
-              onClick={() => { onChange(''); setIsOpen(false); setSearch(""); }}
+              onClick={() => { onChange(''); setSearch(""); close(); }}
               className={`p-2 text-sm cursor-pointer hover:bg-blue-900 transition-colors text-gray-400 ${!selected ? 'bg-blue-900 font-bold text-gray-200' : ''}`}
             >
               All
@@ -65,7 +71,7 @@ export function SearchableSelect({ options, selected, onChange, placeholder, lab
               filtered.map(opt => (
                 <div
                   key={opt}
-                  onClick={() => { onChange(opt); setIsOpen(false); setSearch(""); }}
+                  onClick={() => { onChange(opt); setSearch(""); close(); }}
                   className={`p-2 text-sm cursor-pointer hover:bg-blue-900 transition-colors ${selected === opt ? 'bg-blue-900 font-bold' : ''}`}
                 >
                   {opt}

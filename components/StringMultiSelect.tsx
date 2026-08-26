@@ -7,6 +7,7 @@ interface Props {
   options: string[];
   selected: string[];
   onChange: (values: string[]) => void;
+  onClose?: () => void;
   disabled?: boolean;
   label: string;
   placeholder?: string;
@@ -15,7 +16,7 @@ interface Props {
   renderOption?: (opt: string) => React.ReactNode;
 }
 
-export function StringMultiSelect({ options, selected, onChange, disabled, label, placeholder = "Select...", labelColor = "text-gray-200", selectedLabel, renderOption }: Props) {
+export function StringMultiSelect({ options, selected, onChange, onClose, disabled, label, placeholder = "Select...", labelColor = "text-gray-200", selectedLabel, renderOption }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -23,6 +24,9 @@ export function StringMultiSelect({ options, selected, onChange, disabled, label
   const filtered = options.filter(opt =>
     opt.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Cerrar el dropdown es la señal de "terminé de elegir": aplica sin esperar el debounce.
+  const close = () => { setIsOpen(false); onClose?.(); };
 
   const toggleOption = (value: string) => {
     if (selected.includes(value)) {
@@ -33,18 +37,19 @@ export function StringMultiSelect({ options, selected, onChange, disabled, label
   };
 
   useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setIsOpen(false);
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) { setIsOpen(false); onClose?.(); }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [isOpen, onClose]);
 
   return (
     <div className={`flex flex-col gap-1 relative ${disabled ? 'opacity-50' : ''}`} ref={containerRef}>
       <label className={`text-[11px] font-bold uppercase tracking-wider ${labelColor}`}>{label}</label>
       <div
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onClick={() => { if (disabled) return; if (isOpen) close(); else setIsOpen(true); }}
         className="flex items-center justify-between border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[240px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
       >
         <span className="truncate max-w-[200px] font-medium">
@@ -84,7 +89,7 @@ export function StringMultiSelect({ options, selected, onChange, disabled, label
           {selected.length > 0 && (
             <div className="p-2 flex items-center justify-between bg-[#1a1d23] border-t border-gray-700">
               <button onClick={() => onChange([])} className="text-[10px] font-bold text-red-500 hover:underline">Reset</button>
-              <button onClick={() => setIsOpen(false)} className="text-[10px] font-bold text-blue-600">Cerrar</button>
+              <button onClick={close} className="text-[10px] font-bold text-blue-600">Cerrar</button>
             </div>
           )}
         </div>

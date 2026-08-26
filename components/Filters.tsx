@@ -1,7 +1,6 @@
 "use client";
-import { useSearchParams } from 'next/navigation';
 import { Region, Tournament, STATS_RANK_DEFAULT_TOURS } from '@/lib/types';
-import { useNavigation } from './NavigationContext';
+import { useNavigation, useFilterParams } from './NavigationContext';
 import { MultiSelect } from "./MultiSelect";
 import { SearchableSelect } from "./SearchableSelect";
 import { SearchableMultiSelect } from "./SearchableMultiSelect";
@@ -18,9 +17,9 @@ interface FiltersProps {
 }
 
 export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode = 'team' }: FiltersProps) {
-  const { navigate } = useNavigation();
-  const searchParams = useSearchParams();
-  const section = searchParams.get('section') || 'compare-maps';
+  const { commitParams, flush, hasPendingEdits } = useNavigation();
+  const filterParams = useFilterParams();
+  const section = filterParams.get('section') || 'compare-maps';
   const isCompare = section === 'compare-maps' || section === 'compare-stats' || section === 'compare-economy';
   const isOverall = mode === 'overall';
   const isMetaShift = mode === 'meta-shift';
@@ -29,7 +28,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
   const isRelevantInfo = section === 'relevant-info';
 
   const updateFilter = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(filterParams.toString());
     if (value) params.set(key, value); else params.delete(key);
 
     if (key === 'reg') { params.delete('team'); params.delete('tour'); params.delete('team2'); params.delete('tour2'); params.delete('excA'); }
@@ -37,25 +36,25 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     if (key === 'team') { params.delete('tour'); if (value) params.delete('excA'); }
     if (key === 'team2') { params.delete('tour2'); if (value) params.delete('excB'); }
 
-    navigate(`?${params.toString()}`);
+    commitParams(params);
   };
 
   const updateRegFilter = (key: 'reg' | 'reg2', values: string[]) => {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(filterParams.toString());
     if (values.length > 0) params.set(key, values.join(',')); else params.delete(key);
     if (key === 'reg') { params.delete('team'); params.delete('tour'); params.delete('team2'); params.delete('tour2'); params.delete('excA'); }
     if (key === 'reg2') { params.delete('team2'); params.delete('tour2'); params.delete('excB'); }
-    navigate(`?${params.toString()}`);
+    commitParams(params);
   };
 
   const updateMultiFilter = (key: string, values: string[]) => {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(filterParams.toString());
     if (values.length > 0) {
       params.set(key, values.join(',')); // Guardamos como "id1,id2,id3"
     } else {
       params.delete(key);
     }
-    navigate(`?${params.toString()}`);
+    commitParams(params);
   };
 
   if (isMetaShift) {
@@ -64,7 +63,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         <label className={`text-[11px] font-bold uppercase tracking-wider ${color}`}>{label}</label>
         <input
           type="date"
-          value={searchParams.get(key) || ''}
+          value={filterParams.get(key) || ''}
           onChange={(e) => updateFilter(key, e.target.value)}
           className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600 [color-scheme:dark]"
         />
@@ -72,13 +71,14 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     );
 
     const resetAllFilters = () => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(filterParams.toString());
       ['reg', 'team', 'tour', 'excA', 'dateFrom', 'dateTo', 'reg2', 'team2', 'tour2', 'excB', 'dateFrom2', 'dateTo2'].forEach(k => params.delete(k));
-      navigate(`?${params.toString()}`);
+      commitParams(params, { immediate: true });
     };
 
     return (
       <div className="flex flex-wrap items-start gap-6 mb-8 bg-[#1a1d23] p-5 rounded-xl border border-gray-800 shadow-xl relative">
+        <PendingBadge show={hasPendingEdits} className="top-3 right-28" />
         <button
           onClick={resetAllFilters}
           className="absolute top-3 right-3 text-[10px] font-bold text-red-500 hover:text-red-400 hover:underline uppercase tracking-wider"
@@ -90,31 +90,31 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
           <RegionChips
             label="Region A"
             options={regions}
-            selected={searchParams.get('reg')?.split(',').filter(Boolean) || []}
+            selected={filterParams.get('reg')?.split(',').filter(Boolean) || []}
             onChange={(values) => updateRegFilter('reg', values)}
             labelColor="text-blue-400"
           />
-          <SearchableSelect
+          <SearchableSelect onClose={flush}
             label="Team A"
             options={teams}
-            selected={searchParams.get('team') || ''}
+            selected={filterParams.get('team') || ''}
             onChange={(val) => updateFilter('team', val)}
             placeholder="All teams"
           />
-          {!searchParams.get('team') && (
-            <StringMultiSelect
+          {!filterParams.get('team') && (
+            <StringMultiSelect onClose={flush}
               label="Exclude Teams A"
               options={teams}
-              selected={searchParams.get('excA')?.split(',').filter(x => x !== '') || []}
+              selected={filterParams.get('excA')?.split(',').filter(x => x !== '') || []}
               onChange={(values) => updateMultiFilter('excA', values)}
               placeholder="Exclude teams..."
               labelColor="text-blue-400"
             />
           )}
-          <SearchableMultiSelect
+          <SearchableMultiSelect onClose={flush}
             label="Tournament A"
             options={tours}
-            selected={searchParams.get('tour')?.split(',').filter(x => x !== '') || []}
+            selected={filterParams.get('tour')?.split(',').filter(x => x !== '') || []}
             onChange={(values) => updateMultiFilter('tour', values)}
             disabled={false}
           />
@@ -129,31 +129,31 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
           <RegionChips
             label="Region B"
             options={regions}
-            selected={searchParams.get('reg2')?.split(',').filter(Boolean) || []}
+            selected={filterParams.get('reg2')?.split(',').filter(Boolean) || []}
             onChange={(values) => updateRegFilter('reg2', values)}
             labelColor="text-orange-400"
           />
-          <SearchableSelect
+          <SearchableSelect onClose={flush}
             label="Team B"
             options={teams2}
-            selected={searchParams.get('team2') || ''}
+            selected={filterParams.get('team2') || ''}
             onChange={(val) => updateFilter('team2', val)}
             placeholder="All teams"
           />
-          {!searchParams.get('team2') && (
-            <StringMultiSelect
+          {!filterParams.get('team2') && (
+            <StringMultiSelect onClose={flush}
               label="Exclude Teams B"
               options={teams2}
-              selected={searchParams.get('excB')?.split(',').filter(x => x !== '') || []}
+              selected={filterParams.get('excB')?.split(',').filter(x => x !== '') || []}
               onChange={(values) => updateMultiFilter('excB', values)}
               placeholder="Exclude teams..."
               labelColor="text-orange-400"
             />
           )}
-          <SearchableMultiSelect
+          <SearchableMultiSelect onClose={flush}
             label="Tournament B"
             options={tours2}
-            selected={searchParams.get('tour2')?.split(',').filter(x => x !== '') || []}
+            selected={filterParams.get('tour2')?.split(',').filter(x => x !== '') || []}
             onChange={(values) => updateMultiFilter('tour2', values)}
             disabled={false}
           />
@@ -167,7 +167,8 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
   const isCompareStats = section === 'compare-stats' || section === 'compare-economy';
 
   return (
-  <div className="flex flex-col gap-4 mb-8 bg-[#1a1d23] p-5 rounded-xl border border-gray-800 shadow-xl">
+  <div className="flex flex-col gap-4 mb-8 bg-[#1a1d23] p-5 rounded-xl border border-gray-800 shadow-xl relative">
+    <PendingBadge show={hasPendingEdits} className="top-3 right-4" />
 
     {/* FILA 1: Region, Serie, Last X */}
     <div className="flex flex-wrap items-start gap-6">
@@ -175,14 +176,14 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
       <RegionChips
         label="Region"
         options={regions}
-        selected={searchParams.get('reg')?.split(',').filter(Boolean) || []}
+        selected={filterParams.get('reg')?.split(',').filter(Boolean) || []}
         onChange={(values) => updateRegFilter('reg', values)}
       />
 
       {!isEconomy && (() => {
         // Sin filtro (o 'all') = ambos formatos: los dos chips activos.
         // Con uno solo activo, cualquier click vuelve a 'ambos'.
-        const bo = searchParams.get('bo') || 'all';
+        const bo = filterParams.get('bo') || 'all';
         const isBoth = bo === 'all';
         return (
           <div className="flex flex-col gap-1">
@@ -213,7 +214,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         <div className="flex flex-col gap-1 justify-end">
           <label className="text-[11px] font-bold text-transparent uppercase tracking-wider">Reset</label>
           <button
-            onClick={() => navigate(`?section=economy`)}
+            onClick={() => commitParams(new URLSearchParams({ section: "economy" }), { immediate: true })}
             className="px-4 py-2 rounded bg-[#252a33] border border-gray-700 text-sm font-semibold text-gray-400 hover:text-gray-200 hover:border-gray-500 transition-colors"
           >
             Reset
@@ -222,10 +223,10 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
       )}
 
       {isOverall && (
-        <StringMultiSelect
+        <StringMultiSelect onClose={flush}
           label="Exclude Teams"
           options={teams}
-          selected={searchParams.get('excA')?.split(',').filter(x => x !== '') || []}
+          selected={filterParams.get('excA')?.split(',').filter(x => x !== '') || []}
           onChange={(values) => updateMultiFilter('excA', values)}
           placeholder="Exclude teams..."
         />
@@ -235,7 +236,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         <div className="flex flex-col gap-1">
           <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Last X matches</label>
           <select
-            value={searchParams.get('last') || "all"}
+            value={filterParams.get('last') || "all"}
             onChange={(e) => updateFilter('last', e.target.value)}
             className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
           >
@@ -254,21 +255,21 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     <div className="flex flex-wrap items-start gap-6 pt-3 border-t border-gray-800">
 
       {!isOverall && !isStatsRank && (
-        <SearchableSelect
+        <SearchableSelect onClose={flush}
           label="Team"
           options={teams}
-          selected={searchParams.get('team') || ""}
+          selected={filterParams.get('team') || ""}
           onChange={(val) => updateFilter('team', val)}
           placeholder="Choose a team"
         />
       )}
 
-      <SearchableMultiSelect
+      <SearchableMultiSelect onClose={flush}
         label="Tournament"
         options={tours}
-        selected={searchParams.get('tour')?.split(',').filter(x => x !== "") || (section === 'neon-dependency' ? STATS_RANK_DEFAULT_TOURS : [])}
+        selected={filterParams.get('tour')?.split(',').filter(x => x !== "") || (section === 'neon-dependency' ? STATS_RANK_DEFAULT_TOURS : [])}
         onChange={(values) => updateMultiFilter('tour', values)}
-        disabled={!isOverall && !isEconomy && !isRelevantInfo && !isStatsRank && !searchParams.get('team')}
+        disabled={!isOverall && !isEconomy && !isRelevantInfo && !isStatsRank && !filterParams.get('team')}
       />
 
       {(isCompareStats || isEconomy || isStatsRank || section === 'map-picks' || section === 'agent-picks' || !section || section === 'maps' || section === 'compare-maps' || section === 'player-stats') && (
@@ -277,7 +278,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
             <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">{isEconomy ? 'From' : 'From A'}</label>
             <input
               type="date"
-              value={searchParams.get('dateFrom') || ''}
+              value={filterParams.get('dateFrom') || ''}
               onChange={(e) => updateFilter('dateFrom', e.target.value)}
               className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600 [color-scheme:dark]"
             />
@@ -286,7 +287,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
             <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">{isEconomy ? 'To' : 'To A'}</label>
             <input
               type="date"
-              value={searchParams.get('dateTo') || ''}
+              value={filterParams.get('dateTo') || ''}
               onChange={(e) => updateFilter('dateTo', e.target.value)}
               className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600 [color-scheme:dark]"
             />
@@ -300,20 +301,20 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     {isCompare && (
       <div className="flex flex-wrap items-start gap-6 pt-3 border-t border-gray-800">
 
-        <SearchableSelect
+        <SearchableSelect onClose={flush}
           label="Team B"
           options={teams}
-          selected={searchParams.get('team2') || ''}
+          selected={filterParams.get('team2') || ''}
           onChange={(val) => updateFilter('team2', val)}
           placeholder="Choose Team B"
         />
 
-        <SearchableMultiSelect
+        <SearchableMultiSelect onClose={flush}
           label="Tournament (B)"
           options={tours2}
-          selected={searchParams.get('tour2')?.split(',').filter(x => x !== '') || []}
+          selected={filterParams.get('tour2')?.split(',').filter(x => x !== '') || []}
           onChange={(values) => updateMultiFilter('tour2', values)}
-          disabled={!searchParams.get('team2')}
+          disabled={!filterParams.get('team2')}
         />
 
         {(isCompareStats || section === 'compare-maps') && (
@@ -322,7 +323,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
               <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">From B</label>
               <input
                 type="date"
-                value={searchParams.get('dateFrom2') || ''}
+                value={filterParams.get('dateFrom2') || ''}
                 onChange={(e) => updateFilter('dateFrom2', e.target.value)}
                 className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600 [color-scheme:dark]"
               />
@@ -331,7 +332,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
               <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">To B</label>
               <input
                 type="date"
-                value={searchParams.get('dateTo2') || ''}
+                value={filterParams.get('dateTo2') || ''}
                 onChange={(e) => updateFilter('dateTo2', e.target.value)}
                 className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600 [color-scheme:dark]"
               />
@@ -343,5 +344,14 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
     )}
 
     </div>
+  );
+}
+// Avisa que hay cambios elegidos esperando a que venza el debounce antes de navegar.
+function PendingBadge({ show, className }: { show: boolean; className: string }) {
+  if (!show) return null;
+  return (
+    <span className={`absolute ${className} text-[10px] font-bold uppercase tracking-wider text-blue-400/80 animate-pulse pointer-events-none`}>
+      Loading...
+    </span>
   );
 }

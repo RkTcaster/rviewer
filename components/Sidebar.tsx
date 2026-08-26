@@ -1,9 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap, ListOrdered, Activity } from 'lucide-react';
-import { useNavigation } from './NavigationContext';
+import { useNavigation, useFilterParams } from './NavigationContext';
 
 const NAV_SECTIONS = [
   
@@ -43,19 +42,19 @@ const NAV_SECTIONS = [
 ];
 
 export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) {
-  const { navigate } = useNavigation();
-  const searchParams = useSearchParams();
-  const currentSection = searchParams.get('section') || 'compare-maps';
+  const { commitParams } = useNavigation();
+  const filterParams = useFilterParams();
+  const currentSection = filterParams.get('section') || 'compare-maps';
   const [collapsed, setCollapsed] = useState(false);
 
   function goToSection(section: string) {
     // Stats Rank y Maps Masters arrancan siempre con su configuración por defecto (sin filtros heredados)
     if (section === 'stats-rank' || section === 'maps-masters' || section === 'neon-dependency') {
-      navigate(`?section=${section}`);
+      commitParams(new URLSearchParams({ section }), { immediate: true });
       return;
     }
 
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(filterParams.toString());
     params.set('section', section);
 
     const goingOverall = section === 'map-picks' || section === 'agent-picks' || section === 'meta-shift';
@@ -72,7 +71,7 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
       params.delete('dateTo2');
     }
 
-    navigate(`?${params.toString()}`);
+    commitParams(params, { immediate: true });
   }
 
   return (
