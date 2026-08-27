@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Minus, X } from 'lucide-react';
-import { MapWL, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { Check, Info, Minus, X } from 'lucide-react';
+import { DuoMapStat, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
+import { Tooltip } from '../Tooltip';
 
 interface Props {
-  stats: Record<string, Record<string, MapWL>>;
+  stats: Record<string, Record<string, DuoMapStat>>;
   maps: string[];
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
@@ -21,10 +22,41 @@ const REGION_ROWS: { id: string; label: string }[] = [
   { id: 'reg_3', label: 'Pacific' },
 ];
 
-// Duo % = maps where the team fielded Neon and Phoenix together (wins) / times it played the map (played)
-function duoPct(wl: MapWL | undefined): number | null {
-  if (!wl || wl.played === 0) return null;
-  return Math.round((wl.wins / wl.played) * 100);
+// Duo % = maps where the team fielded Neon and Phoenix together / times it played the map
+function duoPct(s: DuoMapStat | undefined): number | null {
+  if (!s || s.played === 0) return null;
+  return Math.round((s.duo / s.played) * 100);
+}
+
+// Raw sum of several cells: the aggregate row adds the counters and divides once, rather than
+// averaging each team's percentage, so teams that played more maps weigh more.
+function sumDuoStats(list: (DuoMapStat | undefined)[]): DuoMapStat {
+  let played = 0, duo = 0, duoWins = 0;
+  for (const s of list) {
+    if (!s) continue;
+    played += s.played; duo += s.duo; duoWins += s.duoWins;
+  }
+  return { played, duo, duoWins };
+}
+
+// Win rate on the maps where the duo was actually fielded. Null when it never was.
+function duoWinPct(s: DuoMapStat | undefined): number | null {
+  if (!s || s.duo === 0) return null;
+  return Math.round((s.duoWins / s.duo) * 100);
+}
+
+// Win rate with the duo, rendered right of the agent icons. Nothing to show when the duo
+// was never fielded; the title carries the raw W-L so the % is never read without its sample.
+// labelTone: the map cells sit on the heatmap, where grey washes out against the lighter greens.
+function winLabel(s: DuoMapStat, labelTone = 'text-gray-400') {
+  const pct = duoWinPct(s);
+  if (pct === null) return null;
+  const tone = pct > 50 ? 'text-green-300' : pct < 50 ? 'text-red-300' : 'text-gray-200/80';
+  return (
+    <span className={`font-bold ${tone}`} title={`${s.duoWins}W-${s.duo - s.duoWins}L with the duo`}>
+      <span className={`font-normal ${labelTone}`}>WR </span>{pct}%
+    </span>
+  );
 }
 
 // The duo's agent icons, shown instead of a "duo" label. Paths mirror agent_info.agent_path,
@@ -34,6 +66,56 @@ const DUO_ICONS = (
     <img src="/agents/neon.png" alt="Neon" title="Neon" className="w-4 h-4 object-contain shrink-0" />
     <img src="/agents/phoenix.png" alt="Phoenix" title="Phoenix" className="w-4 h-4 object-contain shrink-0" />
   </span>
+);
+
+// What every encoded element of this table means. Local on purpose: the copy describes this
+// table's rules (duo %, WR sample, tick thresholds) and is not reusable anywhere else.
+const LEGEND = (
+  <dl className="w-[340px] flex flex-col gap-2 text-[11px] leading-snug text-gray-300">
+    <div>
+      <dt className="font-bold text-gray-100">Cell %  —  duo usage, not win rate</dt>
+      <dd className="text-gray-400">
+        Maps where the team fielded Neon <b>and</b> Phoenix at the same time, over maps played.
+        The cell background is a heatmap of that same %.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Detail info</dt>
+      <dd className="text-gray-400">
+        Reveals <span className="text-gray-200">duo/played</span>, the two agent icons with the
+        duo count, and <span className="text-gray-200">WR</span>.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">WR  —  win rate on the duo maps only</dt>
+      <dd className="text-gray-400">
+        Not the team&apos;s overall win rate. Hover the number for the raw W-L: with 4 or 5 maps,
+        a 60% is 3W-2L.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">
+        <Check className="inline w-3 h-3 text-green-400" strokeWidth={3} />
+        <Minus className="inline w-3 h-3 text-yellow-400" strokeWidth={3} />
+        <X className="inline w-3 h-3 text-red-400" strokeWidth={3} />
+        <span className="ml-1">in Overall</span>
+      </dt>
+      <dd className="text-gray-400">
+        Duo usage per map: over 60% / 40-60% / under 40%. Grey when the team never played it.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">All row</dt>
+      <dd className="text-gray-400">
+        Raw sum of the selected teams — totals added, then divided once. It changes as you
+        toggle chips.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Region logos</dt>
+      <dd className="text-gray-400">Click one to add or remove that whole region.</dd>
+    </div>
+  </dl>
 );
 
 // Per-map summary icon, same rules as Maps Rank: green >60, yellow 40-60, red <40, grey when no data
@@ -107,6 +189,19 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
     });
   }
 
+  // Region logo acts as a bulk toggle for its row: clears the whole region when every team in
+  // it is already on, otherwise turns them all on.
+  function toggleRegionTeams(rowTeams: string[]) {
+    setHiddenTeams(prev => {
+      const next = new Set(prev);
+      const allVisible = rowTeams.every(t => !next.has(t));
+      for (const t of rowTeams) {
+        if (allVisible) next.add(t); else next.delete(t);
+      }
+      return next;
+    });
+  }
+
   function toggleMap(map: string) {
     setHiddenMaps(prev => {
       const next = new Set(prev);
@@ -135,12 +230,12 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
   }
 
   // Overall duo usage per team: total maps with the duo / total maps played (across every map)
-  function overallUsage(team: string): MapWL {
+  function overallUsage(team: string): DuoMapStat {
     const byMap = stats[team];
-    if (!byMap) return { wins: 0, played: 0, bans: 0 };
-    let wins = 0, played = 0;
-    for (const m in byMap) { wins += byMap[m].wins; played += byMap[m].played; }
-    return { wins, played, bans: 0 };
+    if (!byMap) return { played: 0, duo: 0, duoWins: 0 };
+    let played = 0, duo = 0, duoWins = 0;
+    for (const m in byMap) { played += byMap[m].played; duo += byMap[m].duo; duoWins += byMap[m].duoWins; }
+    return { played, duo, duoWins };
   }
 
   // Valores por columna (mapa visible) para colorear best/worst — siempre sobre el orden base
@@ -203,7 +298,7 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
             <button
               key={map}
               onClick={() => toggleMap(map)}
-              className={`flex flex-col items-center gap-1 p-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+              className={`shrink-0 flex flex-col items-center gap-1 p-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-colors border ${
                 active
                   ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
                   : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
@@ -243,16 +338,31 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
                 >
                   {allTeamsSelected ? 'Clear' : 'Add all'}
                 </button>
+                <span className="text-[10px] text-gray-600">
+                  Click a region logo to add / remove all teams from that region
+                </span>
               </div>
               <div className="flex flex-col gap-2 px-1">
                 {visibleRows.map(row => (
                   <div key={row.label} className="flex items-center gap-3">
-                    <span className="w-12 shrink-0 flex items-center justify-end text-[10px] font-bold uppercase tracking-widest text-gray-600">
-                      {/* The logo replaces the name; 'Other' has no logo and falls back to text */}
-                      {row.logo
-                        ? <img src={row.logo} alt={row.label} title={row.label} className="w-[30px] h-[30px] object-contain shrink-0" />
-                        : row.label}
-                    </span>
+                    {(() => {
+                      // The logo replaces the name; 'Other' has no logo and falls back to text.
+                      // Dimmed like an inactive chip when no team of the row is selected.
+                      const anyVisible = row.teams.some(t => !hiddenTeams.has(t));
+                      return (
+                        <button
+                          onClick={() => toggleRegionTeams(row.teams)}
+                          title={`${row.label} — select / clear the whole region`}
+                          className={`w-12 shrink-0 flex items-center justify-start text-[10px] font-bold uppercase tracking-widest transition-opacity hover:opacity-100 ${
+                            anyVisible ? 'text-gray-400' : 'text-gray-600 opacity-50'
+                          }`}
+                        >
+                          {row.logo
+                            ? <img src={row.logo} alt={row.label} className={`w-[30px] h-[30px] object-contain shrink-0 transition-all ${anyVisible ? '' : 'grayscale'}`} />
+                            : row.label}
+                        </button>
+                      );
+                    })()}
                     <div className="flex flex-wrap gap-2">
                       {row.teams.map(renderTeamChip)}
                     </div>
@@ -264,7 +374,7 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
             {/* Maps */}
             <div className="flex flex-col gap-2">
               <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Maps</span>
-              <div className="flex flex-wrap gap-2 px-1 max-w-md">
+              <div className="flex gap-2 px-1 overflow-x-auto">
                 {maps.map(renderMapChip)}
               </div>
             </div>
@@ -284,6 +394,12 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
         >
           Detail info
         </button>
+        <Tooltip content={LEGEND} className="items-center">
+          <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-gray-200 hover:text-white transition-colors cursor-help">
+            <Info className="w-3.5 h-3.5 shrink-0" />
+            Legend
+          </span>
+        </Tooltip>
         <button
           onClick={resetFilters}
           className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-red-400 hover:border-red-500 hover:text-red-300"
@@ -347,6 +463,62 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
             </tr>
           </thead>
           <tbody>
+            {/* Aggregate row: raw sum over the visible teams. Pinned above them and outside the
+                sort, and excluded from mapAllValues so it never counts as a column's best/worst. */}
+            {(() => {
+              const tot = sumDuoStats(baseTeams.map(t => overallUsage(t)));
+              const val = duoPct(tot);
+              const mapTotals = visibleMaps.map(m => sumDuoStats(baseTeams.map(t => stats[t]?.[m])));
+              return (
+                <tr className="border-b-2 border-gray-700">
+                  <td className="sticky left-0 z-10 bg-[#1a1d23] w-8 py-3" />
+                  <td className="sticky left-8 z-10 bg-[#1a1d23] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-gray-100 border-r border-gray-800 whitespace-nowrap" style={{ width: '1%' }}>
+                    All
+                  </td>
+                  <td className="py-3 px-3 text-center border-r border-gray-800" style={{ minWidth: 72 }}>
+                    {val !== null ? (
+                      <div className="text-sm font-bold" style={{ color: heatmapBg(val) }}>
+                        {val}%
+                        {showDetail && <span className="text-gray-200/80 font-normal whitespace-nowrap"> {tot.duo}/{tot.played} {DUO_ICONS} {winLabel(tot)}</span>}
+                      </div>
+                    ) : (
+                      <span className="text-gray-700">—</span>
+                    )}
+                    {showDetail && (
+                      <div className="flex flex-wrap justify-center items-center gap-0.5 mt-1">
+                        {mapTotals.map((mt, mi) => mapTick(duoPct(mt), visibleMaps[mi]))}
+                      </div>
+                    )}
+                  </td>
+                  {mapTotals.map((mt, mi) => {
+                    const v = duoPct(mt);
+                    return (
+                      <td
+                        key={visibleMaps[mi]}
+                        className="py-3 px-3 text-center"
+                        style={{ minWidth: 64, backgroundColor: v !== null ? heatmapBg(v) : '#1a1d23' }}
+                      >
+                        {v !== null ? (
+                          <>
+                            <div className="text-sm font-bold text-gray-100">
+                              {v}%
+                              {showDetail && <span className="text-gray-200/80 font-normal whitespace-nowrap"> {mt.duo}/{mt.played}</span>}
+                            </div>
+                            {showDetail && (
+                              <div className="flex items-center justify-center gap-1 text-[13px] text-gray-200/80 whitespace-nowrap">
+                                {mt.duo} {DUO_ICONS} {winLabel(mt, 'text-white')}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-gray-700">—</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })()}
             {teams.map((team, rank) => (
               <tr key={team} className="hover:bg-[#252a33] transition-colors border-b border-gray-800">
                 <td className="sticky left-0 z-10 bg-[#1a1d23] w-8 text-center py-3 text-[11px] font-bold text-gray-600">
@@ -372,7 +544,7 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
                         <div className="text-sm font-bold" style={{ color: heatmapBg(val) }}>
                           {val}%
                           {showDetail && (
-                            <span className="text-gray-200/80 font-normal whitespace-nowrap"> {ov.wins}/{ov.played} {DUO_ICONS}</span>
+                            <span className="text-gray-200/80 font-normal whitespace-nowrap"> {ov.duo}/{ov.played} {DUO_ICONS} {winLabel(ov)}</span>
                           )}
                         </div>
                       ) : (
@@ -410,11 +582,11 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
                         <>
                           <div className={`text-sm ${color}`}>
                             {val}%
-                            {showDetail && <span className="text-gray-200/80 font-normal whitespace-nowrap"> {wl.wins}/{wl.played}</span>}
+                            {showDetail && <span className="text-gray-200/80 font-normal whitespace-nowrap"> {wl.duo}/{wl.played}</span>}
                           </div>
                           {showDetail && (
                             <div className="flex items-center justify-center gap-1 text-[13px] text-gray-200/80 whitespace-nowrap">
-                              {wl.wins} {DUO_ICONS}
+                              {wl.duo} {DUO_ICONS} {winLabel(wl, 'text-white')}
                             </div>
                           )}
                         </>

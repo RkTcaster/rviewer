@@ -1,7 +1,7 @@
 // lib/data/agents.ts — picks de agentes y composiciones
 import { supabase } from '../supabase';
 import { versioned, fetchAllPages } from './helpers';
-import { AgentMatchDetail, AgentPickStat, CompositionStat, MapCompositionStat, MapsMastersData, MapWL } from '../types';
+import { AgentMatchDetail, AgentPickStat, CompositionStat, DuoMapStat, DuoStatsData, MapCompositionStat, MapsMastersData, MapWL } from '../types';
 import type { PostgrestFilterBuilder } from '@supabase/postgrest-js';
 import { PlayerStatsRow, RoundInfoRow } from './rows';
 
@@ -10,11 +10,11 @@ type RoundWinnerRow = Pick<RoundInfoRow, 'series_id' | 'map_id' | 'round' | 'tea
 
 // Neon + Phoenix: same filter logic as Maps Masters (draft → series_ids), but per team and map
 // it returns on how many map instances the team fielded Neon AND Phoenix at the same time
-// (wins = maps with the duo) out of how many times it played that map (played).
-export const getNeonDependencyStats = versioned('neon-phoenix-duo-stats', getNeonDependencyStats_impl);
+// (duo) out of how many times it played that map (played), plus how many of those it won (duoWins).
+export const getNeonDependencyStats = versioned('neon-phoenix-duo-stats-v2', getNeonDependencyStats_impl);
 async function getNeonDependencyStats_impl(
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
-): Promise<MapsMastersData> {
+): Promise<DuoStatsData> {
   let idQuery = supabase.from('draft').select('series_id, bo');
   if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
   if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
@@ -31,6 +31,23 @@ async function getNeonDependencyStats_impl(
     supabase.from('player_stats').select('team, map, map_id, agent').in('series_id', seriesIds).range(from, to)
   );
   if (!rows || rows.length === 0) return { stats: {}, maps: [] };
+
+  // Winner per map_id from round_info (same pattern as getAgentPickStats)
+  const winnerByMapId: Record<string, string | undefined> = {};
+  const roundRows = await fetchAllPages<RoundWinnerRow>((from, to) =>
+    supabase.from('round_info')
+      .select('series_id, map_id, round, teamA, teamB, rndA, rndB')
+      .in('series_id', seriesIds)
+      .range(from, to)
+  );
+  const finalRoundByMapId: Record<string, RoundWinnerRow> = {};
+  for (const r of roundRows) {
+    const prev = finalRoundByMapId[r.map_id];
+    if (!prev || Number(r.round) > Number(prev.round)) finalRoundByMapId[r.map_id] = r;
+  }
+  for (const [map_id, r] of Object.entries(finalRoundByMapId)) {
+    winnerByMapId[map_id] = Number(r.rndA) === 1 ? r.teamA?.trim() : r.teamB?.trim();
+  }
 
   // Per team+map: set of map_id played, plus one set per agent of the duo. A map counts for the
   // duo only if its map_id is in both agent sets, i.e. the team fielded them together.
@@ -50,20 +67,26 @@ async function getNeonDependencyStats_impl(
     else if (r.agent === 'Phoenix') (phoenixSets[key] ??= new Set()).add(mapId);
   }
 
-  const stats: Record<string, Record<string, MapWL>> = {};
+  const stats: Record<string, Record<string, DuoMapStat>> = {};
   for (const key of Object.keys(playedSets)) {
     const sep = key.indexOf('__');
     const team = key.slice(0, sep);
     const map = key.slice(sep + 2);
     const neon = neonSets[key];
     const phoenix = phoenixSets[key];
-    let duo = 0;
-    if (neon && phoenix) for (const mapId of neon) if (phoenix.has(mapId)) duo++;
+    let duo = 0, duoWins = 0;
+    if (neon && phoenix) {
+      for (const mapId of neon) {
+        if (!phoenix.has(mapId)) continue;
+        duo++;
+        if (winnerByMapId[mapId] === team) duoWins++;
+      }
+    }
     if (!stats[team]) stats[team] = {};
     stats[team][map] = {
-      wins: duo,
       played: playedSets[key].size,
-      bans: 0,
+      duo,
+      duoWins,
     };
   }
 

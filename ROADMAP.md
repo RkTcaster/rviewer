@@ -3,12 +3,45 @@
 Planning of improvements and features. Context: **personal** analysis/casting tool,
 used on desktop. Data depth is the priority; mobile and public polish come last.
 
-Last updated: 2026-07-09
+Last updated: 2026-08-27
 
 ---
 
 ## ✅ Done
 
+- **Neon Dependency → Neon + Phoenix** (aug 2026): the metric changed from "how often the team
+  fielded Neon" to "how often it fielded Neon **and** Phoenix on the same map" — an intersection,
+  so a map counts once even with both agents and the cell can never exceed 100%. Added `duoWins`
+  (map winner from `round_info`, same last-round pattern the rest of the module uses), so each
+  cell also shows the win rate on the duo maps. New `DuoMapStat` type instead of stretching
+  `MapWL`, whose `bans` had no meaning here. Verified against Supabase: the implementation matched
+  an independent per-`map_id` count on all 341 cells, 538/538 maps resolved a winner, and the
+  aggregate landed at 49% WR (the sanity signal that team names match across the two tables).
+- **4.4 Own README** (aug 2026): replaced the create-next-app default. Covers setup, the
+  single-route architecture, the `lib/data/*` split, `versioned`/`fetchAllPages`, the debounced
+  filters, a section-by-section table, the query params and the CSV upload flow. Written in
+  English, along with this roadmap.
+- **Neon + Phoenix table rework** (aug 2026): region logos replacing text labels and doubling as
+  bulk region toggles; team chips in the Maps Rank card format with an Add all / Clear button;
+  agent icons in place of the "duo" label; the Maps Rank Overall format with its ✓/−/✗ rules; an
+  `All` row with the raw sum over the selected teams; map chips on a single row. The Add all
+  button forced a companion fix: the section was guarded on `baseTeams.length`, so clearing every
+  team hid the chips and locked the user out — now guarded on `allTeams.length`, as Maps Rank
+  already did.
+- **`Tooltip` with portal + section legend** (aug 2026): `components/Tooltip.tsx`, a ~70-line
+  primitive with `createPortal`, `fixed` positioning off the trigger rect, edge clamping and
+  flip-up. The portal is what lets a tooltip live inside the tables, whose `overflow-x-auto`
+  container clips any absolutely positioned descendant. First consumer: the `ⓘ Legend` in
+  Neon + Phoenix, which documents the duo %, the WR sample, the tick thresholds and the `All` row.
+  No new dependency.
+- **Region logos in the Stats Rank team filter** (aug 2026): same treatment as Neon + Phoenix —
+  logos replacing the text labels, clickable to add or clear a whole region, dimmed when none of
+  the row is picked, plus the hint next to Add all / Clear. The toggle had to be written inverted
+  between the two sections: Stats Rank tracks `selectedTeams` (opt-in, starts empty) while
+  Neon + Phoenix tracks `hiddenTeams` (opt-out, starts on `STATS_RANK_DEFAULT_TEAMS`).
+- **Stage 2 as the default tournaments** (aug 2026): `STATS_RANK_DEFAULT_TOURS` moved from a mix
+  of Stage 1 plus two international events to the four regional Stage 2 (218 series). The constant
+  now only feeds Neon + Phoenix — both consumers are gated on that section — so the name is stale.
 - **Parallelized fetches** (jul 2026): the ~35 conditional fetches in `app/page.tsx` went from
   sequential `await`s to a single `Promise.all`. With a warm cache, stats-rank dropped from
   ~6.5s to ~300ms. The existing loading overlay is now visible for far less time.
@@ -37,7 +70,7 @@ Last updated: 2026-07-09
 
 ## Ongoing — translate code comments to English
 
-The codebase still has ~207 comment lines in Spanish across ~30 files (heaviest:
+The codebase still has ~214 comment lines in Spanish across ~31 files (heaviest:
 `lib/data/draft.ts`, `lib/data/agents.ts`, `components/sections/AgentPicksSection.tsx`,
 `components/sections/MapsMastersSection.tsx`, `lib/types.ts`, `components/NavigationContext.tsx`).
 
@@ -93,11 +126,13 @@ Done when `grep` finds no Spanish comments left, at which point the README's con
 
 ## Phase 4 — Polish (low priority, personal tool)
 
-- **4.1 Clean up the "Testing" sidebar section**: promote what's already useful (Relevant Info,
-  Player Stats) and hide the rest.
-- **4.2 Unify the UI language** (currently a mix of English/Spanish).
+- **4.1 Clean up the "Testing" sidebar section**: partly advanced (aug 2026) — Skirmish Americas
+  and Form Timeline are hidden, and Veto Draft moved from Team into Testing. Still pending:
+  decide whether Relevant Info, Economy and Player Stats get promoted or dropped.
+- **4.2 Unify the UI language** (currently a mix of English/Spanish). Related but separate from
+  the Ongoing item above, which covers code comments rather than what the UI shows.
 - **4.3 Move the Playoff % disclaimer out of the h1** into a subtitle.
-- **4.4 Own README** (currently the create-next-app default).
+- **4.4 Own README**: done (see Done).
 - **4.5 Color accessibility**: green/red as the only encoding doesn't work for colorblind users;
   pair it with font weight or a symbol.
 - **4.6 Responsive**: only if the tool ever goes public.

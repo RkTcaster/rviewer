@@ -107,6 +107,15 @@ export type MapsMastersData = {
   maps: string[];
 };
 
+// Neon + Phoenix: per team and map — maps played, of those how many had the duo,
+// and of the duo ones how many the team won. Its own type because MapWL only carries
+// two counters and `bans` has no meaning here.
+export type DuoMapStat = { played: number; duo: number; duoWins: number };
+export type DuoStatsData = {
+  stats: Record<string, Record<string, DuoMapStat>>;
+  maps: string[];
+};
+
 export type CompositionStat = {
   map: string;
   composition: string;

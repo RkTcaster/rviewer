@@ -118,6 +118,19 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
     });
   }
 
+  // Region logo acts as a bulk toggle for its row: clears the whole region when every team in
+  // it is already selected, otherwise adds them all.
+  function toggleRegionTeams(rowTeams: string[]) {
+    setSelectedTeams(prev => {
+      const next = new Set(prev);
+      const allSelected = rowTeams.every(t => next.has(t));
+      for (const t of rowTeams) {
+        if (allSelected) next.delete(t); else next.add(t);
+      }
+      return next;
+    });
+  }
+
   function toggleGroup(id: string) {
     setHiddenGroups(prev => {
       const next = new Set(prev);
@@ -213,6 +226,9 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
       >
         {allTeamsSelected ? 'Clear' : 'Add all'}
       </button>
+      <span className="text-[10px] text-gray-600">
+        Click a region logo to add / remove all teams from that region
+      </span>
     </div>
 
     {/* Team filter chips — one row per region */}
@@ -243,20 +259,36 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
       };
 
       const knownRegions = new Set(REGION_ROWS.map(r => r.id));
-      const rows = REGION_ROWS.map(r => ({
+      const rows: { label: string; logo: string | null; teams: string[] }[] = REGION_ROWS.map(r => ({
         label: r.label,
+        logo: `/region/${r.label.toLowerCase()}.png`,
         teams: allTeams.filter(t => teamRegions[t] === r.id),
       }));
       const otherTeams = allTeams.filter(t => !knownRegions.has(teamRegions[t]));
-      if (otherTeams.length > 0) rows.push({ label: 'Other', teams: otherTeams });
+      if (otherTeams.length > 0) rows.push({ label: 'Other', logo: null, teams: otherTeams });
 
       return (
         <div className="flex flex-col gap-2 px-1">
           {rows.filter(row => row.teams.length > 0).map(row => (
             <div key={row.label} className="flex items-center gap-3">
-              <span className="w-16 shrink-0 text-right text-[10px] font-bold uppercase tracking-widest text-gray-600">
-                {row.label}
-              </span>
+              {(() => {
+                // The logo replaces the name; 'Other' has no logo and falls back to text.
+                // Dimmed like an inactive chip when no team of the row is selected.
+                const anySelected = row.teams.some(t => selectedTeams.has(t));
+                return (
+                  <button
+                    onClick={() => toggleRegionTeams(row.teams)}
+                    title={`${row.label} — select / clear the whole region`}
+                    className={`w-12 shrink-0 flex items-center justify-start text-[10px] font-bold uppercase tracking-widest transition-opacity hover:opacity-100 ${
+                      anySelected ? 'text-gray-400' : 'text-gray-600 opacity-50'
+                    }`}
+                  >
+                    {row.logo
+                      ? <img src={row.logo} alt={row.label} className={`w-[30px] h-[30px] object-contain shrink-0 transition-all ${anySelected ? '' : 'grayscale'}`} />
+                      : row.label}
+                  </button>
+                );
+              })()}
               <div className="flex flex-wrap gap-2">
                 {row.teams.map(renderChip)}
               </div>
