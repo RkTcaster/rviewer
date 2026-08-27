@@ -8,10 +8,10 @@ import { PlayerStatsRow, RoundInfoRow } from './rows';
 // Subconjunto de round_info usado para determinar el ganador de cada mapa
 type RoundWinnerRow = Pick<RoundInfoRow, 'series_id' | 'map_id' | 'round' | 'teamA' | 'teamB' | 'rndA' | 'rndB'>;
 
-// Neon Dependency: misma lógica de filtro que Maps Masters (draft → series_ids),
-// pero por equipo y mapa devuelve cuántas veces el equipo llevó al agente Neon
-// (wins = picks de Neon) sobre cuántas veces jugó ese mapa (played).
-export const getNeonDependencyStats = versioned('neon-dependency-stats', getNeonDependencyStats_impl);
+// Neon + Phoenix: same filter logic as Maps Masters (draft → series_ids), but per team and map
+// it returns on how many map instances the team fielded Neon AND Phoenix at the same time
+// (wins = maps with the duo) out of how many times it played that map (played).
+export const getNeonDependencyStats = versioned('neon-phoenix-duo-stats', getNeonDependencyStats_impl);
 async function getNeonDependencyStats_impl(
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<MapsMastersData> {
@@ -32,9 +32,11 @@ async function getNeonDependencyStats_impl(
   );
   if (!rows || rows.length === 0) return { stats: {}, maps: [] };
 
-  // Por equipo+mapa: set de map_id jugados y set de map_id donde llevó Neon.
+  // Per team+map: set of map_id played, plus one set per agent of the duo. A map counts for the
+  // duo only if its map_id is in both agent sets, i.e. the team fielded them together.
   const playedSets: Record<string, Set<string>> = {};
   const neonSets: Record<string, Set<string>> = {};
+  const phoenixSets: Record<string, Set<string>> = {};
   const mapTotals: Record<string, Set<string>> = {};
   for (const r of rows) {
     const team = r.team?.trim();
@@ -45,6 +47,7 @@ async function getNeonDependencyStats_impl(
     (playedSets[key] ??= new Set()).add(mapId);
     (mapTotals[map] ??= new Set()).add(mapId);
     if (r.agent === 'Neon') (neonSets[key] ??= new Set()).add(mapId);
+    else if (r.agent === 'Phoenix') (phoenixSets[key] ??= new Set()).add(mapId);
   }
 
   const stats: Record<string, Record<string, MapWL>> = {};
@@ -52,9 +55,13 @@ async function getNeonDependencyStats_impl(
     const sep = key.indexOf('__');
     const team = key.slice(0, sep);
     const map = key.slice(sep + 2);
+    const neon = neonSets[key];
+    const phoenix = phoenixSets[key];
+    let duo = 0;
+    if (neon && phoenix) for (const mapId of neon) if (phoenix.has(mapId)) duo++;
     if (!stats[team]) stats[team] = {};
     stats[team][map] = {
-      wins: neonSets[key]?.size ?? 0,
+      wins: duo,
       played: playedSets[key].size,
       bans: 0,
     };

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Check, Minus, X } from 'lucide-react';
 import { MapWL, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 
@@ -20,10 +21,28 @@ const REGION_ROWS: { id: string; label: string }[] = [
   { id: 'reg_3', label: 'Pacific' },
 ];
 
-// % de Neon = picks de Neon (wins) / veces jugado el mapa (played)
-function neonPct(wl: MapWL | undefined): number | null {
+// Duo % = maps where the team fielded Neon and Phoenix together (wins) / times it played the map (played)
+function duoPct(wl: MapWL | undefined): number | null {
   if (!wl || wl.played === 0) return null;
   return Math.round((wl.wins / wl.played) * 100);
+}
+
+// The duo's agent icons, shown instead of a "duo" label. Paths mirror agent_info.agent_path,
+// hardcoded like the agents themselves so the section needs no agentImages prop.
+const DUO_ICONS = (
+  <span className="inline-flex items-center gap-0.5 align-middle">
+    <img src="/agents/neon.png" alt="Neon" title="Neon" className="w-4 h-4 object-contain shrink-0" />
+    <img src="/agents/phoenix.png" alt="Phoenix" title="Phoenix" className="w-4 h-4 object-contain shrink-0" />
+  </span>
+);
+
+// Per-map summary icon, same rules as Maps Rank: green >60, yellow 40-60, red <40, grey when no data
+function mapTick(pct: number | null, key: string) {
+  const cls = 'w-3 h-3 shrink-0';
+  if (pct === null) return <Minus key={key} className={`${cls} text-gray-600`} strokeWidth={3} />;
+  if (pct > 60)     return <Check key={key} className={`${cls} text-green-400`} strokeWidth={3} />;
+  if (pct < 40)     return <X     key={key} className={`${cls} text-red-400`} strokeWidth={3} />;
+  return            <Minus key={key} className={`${cls} text-yellow-400`} strokeWidth={3} />;
 }
 
 // Fondo en gradiente según % (misma paleta que Playoff % / Maps Masters)
@@ -72,6 +91,7 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
   );
 
   const baseTeams = allTeams.filter(t => !hiddenTeams.has(t));
+  const allTeamsSelected = hiddenTeams.size === 0;
 
   // Por defecto ocultos los mapas fuera de rotación (in_rotation en maps_name_ids)
   const [hiddenMaps, setHiddenMaps] = useState<Set<string>>(
@@ -104,7 +124,9 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
     navigate('?section=neon-dependency');
   }
 
-  if (baseTeams.length === 0 || maps.length === 0) {
+  // Guarded on allTeams, not baseTeams: hiding every team must still render the chips so the
+  // selection can be undone. Only a lack of data replaces the whole section with the placeholder.
+  if (allTeams.length === 0 || maps.length === 0) {
     return (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
         Select a region and tournament to see the maps...
@@ -112,7 +134,7 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
     );
   }
 
-  // Uso global de Neon por equipo: total picks de Neon / total mapas jugados (todos los mapas)
+  // Overall duo usage per team: total maps with the duo / total maps played (across every map)
   function overallUsage(team: string): MapWL {
     const byMap = stats[team];
     if (!byMap) return { wins: 0, played: 0, bans: 0 };
@@ -122,14 +144,13 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
   }
 
   // Valores por columna (mapa visible) para colorear best/worst — siempre sobre el orden base
-  const mapAllValues = visibleMaps.map(m => baseTeams.map(t => neonPct(stats[t]?.[m])));
-  const overallAllValues = baseTeams.map(t => neonPct(overallUsage(t)));
+  const mapAllValues = visibleMaps.map(m => baseTeams.map(t => duoPct(stats[t]?.[m])));
 
   const teams = (sortCol === null || (typeof sortCol === 'number' && sortCol >= visibleMaps.length))
     ? baseTeams
     : [...baseTeams].sort((a, b) => {
-        const valA = sortCol === 'overall' ? neonPct(overallUsage(a)) : neonPct(stats[a]?.[visibleMaps[sortCol]]);
-        const valB = sortCol === 'overall' ? neonPct(overallUsage(b)) : neonPct(stats[b]?.[visibleMaps[sortCol]]);
+        const valA = sortCol === 'overall' ? duoPct(overallUsage(a)) : duoPct(stats[a]?.[visibleMaps[sortCol]]);
+        const valB = sortCol === 'overall' ? duoPct(overallUsage(b)) : duoPct(stats[b]?.[visibleMaps[sortCol]]);
         if (valA === null && valB === null) return 0;
         if (valA === null) return 1;
         if (valB === null) return -1;
@@ -157,7 +178,7 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
             <button
               key={team}
               onClick={() => toggleTeam(team)}
-              className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+              className={`w-[58px] flex flex-col items-center gap-1 px-1.5 py-1.5 rounded-lg text-[12.8px] font-bold uppercase tracking-wide transition-colors border ${
                 active
                   ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
                   : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
@@ -167,7 +188,7 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
                 <img
                   src={logo}
                   alt={team}
-                  className={`w-4 h-4 object-contain shrink-0 transition-opacity ${active ? '' : 'opacity-40 grayscale'}`}
+                  className={`w-5 h-5 object-contain shrink-0 transition-opacity ${active ? '' : 'opacity-40 grayscale'}`}
                 />
               )}
               <span className={active ? '' : 'line-through'}>{team}</span>
@@ -201,24 +222,36 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
         };
 
         const knownRegions = new Set(REGION_ROWS.map(r => r.id));
-        const rows = REGION_ROWS.map(r => ({
+        const rows: { label: string; logo: string | null; teams: string[] }[] = REGION_ROWS.map(r => ({
           label: r.label,
+          logo: `/region/${r.label.toLowerCase()}.png`,
           teams: allTeams.filter(t => teamRegions[t] === r.id),
         }));
         const otherTeams = allTeams.filter(t => !knownRegions.has(teamRegions[t]));
-        if (otherTeams.length > 0) rows.push({ label: 'Other', teams: otherTeams });
+        if (otherTeams.length > 0) rows.push({ label: 'Other', logo: null, teams: otherTeams });
         const visibleRows = rows.filter(row => row.teams.length > 0);
 
         return (
           <div className="flex flex-wrap gap-x-10 gap-y-4">
             {/* Teams — columna izquierda */}
             <div className="flex flex-col gap-2">
-              <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Teams</span>
+              <div className="flex items-center gap-3 px-1">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Teams</span>
+                <button
+                  onClick={() => setHiddenTeams(allTeamsSelected ? new Set(allTeams) : new Set())}
+                  className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200"
+                >
+                  {allTeamsSelected ? 'Clear' : 'Add all'}
+                </button>
+              </div>
               <div className="flex flex-col gap-2 px-1">
                 {visibleRows.map(row => (
                   <div key={row.label} className="flex items-center gap-3">
-                    <span className="w-16 shrink-0 text-right text-[10px] font-bold uppercase tracking-widest text-gray-600">
-                      {row.label}
+                    <span className="w-12 shrink-0 flex items-center justify-end text-[10px] font-bold uppercase tracking-widest text-gray-600">
+                      {/* The logo replaces the name; 'Other' has no logo and falls back to text */}
+                      {row.logo
+                        ? <img src={row.logo} alt={row.label} title={row.label} className="w-[30px] h-[30px] object-contain shrink-0" />
+                        : row.label}
                     </span>
                     <div className="flex flex-wrap gap-2">
                       {row.teams.map(renderTeamChip)}
@@ -329,44 +362,33 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
                 </td>
                 {(() => {
                   const ov = overallUsage(team);
-                  const val = neonPct(ov);
-                  const color = getCellColor(val, overallAllValues);
-                  const cellRank = getCellRank(val, overallAllValues);
-                  const isActive = sortCol === 'overall';
-                  const ringColor =
-                    cellRank === 'best' ? 'rgba(74,222,128,0.9)' :
-                    cellRank === 'worst' ? '#181938' :
-                    isActive ? 'rgba(59,130,246,0.4)' : null;
+                  const val = duoPct(ov);
                   return (
                     <td
                       className="py-3 px-3 text-center border-r border-gray-800"
-                      style={{
-                        minWidth: 72,
-                        backgroundColor: val !== null ? heatmapBg(val) : (isActive ? '#1e2430' : '#1a1d23'),
-                        boxShadow: ringColor ? `inset 0 0 0 2px ${ringColor}` : undefined,
-                      }}
+                      style={{ minWidth: 72 }}
                     >
                       {val !== null ? (
-                        <>
-                          <div className={`text-sm ${color}`}>
-                            {val}%
-                            {showDetail && <span className="text-gray-200/80 font-normal whitespace-nowrap"> {ov.wins}/{ov.played}</span>}
-                          </div>
+                        <div className="text-sm font-bold" style={{ color: heatmapBg(val) }}>
+                          {val}%
                           {showDetail && (
-                            <div className="text-[13px] text-gray-200/80 whitespace-nowrap">
-                              {ov.wins} Neon
-                            </div>
+                            <span className="text-gray-200/80 font-normal whitespace-nowrap"> {ov.wins}/{ov.played} {DUO_ICONS}</span>
                           )}
-                        </>
+                        </div>
                       ) : (
                         <span className="text-gray-700">—</span>
+                      )}
+                      {showDetail && (
+                        <div className="flex flex-wrap justify-center items-center gap-0.5 mt-1">
+                          {visibleMaps.map(m => mapTick(duoPct(stats[team]?.[m]), m))}
+                        </div>
                       )}
                     </td>
                   );
                 })()}
                 {visibleMaps.map((m, mi) => {
                   const wl = stats[team]?.[m];
-                  const val = neonPct(wl);
+                  const val = duoPct(wl);
                   const color = getCellColor(val, mapAllValues[mi]);
                   const cellRank = getCellRank(val, mapAllValues[mi]);
                   const isActive = sortCol === mi;
@@ -391,8 +413,8 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
                             {showDetail && <span className="text-gray-200/80 font-normal whitespace-nowrap"> {wl.wins}/{wl.played}</span>}
                           </div>
                           {showDetail && (
-                            <div className="text-[13px] text-gray-200/80 whitespace-nowrap">
-                              {wl.wins} Neon
+                            <div className="flex items-center justify-center gap-1 text-[13px] text-gray-200/80 whitespace-nowrap">
+                              {wl.wins} {DUO_ICONS}
                             </div>
                           )}
                         </>

@@ -48,14 +48,14 @@ export type Tournament = {
   reg_id?: string;
 };
 
-// Torneos seleccionados por defecto al entrar a la solapa Stats Rank
+// Tournaments preselected on the Neon + Phoenix tab: every regional Stage 2.
+// Read both by the server fetch (app/page.tsx) and by the Tournament filter chips
+// (components/Filters.tsx), so the two must stay in sync through this constant.
 export const STATS_RANK_DEFAULT_TOURS = [
-  'esports_world_cup_2026',
-  'vct_2026_americas_stage_1',
-  'vct_2026_emea_stage_1',
-  'vct_2026_pacific_stage_1',
-  'vct_2026_china_stage_1',
-  'valorant_masters_london_2026',
+  'vct_2026_americas_stage_2',
+  'vct_2026_emea_stage_2',
+  'vct_2026_pacific_stage_2',
+  'vct_2026_china_stage_2',
 ];
 
 // Equipos visibles por defecto en la tabla de Stats Rank

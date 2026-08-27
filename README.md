@@ -101,7 +101,7 @@ Each sidebar item (`components/Sidebar.tsx`) is a `section` in the URL and a com
 | Map Info | `map-picks` | Picks, bans, deciders and side win rate for each map. |
 | Agent Picks | `agent-picks` | Pick rate by agent and map, compositions, and win rate in non-mirror matchups. |
 | Meta Shift | `meta-shift` | Two sets of filters (region/team/tournament/dates) side by side, to compare how the agent meta shifted between two slices. |
-| Neon Dependency | `neon-dependency` | Neon dependency by team and map. Currently hidden in the sidebar. |
+| Neon + Phoenix | `neon-dependency` | Per team and map, how often the team fielded Neon and Phoenix together on the same map, out of maps played. Counts a map once even if both agents were on it. |
 
 **Team** — require a selected team:
 
@@ -111,15 +111,19 @@ Each sidebar item (`components/Sidebar.tsx`) is a `section` in the URL and a com
 | Compare Maps | `compare-maps` | Two teams side by side per map, with their compositions. This is the default section. |
 | Compare Stats | `compare-stats` | Pistols, anti-eco, recovery and post-plant for both teams. |
 | Compare Economy | `compare-economy` | WR by own economy bucket and by the opponent's. |
-| Veto Draft | `veto` | The team's Ban → Pick → Ban 2 flow and repeated full sequences. |
-| Form Timeline | `form` | Rolling WR (3/5/10 window, by rounds or maps) with points colored by result. |
 
 **Testing** — under evaluation, either promoted or dropped:
 
-`skirmish-americas`, `relevant-info` (longest maps, top individual performances), `economy`
-(credit histogram) and `player-stats` (per-player stats against the tournament average, plus a
-timeline). `playoff-pct` exists (`PlayoffPctSection`, qualification scenarios from `simulations`)
-but is commented out in the sidebar.
+| Section | `section` | What it shows |
+| --- | --- | --- |
+| Veto Draft | `veto` | The team's Ban → Pick → Ban 2 flow and repeated full sequences. Requires a selected team. |
+| Relevant Info | `relevant-info` | Longest maps and top individual performances. |
+| Economy | `economy` | Credit histogram. |
+| Player Stats | `player-stats` | Per-player stats against the tournament average, plus a timeline. |
+
+**Hidden** — commented out in `NAV_SECTIONS` but still reachable by URL, since `page.tsx`
+renders on the `section` param alone: `form` (Form Timeline — rolling WR over a 3/5/10 window,
+by rounds or maps, points colored by result), `skirmish-americas` and `playoff-pct` (`PlayoffPctSection`, qualification scenarios from `simulations`).
 
 ### Query params
 

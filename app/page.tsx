@@ -34,7 +34,7 @@ export default async function Page({
   const { reg, team, tour, bo, last, section = 'compare-maps', team2, tour2, reg2, dateFrom, dateTo, dateFrom2, dateTo2, excA, excB } = params;
   const regArr = reg ? reg.split(',').filter(Boolean) : undefined;
   const reg2Arr = reg2 ? reg2.split(',').filter(Boolean) : undefined;
-  // Solo Neon Dependency conserva la selección de torneos por defecto
+  // Solo Neon + Phoenix conserva la selección de torneos por defecto
   const effectiveTour = (section === 'neon-dependency' && tour === undefined)
     ? STATS_RANK_DEFAULT_TOURS.join(',')
     : tour;
@@ -337,7 +337,7 @@ export default async function Page({
           'playoff-pct': 'Playoff % (Number of possible results, not probability)',
           'stats-rank': 'Stats Rank',
           'maps-masters': 'Maps Masters',
-          'neon-dependency': 'Neon Dependency',
+          'neon-dependency': 'Neon + Phoenix',
           }[section] ?? section}</h1>
           {regArr && regArr.length > 0 && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">

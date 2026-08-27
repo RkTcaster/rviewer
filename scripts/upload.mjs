@@ -20,7 +20,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 // 2. LISTA DE ARCHIVOS A PROCESAR
 // Agrega aquí todas tus tablas nuevas con sus PKs
 const FILES_TO_UPLOAD = [
-  { file: 'table_regions.csv', table: 'regions', pk: 'reg_id' }, // no deberia updatearse a menos que haya una nueva region
+  { file: 'table_region.csv', table: 'regions', pk: 'reg_id' }, // no deberia updatearse a menos que haya una nueva region
   { file: 'table_tournament.csv', table: 'tournament', pk: 'tour_id' }, //Update con torneos nuevos
   { file: 'table_tournament_played.csv', table: 'tournament_played', pk: 'tour_id, teamA' },   
   { file: 'table_players.csv', table: 'players', pk: 'player_id' }, //solo con players nuevos  

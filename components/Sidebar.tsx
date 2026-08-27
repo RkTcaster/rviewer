@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap, ListOrdered, Activity } from 'lucide-react';
+import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap, ListOrdered } from 'lucide-react';
 import { useNavigation, useFilterParams } from './NavigationContext';
 
 const NAV_SECTIONS = [
@@ -11,7 +11,7 @@ const NAV_SECTIONS = [
     items: [
       { id: 'stats-rank',    label: 'Stats Rank',    icon: BarChart2 },
       { id: 'maps-masters',  label: 'Maps Rank',  icon: LayoutGrid },
-      // { id: 'neon-dependency', label: 'Neon Dependency', icon: Zap },
+      { id: 'neon-dependency', label: 'Neon + Phoenix', icon: Zap },
       { id: 'map-picks',   label: 'Map Info',    icon: Map },
       { id: 'agent-picks',   label: 'Agent Picks',   icon: Users },
       { id: 'meta-shift',    label: 'Meta Shift',    icon: TrendingUp },
@@ -25,14 +25,14 @@ const NAV_SECTIONS = [
       { id: 'compare-maps',  label: 'Compare Maps',  icon: GitCompareArrows },
       { id: 'compare-stats',    label: 'Compare Stats',    icon: AlignCenterVertical },
       { id: 'compare-economy', label: 'Compare Economy', icon: Scale },
-      { id: 'veto', label: 'Veto Draft', icon: ListOrdered },
-      { id: 'form', label: 'Form Timeline', icon: Activity },
+      // { id: 'form', label: 'Form Timeline', icon: Activity },
     ],
   },
   {
     title: 'Testing',
     items: [
-      { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Zap },
+      { id: 'veto', label: 'Veto Draft', icon: ListOrdered },
+      // { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Zap },
       { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
       { id: 'economy',       label: 'Economy',       icon: DollarSign },
       { id: 'player-stats',  label: 'Player Stats',  icon: UserRound },
