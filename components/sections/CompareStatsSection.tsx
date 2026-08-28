@@ -304,7 +304,7 @@ export function CompareStatsSection({
       lowerIsBetter: true,
     },
     {
-      label: 'Timeout Losses', key: 'timeout',
+      label: 'Atk Loss by Time', key: 'timeout',
       valA: timeoutA, winsA: timeoutA, totalA: timeoutA,
       valB: timeoutB, winsB: timeoutB, totalB: timeoutB,
       lowerIsBetter: true, countOnly: true,
