@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { Check, Minus, X } from 'lucide-react';
-import { MapWL } from '@/lib/types';
+import { MapWL, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
+import { useUrlSet } from '@/hooks/useUrlSet';
 
 interface Props {
   stats: Record<string, Record<string, MapWL>>;
@@ -78,15 +79,14 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
   const [showDetail, setShowDetail] = useState(false);
 
   const allTeams = Object.keys(stats).sort();
-  // Por defecto no hay ningún equipo seleccionado: el usuario elige cuáles ver
-  const [selectedTeams, setSelectedTeams] = useState<Set<string>>(() => new Set());
+  // Equipos seleccionados: por defecto STATS_RANK_DEFAULT_TEAMS, espejados en la URL (`teams`)
+  // para compartir/recargar sin round-trip al server — ver useUrlSet.
+  const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
 
   const baseTeams = allTeams.filter(t => selectedTeams.has(t));
 
-  // Por defecto ocultos los mapas fuera de rotación (in_rotation en maps_name_ids)
-  const [hiddenMaps, setHiddenMaps] = useState<Set<string>>(
-    () => new Set(maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase())))
-  );
+  // Mapas ocultos: por defecto los que están fuera de rotación, espejados en la URL (`hideMaps`).
+  const [hiddenMaps, setHiddenMaps] = useUrlSet('hideMaps', maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase())));
   const visibleMaps = maps.filter(m => !hiddenMaps.has(m));
 
   function toggleTeam(team: string) {
@@ -107,7 +107,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
   }
 
   function resetFilters() {
-    setSelectedTeams(new Set());
+    setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
     setHiddenMaps(new Set(maps.filter(m => m.toLowerCase() === 'bind')));
     setSortCol(null);
     setSortDir('desc');
@@ -197,7 +197,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
             <button
               key={map}
               onClick={() => toggleMap(map)}
-              className={`flex flex-col items-center gap-1 p-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+              className={`shrink-0 flex flex-col items-center gap-1 p-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-colors border ${
                 active
                   ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
                   : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
@@ -258,7 +258,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
             {/* Maps */}
             <div className="flex flex-col gap-2">
               <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Maps</span>
-              <div className="flex flex-wrap gap-2 px-1 max-w-md">
+              <div className="flex gap-2 px-1 overflow-x-auto">
                 {maps.map(renderMapChip)}
               </div>
             </div>

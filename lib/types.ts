@@ -58,9 +58,9 @@ export const STATS_RANK_DEFAULT_TOURS = [
   'vct_2026_china_stage_2',
 ];
 
-// Equipos visibles por defecto en la tabla de Stats Rank
+// Equipos visibles por defecto en la tabla de Stats Rank y Neon + Phoenix
 export const STATS_RANK_DEFAULT_TEAMS = [
-  'G2', 'MIBR', 'NRG', 'TH', 'VIT', 'KC', 'M8', 'GE', 'NS', 'XLG', 'EDG', 'PRX','AG','RRQ','100T','BBL'
+  '100T', 'LOUD', 'G2', 'NRG', 'T1', 'JDG', 'FUT', 'GE', 'VIT', 'EDG', 'TYL', 'TL', 'PRX', 'KC', 'XLG', 'NS'
 ];
 
 export type OverallMapStat = {

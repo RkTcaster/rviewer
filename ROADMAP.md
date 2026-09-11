@@ -3,12 +3,30 @@
 Planning of improvements and features. Context: **personal** analysis/casting tool,
 used on desktop. Data depth is the priority; mobile and public polish come last.
 
-Last updated: 2026-08-27
+Last updated: 2026-09-11
 
 ---
 
 ## ✅ Done
 
+- **3.6 URL-backed filter model for the Overall table sections** (sep 2026): team (and map)
+  selection in Stats Rank, Maps Rank and Neon + Phoenix moved from ephemeral `useState` into the URL,
+  so a view is shareable by link and survives reload. Kept **off** the Next router: the selection is
+  pure client filtering over already-fetched data, so a new `useUrlSet` hook (`hooks/useUrlSet.ts`)
+  seeds from the query param on mount and mirrors changes back with `history.replaceState` — no server
+  round-trip, chips stay instant. Canonical shape: `teams` stores the selected set, `hideMaps` the
+  hidden maps; the param is written only when it differs from the defaults, so an absent param means
+  "defaults" and the URL stays clean. Neon + Phoenix, which reasons internally in `hiddenTeams`
+  (opt-out), was converted to a URL-backed `selectedTeams` with `hiddenTeams` derived, so the three
+  now share one canonical `teams=` shape. No cross-page carry-over (Sidebar still clean-starts) and
+  Reset stays per section, per the sep 2026 feasibility review. Verified end-to-end via CDP: a chip
+  click updates `location.search` to the sorted selected set without navigating, and a crafted
+  `?teams=…` link boots each section (incl. Neon's opt-out conversion) to exactly those teams.
+- **Shared Stats Rank defaults** (sep 2026): `STATS_RANK_DEFAULT_TEAMS` was rewritten to a new
+  16-team list and now seeds Stats Rank and Maps Rank (`maps-masters`) too, not just Neon + Phoenix —
+  those sections start with the 16 teams selected instead of empty. `STATS_RANK_DEFAULT_TOURS`
+  (the four Stage 2) now preselects on all three, via `effectiveTour` in `app/page.tsx` and the
+  chip default in `Filters.tsx`. Both constant names are accurate again.
 - **Neon Dependency → Neon + Phoenix** (aug 2026): the metric changed from "how often the team
   fielded Neon" to "how often it fielded Neon **and** Phoenix on the same map" — an intersection,
   so a map counts once even with both agents and the cell can never exceed 100%. Added `duoWins`
@@ -37,11 +55,12 @@ Last updated: 2026-08-27
 - **Region logos in the Stats Rank team filter** (aug 2026): same treatment as Neon + Phoenix —
   logos replacing the text labels, clickable to add or clear a whole region, dimmed when none of
   the row is picked, plus the hint next to Add all / Clear. The toggle had to be written inverted
-  between the two sections: Stats Rank tracks `selectedTeams` (opt-in, starts empty) while
-  Neon + Phoenix tracks `hiddenTeams` (opt-out, starts on `STATS_RANK_DEFAULT_TEAMS`).
+  between the two sections: Stats Rank tracks `selectedTeams` (opt-in) while
+  Neon + Phoenix tracks `hiddenTeams` (opt-out) — both now seeded from `STATS_RANK_DEFAULT_TEAMS`
+  (see the sep 2026 entry; Stats Rank originally started empty).
 - **Stage 2 as the default tournaments** (aug 2026): `STATS_RANK_DEFAULT_TOURS` moved from a mix
-  of Stage 1 plus two international events to the four regional Stage 2 (218 series). The constant
-  now only feeds Neon + Phoenix — both consumers are gated on that section — so the name is stale.
+  of Stage 1 plus two international events to the four regional Stage 2 (218 series). It originally
+  fed only Neon + Phoenix; since the sep 2026 entry it also preselects on Stats Rank.
 - **Parallelized fetches** (jul 2026): the ~35 conditional fetches in `app/page.tsx` went from
   sequential `await`s to a single `Promise.all`. With a warm cache, stats-rank dropped from
   ~6.5s to ~300ms. The existing loading overlay is now visible for far less time.
@@ -123,6 +142,7 @@ Done when `grep` finds no Spanish comments left, at which point the README's con
   post-plant WR) overlaid for the 2 teams. Data: `TeamRankStats` is already computed.
 - **3.5 WR vs economy difference curve**: probability of winning the round given the credit gap,
   from `team_economy`. Complements Compare Economy.
+- **3.6 URL-backed filter model for the Overall table sections**: done (see Done, sep 2026).
 
 ## Phase 4 — Polish (low priority, personal tool)
 

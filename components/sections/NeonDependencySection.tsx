@@ -5,6 +5,7 @@ import { Check, Info, Minus, X } from 'lucide-react';
 import { DuoMapStat, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { Tooltip } from '../Tooltip';
+import { useUrlSet } from '@/hooks/useUrlSet';
 
 interface Props {
   stats: Record<string, Record<string, DuoMapStat>>;
@@ -167,22 +168,21 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
   const [showDetail, setShowDetail] = useState(false);
 
   const allTeams = Object.keys(stats).sort();
-  // Por defecto se muestran solo los equipos de STATS_RANK_DEFAULT_TEAMS (el resto ocultos)
-  const [hiddenTeams, setHiddenTeams] = useState<Set<string>>(
-    () => new Set(allTeams.filter(t => !STATS_RANK_DEFAULT_TEAMS.includes(t)))
-  );
+  // Equipos seleccionados (modelo canónico, compartido con Stats Rank / Maps Rank): por defecto
+  // STATS_RANK_DEFAULT_TEAMS, espejados en la URL (`teams`). Internamente la tabla razona en términos
+  // de `hiddenTeams` (opt-out), que derivamos del set seleccionado.
+  const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
+  const hiddenTeams = new Set(allTeams.filter(t => !selectedTeams.has(t)));
 
   const baseTeams = allTeams.filter(t => !hiddenTeams.has(t));
   const allTeamsSelected = hiddenTeams.size === 0;
 
-  // Por defecto ocultos los mapas fuera de rotación (in_rotation en maps_name_ids)
-  const [hiddenMaps, setHiddenMaps] = useState<Set<string>>(
-    () => new Set(maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase())))
-  );
+  // Mapas ocultos: por defecto los que están fuera de rotación, espejados en la URL (`hideMaps`).
+  const [hiddenMaps, setHiddenMaps] = useUrlSet('hideMaps', maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase())));
   const visibleMaps = maps.filter(m => !hiddenMaps.has(m));
 
   function toggleTeam(team: string) {
-    setHiddenTeams(prev => {
+    setSelectedTeams(prev => {
       const next = new Set(prev);
       if (next.has(team)) next.delete(team); else next.add(team);
       return next;
@@ -192,11 +192,11 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
   // Region logo acts as a bulk toggle for its row: clears the whole region when every team in
   // it is already on, otherwise turns them all on.
   function toggleRegionTeams(rowTeams: string[]) {
-    setHiddenTeams(prev => {
+    setSelectedTeams(prev => {
       const next = new Set(prev);
-      const allVisible = rowTeams.every(t => !next.has(t));
+      const allSelected = rowTeams.every(t => next.has(t));
       for (const t of rowTeams) {
-        if (allVisible) next.add(t); else next.delete(t);
+        if (allSelected) next.delete(t); else next.add(t);
       }
       return next;
     });
@@ -212,7 +212,7 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
   }
 
   function resetFilters() {
-    setHiddenTeams(new Set(allTeams.filter(t => !STATS_RANK_DEFAULT_TEAMS.includes(t))));
+    setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
     setHiddenMaps(new Set(maps.filter(m => m.toLowerCase() === 'bind')));
     setSortCol(null);
     setSortDir('desc');
@@ -333,7 +333,7 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
               <div className="flex items-center gap-3 px-1">
                 <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Teams</span>
                 <button
-                  onClick={() => setHiddenTeams(allTeamsSelected ? new Set(allTeams) : new Set())}
+                  onClick={() => setSelectedTeams(allTeamsSelected ? new Set() : new Set(allTeams))}
                   className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200"
                 >
                   {allTeamsSelected ? 'Clear' : 'Add all'}

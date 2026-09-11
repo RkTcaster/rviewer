@@ -34,12 +34,11 @@ export default async function Page({
   const { reg, team, tour, bo, last, section = 'compare-maps', team2, tour2, reg2, dateFrom, dateTo, dateFrom2, dateTo2, excA, excB } = params;
   const regArr = reg ? reg.split(',').filter(Boolean) : undefined;
   const reg2Arr = reg2 ? reg2.split(',').filter(Boolean) : undefined;
-  // Solo Neon + Phoenix conserva la selección de torneos por defecto
-  const effectiveTour = (section === 'neon-dependency' && tour === undefined)
+  // Neon + Phoenix, Stats Rank y Maps Masters conservan la selección de torneos por defecto
+  const effectiveTour = ((section === 'neon-dependency' || section === 'stats-rank' || section === 'maps-masters') && tour === undefined)
     ? STATS_RANK_DEFAULT_TOURS.join(',')
     : tour;
-  // Stats Rank y Maps Masters arrancan sin torneo: sin torneo no se consulta nada
-  const hasTour = (tour?.split(',').filter(Boolean).length ?? 0) > 0;
+  const hasTour = (effectiveTour?.split(',').filter(Boolean).length ?? 0) > 0;
   const excludeTeamsA = excA ? excA.split(',') : [];
   const excludeTeamsB = excB ? excB.split(',') : [];
 
@@ -336,7 +335,7 @@ export default async function Page({
           'skirmish-americas': 'Skirmish VCT Americas Stage 1',
           'playoff-pct': 'Playoff % (Number of possible results, not probability)',
           'stats-rank': 'Stats Rank',
-          'maps-masters': 'Maps Masters',
+          'maps-masters': 'Maps Rank',
           'neon-dependency': 'Neon + Phoenix',
           }[section] ?? section}</h1>
           {regArr && regArr.length > 0 && (

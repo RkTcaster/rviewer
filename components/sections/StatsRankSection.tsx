@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { TeamRankStats, TeamEconomyCompare, EconomyCategoryStats, EconomyMatchup } from '@/lib/types';
+import { TeamRankStats, TeamEconomyCompare, EconomyCategoryStats, EconomyMatchup, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
+import { useUrlSet } from '@/hooks/useUrlSet';
 
 interface Props {
   rankings: Record<string, TeamRankStats>;
@@ -55,6 +56,9 @@ type MetricDef = {
   getValue: (s: TeamRankStats) => number | null;
   /** wins/total for the W-L line under the %. Omit for count-only metrics. */
   getWL?: (s: TeamRankStats) => { wins: number; total: number };
+  /** Render the detail as a plain "occurrences/total" ratio instead of W-L. For metrics whose
+   *  numerator counts an event (not a win), where a "W" label would read backwards. */
+  ratioDetail?: boolean;
   lowerIsBetter?: boolean;
   countOnly?: boolean;
 };
@@ -78,7 +82,7 @@ const METRICS: RowDef[] = [
   { label: 'Bonus Conversion Atk',               getValue: s => pct(s.pabAtkWins, s.pabAtkTotal),            getWL: s => ({ wins: s.pabAtkWins, total: s.pabAtkTotal }) },
   { label: 'Bonus Conversion Def',               getValue: s => pct(s.pabDefWins, s.pabDefTotal),            getWL: s => ({ wins: s.pabDefWins, total: s.pabDefTotal }) },
   { label: 'Post Pistol Loss Into Win (L-W)', getValue: s => pct(s.recoveryWins, s.recoveryTotal), getWL: s => ({ wins: s.recoveryWins, total: s.recoveryTotal }) },
-  { label: 'Losing to enemy bonus (L-L-L)',  getValue: s => pct(s.first3Lost, s.first3Total), lowerIsBetter: true, getWL: s => ({ wins: s.first3Lost, total: s.first3Total }) },
+  { label: 'Losing to enemy bonus (L-L-L)',  getValue: s => pct(s.first3Lost, s.first3Total), lowerIsBetter: true, getWL: s => ({ wins: s.first3Lost, total: s.first3Total }), ratioDetail: true },
 ];
 
 function getCellColor(value: number | null, allValues: (number | null)[], lowerIsBetter: boolean): string {
@@ -100,8 +104,9 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   const [showDetail, setShowDetail] = useState(false);
 
   const allTeams = Object.keys(rankings).sort();
-  // Por defecto no hay ningún equipo seleccionado: el usuario elige cuáles ver
-  const [selectedTeams, setSelectedTeams] = useState<Set<string>>(() => new Set());
+  // Equipos seleccionados: por defecto STATS_RANK_DEFAULT_TEAMS, espejados en la URL (param `teams`)
+  // para que la vista sea compartible y sobreviva la recarga — sin round-trip al server (ver useUrlSet).
+  const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
 
   const baseTeams = allTeams.filter(t => selectedTeams.has(t));
 
@@ -140,8 +145,8 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   }
 
   function resetFilters() {
-    // Vuelve al estado inicial: torneos por defecto (sin params) y sin equipos seleccionados
-    setSelectedTeams(new Set());
+    // Vuelve al estado inicial: torneos por defecto (sin params) y equipos por defecto
+    setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
     setHiddenGroups(new Set(ECO_CATEGORIES.map(c => c.key)));
     setSortCol(null);
     setSortDir('desc');
@@ -492,7 +497,7 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
                       const { wins, total } = m.getWL(rankings[team]);
                       return total > 0 ? (
                         <div className="text-[11px] text-gray-600 whitespace-nowrap">
-                          {wins}W-{total - wins}L
+                          {m.ratioDetail ? `${wins}/${total}` : `${wins}W-${total - wins}L`}
                         </div>
                       ) : null;
                     })()}
