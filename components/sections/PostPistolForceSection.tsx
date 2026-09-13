@@ -28,13 +28,14 @@ type SortCol = 'losses' | 'forced' | 'forcePct' | 'forceWr' | 'ecoWr' | 'postEco
 const HALF_OPTIONS = [['both', 'R2 + R14'], ['r2', 'R2'], ['r14', 'R14']] as const;
 
 // halfTag: the header names the selected half chip, e.g. "Force % (R2)"
-const COLUMNS: { key: SortCol; label: string; halfTag?: boolean }[] = [
-  { key: 'losses',   label: 'Pistols lost' },
-  { key: 'forced',   label: 'Forces' },
-  { key: 'forcePct', label: 'Force %',  halfTag: true },
-  { key: 'forceWr',  label: 'Force WR', halfTag: true },
-  { key: 'ecoWr',    label: 'Eco WR',   halfTag: true },
-  { key: 'postEcoWr', label: 'Post Eco WR', halfTag: true },
+// width: fixed per column so the table never resizes when the filters change the header text
+const COLUMNS: { key: SortCol; label: string; halfTag?: boolean; width: string }[] = [
+  { key: 'losses',   label: 'Pistols lost', width: 'w-[110px]' },
+  { key: 'forced',   label: 'Forces', width: 'w-[110px]' },
+  { key: 'forcePct', label: 'Force %',  halfTag: true, width: 'w-[190px]' },
+  { key: 'forceWr',  label: 'Force WR', halfTag: true, width: 'w-[190px]' },
+  { key: 'ecoWr',    label: 'Eco WR',   halfTag: true, width: 'w-[190px]' },
+  { key: 'postEcoWr', label: 'Post Eco WR', halfTag: true, width: 'w-[190px]' },
 ];
 
 function pct(n: number, d: number): number | null {
@@ -110,9 +111,9 @@ const LEGEND = (
       <dd className="text-gray-400">After a non-forced R2 / R14, how often the team won the next round (R3 / R15).</dd>
     </div>
     <div>
-      <dt className="font-bold text-gray-100">Post Plant</dt>
+      <dt className="font-bold text-gray-100">Plant &amp; Force</dt>
       <dd className="text-gray-400">
-        Combines with R2 + R14 / R2 / R14: only pistols the team lost by defuse, i.e. it attacked and planted.
+        Force after losing the pistol and planting the spike.
       </dd>
     </div>
     <div>
@@ -121,15 +122,27 @@ const LEGEND = (
     </div>
     <div>
       <dt className="font-bold text-gray-100">Coverage</dt>
-      <dd className="text-gray-400">Maps without economy data are not counted.</dd>
+      <dd className="text-gray-400">Maps without economy data are not counted (China region).</dd>
     </div>
   </dl>
 );
 
+// fixed width so the Rounds and Modifier rows line their chips up
+const CONTROL_LABEL = 'w-16 shrink-0 text-[10px] font-bold uppercase tracking-widest text-gray-500';
+
 const FORCE_RATE_COLOR = '#f59e0b';
 const FORCE_WR_COLOR = '#22c55e';
 
-type ChartRow = { group: string; s: PostPistolForceStat; forceRate: number | null; forceWr: number | null };
+// regions: the split used by the By region stacks; f_<id> / w_<id> are the flat keys Recharts stacks on
+type RegionSplit = { id: string; label: string; color: string; forced: number; won: number };
+type ChartRow = {
+  group: string;
+  s: PostPistolForceStat;
+  forceRate: number | null;
+  forceWr: number | null;
+  regions: RegionSplit[];
+  [key: string]: unknown;
+};
 
 // Both bars of a group with their raw sample: forces / pistols lost and forced rounds won / forces
 function ChartTooltipContent({ active, payload }: { active?: boolean; payload?: { payload: ChartRow }[] }) {
@@ -144,10 +157,27 @@ function ChartTooltipContent({ active, payload }: { active?: boolean; payload?: 
   );
 }
 
+// By region: forces and forced rounds won per region, the two stacks of the group
+function RegionTooltipContent({ active, payload }: { active?: boolean; payload?: { payload: ChartRow }[] }) {
+  if (!active || !payload?.length) return null;
+  const { group, regions } = payload[0].payload;
+  return (
+    <div className="bg-[#0f1115] border border-gray-700 rounded-lg px-3 py-2 text-sm shadow-xl">
+      <p className="font-bold text-white mb-1">{group}</p>
+      {regions.map(r => (
+        <p key={r.id} style={{ color: r.color }}>
+          {r.label}: <span className="font-bold">{r.forced}</span> forces <span className="text-gray-400">· {r.won} won</span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {} }: Props) {
   const { navigate } = useNavigation();
   const [half, setHalf] = useState<Half>('both');
   const [postPlant, setPostPlant] = useState(false);
+  const [byRegion, setByRegion] = useState(false);
   const [sortCol, setSortCol] = useState<SortCol>('forcePct');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -164,7 +194,7 @@ export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {}
     );
   }
 
-  // pp: only pistols lost by defuse (Post Plant modifier)
+  // pp: only pistols lost by defuse (Plant & Force modifier)
   const statFor = (team: string, h: Half, pp: boolean): PostPistolForceStat => {
     const t = stats[team];
     if (!t) return sumStats([]);
@@ -173,7 +203,7 @@ export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {}
     return h === 'both' ? sumStats([r2, r14]) : h === 'r2' ? r2 : r14;
   };
   const teamStat = (team: string) => statFor(team, half, postPlant);
-  const halfLabel = `${HALF_OPTIONS.find(([k]) => k === half)![1]}${postPlant ? ', Post Plant' : ''}`;
+  const roundLabel = HALF_OPTIONS.find(([k]) => k === half)![1];
 
   function toggleTeam(team: string) {
     setSelectedTeams(prev => {
@@ -226,11 +256,18 @@ export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {}
   const otherTeams = allTeams.filter(t => !knownRegions.has(teamRegions[t]));
   if (otherTeams.length > 0) chipRows.push({ label: 'Other', logo: null, teams: otherTeams });
 
-  // Chart: raw sum of the selected teams — Overall, R2, R14 and Post Plant (both halves)
-  const chartGroups: [string, Half, boolean][] = [['Overall', 'both', false], ['R2', 'r2', false], ['R14', 'r14', false], ['Post Plant', 'both', true]];
+  // Chart: raw sum of the selected teams — Overall, R2, R14 and Plant & Force (both halves)
+  const chartGroups: [string, Half, boolean][] = [['Overall', 'both', false], ['R2', 'r2', false], ['R14', 'r14', false], ['Plant & Force', 'both', true]];
   const chartData: ChartRow[] = chartGroups.map(([group, h, pp]) => {
     const s = sumStats(baseTeams.map(t => statFor(t, h, pp)));
-    return { group, s, forceRate: pct(s.forced, s.losses), forceWr: pct(s.forcedWins, s.forced) };
+    // By region stacks: teams outside the four regions are left out, so a stack can fall short of the table total
+    const regions: RegionSplit[] = REGION_ROWS.map(r => {
+      const rs = sumStats(baseTeams.filter(t => teamRegions[t] === r.id).map(t => statFor(t, h, pp)));
+      return { id: r.id, label: r.label, color: r.color, forced: rs.forced, won: rs.forcedWins };
+    });
+    const flat: Record<string, number> = {};
+    for (const r of regions) { flat[`f_${r.id}`] = r.forced; flat[`w_${r.id}`] = r.won; }
+    return { group, s, forceRate: pct(s.forced, s.losses), forceWr: pct(s.forcedWins, s.forced), regions, ...flat };
   });
 
   const pillClass = (active: boolean) => `px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
@@ -301,48 +338,58 @@ export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {}
       </div>
 
       {/* Controls */}
-      <div className="flex flex-wrap items-center justify-start gap-2 px-1">
-        {HALF_OPTIONS.map(([key, label]) => (
-          <button key={key} onClick={() => setHalf(key)} className={pillClass(half === key)}>{label}</button>
-        ))}
-        <button onClick={() => setPostPlant(p => !p)} className={pillClass(postPlant)} title="Only pistols lost by defuse (the team attacked and planted)">
-          Post Plant
-        </button>
-        <Tooltip content={LEGEND} className="items-center">
-          <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-gray-200 hover:text-white transition-colors cursor-help">
-            <Info className="w-3.5 h-3.5 shrink-0" />
-            Legend
-          </span>
-        </Tooltip>
-        <button
-          onClick={resetFilters}
-          className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-red-400 hover:border-red-500 hover:text-red-300"
-        >
-          Reset filters
-        </button>
+      <div className="flex flex-col gap-2 px-1">
+        <div className="flex flex-wrap items-center justify-start gap-2">
+          <span className={CONTROL_LABEL}>Rounds</span>
+          {HALF_OPTIONS.map(([key, label]) => (
+            <button key={key} onClick={() => setHalf(key)} className={pillClass(half === key)}>{label}</button>
+          ))}
+          <Tooltip content={LEGEND} className="items-center">
+            <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-gray-200 hover:text-white transition-colors cursor-help">
+              <Info className="w-3.5 h-3.5 shrink-0" />
+              Legend
+            </span>
+          </Tooltip>
+          <button
+            onClick={resetFilters}
+            className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-red-400 hover:border-red-500 hover:text-red-300"
+          >
+            Reset filters
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center justify-start gap-2">
+          <span className={CONTROL_LABEL}>Modifier</span>
+          <button onClick={() => setPostPlant(p => !p)} className={pillClass(postPlant)} title="Only pistols lost by defuse (the team attacked and planted)">
+            Plant &amp; Force
+          </button>
+        </div>
       </div>
 
       <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-x-auto">
-        <table className="w-full border-collapse">
+        <table className="w-full min-w-[1180px] table-fixed border-collapse">
           <thead className="bg-[#0f1115]">
             <tr>
               <th className="w-8 text-center py-2 border-b border-gray-800 text-[10px] font-bold uppercase tracking-widest text-gray-500">#</th>
-              <th className="px-5 py-2 text-left border-b border-r border-gray-800 text-[10px] font-bold uppercase tracking-widest text-gray-500 whitespace-nowrap">Team</th>
+              <th className="w-[150px] px-5 py-2 text-left border-b border-r border-gray-800 text-[10px] font-bold uppercase tracking-widest text-gray-500 whitespace-nowrap">Team</th>
               {COLUMNS.map(c => {
                 const isActive = sortCol === c.key;
                 return (
                   <th
                     key={c.key}
                     onClick={() => handleColClick(c.key)}
-                    className={`px-3 py-2 border-b border-gray-800 cursor-pointer select-none transition-colors hover:bg-[#252a33] ${isActive ? 'bg-[#1e2430]' : ''}`}
+                    className={`${c.width} px-3 py-2 border-b border-gray-800 cursor-pointer select-none transition-colors hover:bg-[#252a33] ${isActive ? 'bg-[#1e2430]' : ''}`}
                   >
                     <div className="flex items-center justify-center gap-1">
                       <span className={`text-[11px] font-bold uppercase tracking-wide whitespace-nowrap ${isActive ? 'text-blue-400' : 'text-gray-400'}`}>
-                        {c.halfTag ? `${c.label} (${halfLabel})` : c.label}
+                        {c.halfTag ? `${c.label} (${roundLabel})` : c.label}
                       </span>
                       <span className={`text-[9px] ${isActive ? 'text-blue-400' : 'text-gray-600'}`}>
                         {isActive ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}
                       </span>
+                    </div>
+                    {/* second line always rendered (invisible when off) so the modifier never resizes the column */}
+                    <div className={`text-[10px] font-bold uppercase tracking-wide whitespace-nowrap text-amber-300/80 ${postPlant && c.halfTag ? '' : 'invisible'}`}>
+                      Plant &amp; Force
                     </div>
                   </th>
                 );
@@ -392,25 +439,60 @@ export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {}
       {/* Force rate and force round WR, raw sum of the selected teams */}
       <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 p-4 flex flex-col gap-3 max-w-2xl">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-1">
+          {/* By region: square toggle with the four region logos instead of a text chip */}
+          <button
+            onClick={() => setByRegion(b => !b)}
+            title="By region — stack the forces by region instead of the overall rates"
+            className={`shrink-0 grid grid-cols-2 gap-0.5 p-1 rounded-lg border transition-colors ${
+              byRegion
+                ? 'bg-blue-900/40 border-blue-700 hover:bg-blue-900/60'
+                : 'bg-transparent border-gray-700 hover:border-gray-500'
+            }`}
+          >
+            {REGION_ROWS.map(r => (
+              <img
+                key={r.id}
+                src={`/region/${r.label.toLowerCase()}.png`}
+                alt={r.label}
+                className={`w-4 h-4 object-contain transition-opacity ${byRegion ? '' : 'opacity-40 grayscale'}`}
+              />
+            ))}
+          </button>
           <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Selected teams</span>
-          {([['Force rate', FORCE_RATE_COLOR], ['Force round WR', FORCE_WR_COLOR]] as const).map(([label, color]) => (
-            <span key={label} className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-gray-300">
-              <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: color }} />
-              {label}
-            </span>
-          ))}
+          {byRegion
+            ? REGION_ROWS.map(r => (
+                <span key={r.id} className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-gray-300">
+                  <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: r.color }} />
+                  {r.label}
+                </span>
+              ))
+            : ([['Force rate', FORCE_RATE_COLOR], ['Force round WR', FORCE_WR_COLOR]] as const).map(([label, color]) => (
+                <span key={label} className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-gray-300">
+                  <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: color }} />
+                  {label}
+                </span>
+              ))}
         </div>
         <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={chartData} margin={{ top: 24, right: 8, left: 0, bottom: 0 }} barGap={0} barCategoryGap="25%">
+          <BarChart data={chartData} margin={{ top: 24, right: 8, left: 0, bottom: 0 }} barGap={byRegion ? 3 : 0} barCategoryGap="25%">
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2d3139" />
             <XAxis dataKey="group" stroke="#6b7280" fontSize={11} tickLine={false} />
-            <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} stroke="#6b7280" fontSize={10} tickLine={false} width={40} />
-            <ChartTooltip content={<ChartTooltipContent />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-            {([['forceRate', FORCE_RATE_COLOR], ['forceWr', FORCE_WR_COLOR]] as const).map(([key, color]) => (
-              <Bar key={key} dataKey={key} fill={color} radius={[3, 3, 0, 0]} maxBarSize={56} isAnimationActive={false}>
-                <LabelList dataKey={key} position="top" fill="#e5e7eb" fontSize={12} fontWeight={700} formatter={(v) => (v == null ? '' : `${v}%`)} />
-              </Bar>
-            ))}
+            <YAxis
+              domain={byRegion ? [0, 'auto'] : [0, 100]}
+              tickFormatter={(v) => (byRegion ? `${v}` : `${v}%`)}
+              stroke="#6b7280" fontSize={10} tickLine={false} width={40}
+            />
+            <ChartTooltip content={byRegion ? <RegionTooltipContent /> : <ChartTooltipContent />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+            {byRegion
+              ? REGION_ROWS.flatMap(r => [
+                  <Bar key={`f_${r.id}`} dataKey={`f_${r.id}`} stackId="forced" fill={r.color} maxBarSize={56} isAnimationActive={false} />,
+                  <Bar key={`w_${r.id}`} dataKey={`w_${r.id}`} stackId="won" fill={r.color} maxBarSize={56} isAnimationActive={false} />,
+                ])
+              : ([['forceRate', FORCE_RATE_COLOR], ['forceWr', FORCE_WR_COLOR]] as const).map(([key, color]) => (
+                  <Bar key={key} dataKey={key} fill={color} radius={[3, 3, 0, 0]} maxBarSize={56} isAnimationActive={false}>
+                    <LabelList dataKey={key} position="top" fill="#e5e7eb" fontSize={12} fontWeight={700} formatter={(v) => (v == null ? '' : `${v}%`)} />
+                  </Bar>
+                ))}
           </BarChart>
         </ResponsiveContainer>
         <p className="px-1 text-[11px] leading-snug text-gray-400">

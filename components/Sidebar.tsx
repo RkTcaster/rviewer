@@ -14,6 +14,7 @@ const NAV_SECTIONS = [
       { id: 'neon-dependency', label: 'Neon + Phoenix', icon: Zap },
       { id: 'map-picks',   label: 'Map Info',    icon: Map },
       { id: 'agent-picks',   label: 'Agent Picks',   icon: Users },
+      { id: 'post-pistol-force', label: 'Post Pistol Force', icon: DollarSign },
       { id: 'meta-shift',    label: 'Meta Shift',    icon: TrendingUp },
       
     ],
@@ -35,7 +36,6 @@ const NAV_SECTIONS = [
       // { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Zap },
       { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
       { id: 'economy',       label: 'Economy',       icon: DollarSign },
-      { id: 'post-pistol-force', label: 'Post Pistol Force', icon: DollarSign },
       { id: 'player-stats',  label: 'Player Stats',  icon: UserRound },
       // { id: 'playoff-pct',        label: 'Playoff %',          icon: Trophy }, 
     ],
