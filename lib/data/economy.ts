@@ -1,7 +1,7 @@
 // lib/data/economy.ts — economía por ronda (distribución, compare, torneo)
 import { supabase } from '../supabase';
 import { versioned, fetchAllPages } from './helpers';
-import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare } from '../types';
+import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare, TeamPostPistolForce } from '../types';
 
 export async function getEconomyDistribution(filters: {
   reg?: string[]; tour?: string; team?: string;
@@ -195,6 +195,88 @@ async function getTournamentEconomy_impl(filters: {
       if (won) stats[teamCat].total.wins++;
       stats[teamCat][vsKey].played++;
       if (won) stats[teamCat][vsKey].wins++;
+    }
+  }
+
+  return result;
+}
+
+// Post Pistol Force: the team that lost R1 / R13 "forces" the next round (R2 / R14) when it
+// spends more than FORCE_SPEND or is left with less than FORCE_BANK. Everything comes from
+// team_economy: its win_A / team_a match round_info's rndA / teamA row by row.
+const FORCE_SPEND = 10000;
+const FORCE_BANK = 1000;
+
+export const getPostPistolForce = versioned('post-pistol-force-v3', getPostPistolForce_impl);
+async function getPostPistolForce_impl(filters: {
+  tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string;
+}): Promise<Record<string, TeamPostPistolForce>> {
+  let idQuery = supabase.from('draft').select('series_id');
+  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
+  if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
+  if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
+  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
+  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
+  if (filters.last && filters.last !== 'all') idQuery = idQuery.order('date', { ascending: false }).limit(parseInt(filters.last));
+
+  const { data: idList } = await idQuery;
+  if (!idList || idList.length === 0) return {};
+  const seriesIds = [...new Set(idList.map((x: { series_id: string }) => x.series_id))];
+
+  type EcoRow = {
+    map_id: string; round: number; team_a: string; team_b: string;
+    team_a_economy: number; team_b_economy: number; team_a_bank: number; team_b_bank: number; win_A: number; winCon: string;
+  };
+  // Ordered by the PK so the pages never overlap or skip rows
+  const rows = await fetchAllPages<EcoRow>((from, to) =>
+    supabase
+      .from('team_economy')
+      .select('map_id,round,team_a,team_b,team_a_economy,team_b_economy,team_a_bank,team_b_bank,win_A,winCon')
+      .in('series_id', seriesIds)
+      .in('round', [1, 2, 3, 13, 14, 15])
+      .order('team_map_round_id')
+      .range(from, to)
+  );
+
+  const byMap: Record<string, Record<number, EcoRow>> = {};
+  for (const r of rows) (byMap[r.map_id] ??= {})[Number(r.round)] = r;
+
+  const result: Record<string, TeamPostPistolForce> = {};
+  const empty = () => ({ losses: 0, forced: 0, forcedWins: 0, ecoWins: 0, postEcoTotal: 0, postEcoWins: 0 });
+
+  for (const rounds of Object.values(byMap)) {
+    for (const [pistolRound, nextRound, half] of [[1, 2, 'r2'], [13, 14, 'r14']] as const) {
+      const pistol = rounds[pistolRound];
+      const next = rounds[nextRound];
+      // Both rounds must exist and keep the same team_a, otherwise the columns would be crossed
+      if (!pistol || !next || pistol.team_a?.trim() !== next.team_a?.trim()) continue;
+
+      const loserIsA = Number(pistol.win_A) === 0;
+      const team = (loserIsA ? pistol.team_a : pistol.team_b)?.trim();
+      const spend = loserIsA ? next.team_a_economy : next.team_b_economy;
+      const bank = loserIsA ? next.team_a_bank : next.team_b_bank;
+      if (!team || spend == null || bank == null) continue;
+
+      const forced = Number(spend) > FORCE_SPEND || Number(bank) < FORCE_BANK;
+      const won = (Number(next.win_A) === 1) === loserIsA;
+
+      // Post eco: conversion of the round after the eco (R3 / R15), same team_a guard
+      const after = rounds[nextRound + 1];
+      const hasAfter = !!after && after.team_a?.trim() === pistol.team_a?.trim();
+      const afterWon = hasAfter && (Number(after.win_A) === 1) === loserIsA;
+
+      const t = (result[team] ??= { r2: empty(), r14: empty(), r2PostPlant: empty(), r14PostPlant: empty() });
+      // Post plant: pistol lost by defuse, so the loser attacked and planted
+      const targets = [t[half]];
+      if (pistol.winCon?.trim().toLowerCase() === 'defus') targets.push(t[half === 'r2' ? 'r2PostPlant' : 'r14PostPlant']);
+      for (const s of targets) {
+        s.losses++;
+        if (forced) { s.forced++; if (won) s.forcedWins++; }
+        else {
+          if (won) s.ecoWins++;
+          if (hasAfter) { s.postEcoTotal++; if (afterWon) s.postEcoWins++; }
+        }
+      }
     }
   }
 

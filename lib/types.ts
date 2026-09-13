@@ -217,6 +217,15 @@ export type TeamEconomyCompare = {
   fullBuy: EconomyCategoryStats;
 };
 
+// Round after a lost pistol (R2 / R14), from the loser's side. eco rounds = losses - forced.
+// postEco*: eco rounds whose following round (R3 / R15) has data, and how many of those were won.
+export type PostPistolForceStat = { losses: number; forced: number; forcedWins: number; ecoWins: number; postEcoTotal: number; postEcoWins: number };
+// *PostPlant: same counters, only for pistols lost by defuse (the loser attacked and planted)
+export type TeamPostPistolForce = {
+  r2: PostPistolForceStat; r14: PostPistolForceStat;
+  r2PostPlant: PostPistolForceStat; r14PostPlant: PostPistolForceStat;
+};
+
 export type PlayerMatchPoint = {
   seriesId: string;
   date: string;

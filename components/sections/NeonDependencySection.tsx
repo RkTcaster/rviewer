@@ -6,6 +6,7 @@ import { DuoMapStat, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { Tooltip } from '../Tooltip';
 import { useUrlSet } from '@/hooks/useUrlSet';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer } from 'recharts';
 
 interface Props {
   stats: Record<string, Record<string, DuoMapStat>>;
@@ -16,12 +17,45 @@ interface Props {
   defaultHiddenMaps?: string[];
 }
 
-const REGION_ROWS: { id: string; label: string }[] = [
-  { id: 'reg_0', label: 'Americas' },
-  { id: 'reg_1', label: 'EMEA' },
-  { id: 'reg_2', label: 'China' },
-  { id: 'reg_3', label: 'Pacific' },
+// color: dominant color of each logo in public/region, used for the region chart bars
+const REGION_ROWS: { id: string; label: string; color: string }[] = [
+  { id: 'reg_0', label: 'Americas', color: '#FF570C' },
+  { id: 'reg_1', label: 'EMEA', color: '#D5FF1D' },
+  { id: 'reg_2', label: 'China', color: '#E73056' },
+  { id: 'reg_3', label: 'Pacific', color: '#01D2D7' },
 ];
+
+type RegionChartRow = { group: string; raw: Record<string, DuoMapStat> };
+
+// Shared tooltip for one group (Overall or a map): every region's duo %, raw duo/played and WR
+function RegionChartTooltip({ active, payload }: { active?: boolean; payload?: { payload: RegionChartRow }[] }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="bg-[#0f1115] border border-gray-700 rounded-lg px-3 py-2 text-sm shadow-xl">
+      <p className="font-bold text-white mb-1">{d.group}</p>
+      {REGION_ROWS.map(r => {
+        const s = d.raw[r.id];
+        const pct = duoPct(s);
+        return (
+          <p key={r.id} className="flex items-center gap-2 whitespace-nowrap">
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: r.color }} />
+            <span className="text-gray-300 w-16">{r.label}</span>
+            {pct === null ? (
+              <span className="text-gray-600">—</span>
+            ) : (
+              <>
+                <span className="font-bold text-white">{pct}%</span>
+                <span className="text-gray-400">{s.duo}/{s.played}</span>
+                {winLabel(s)}
+              </>
+            )}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
 
 // Duo % = maps where the team fielded Neon and Phoenix together / times it played the map
 function duoPct(s: DuoMapStat | undefined): number | null {
@@ -601,6 +635,52 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
           </tbody>
         </table>
       </div>
+
+      {/* Region comparison: same raw-sum rule as the All row, split by region over the
+          selected teams and visible maps. */}
+      {(() => {
+        const regionTeams = (id: string) => baseTeams.filter(t => teamRegions[t] === id);
+        const makeRow = (group: string, pick: (team: string) => DuoMapStat | undefined): RegionChartRow => ({
+          group,
+          raw: Object.fromEntries(REGION_ROWS.map(r => [r.id, sumDuoStats(regionTeams(r.id).map(pick))])),
+        });
+        const chartData = [
+          makeRow('Overall', t => sumDuoStats(visibleMaps.map(m => stats[t]?.[m]))),
+          ...visibleMaps.map(m => makeRow(m, t => stats[t]?.[m])),
+        ];
+        return (
+          <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 p-4 flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-1">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Duo usage by region</span>
+              {REGION_ROWS.map(r => (
+                <span key={r.id} className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: r.color }}>
+                  <img src={`/region/${r.label.toLowerCase()}.png`} alt={r.label} className="w-4 h-4 object-contain shrink-0" />
+                  {r.label}
+                </span>
+              ))}
+            </div>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="20%">
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2d3139" />
+                <XAxis dataKey="group" stroke="#6b7280" fontSize={11} tickLine={false} />
+                <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} stroke="#6b7280" fontSize={10} tickLine={false} width={40} />
+                <ChartTooltip content={<RegionChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                {REGION_ROWS.map(r => (
+                  <Bar
+                    key={r.id}
+                    name={r.label}
+                    dataKey={(d: RegionChartRow) => duoPct(d.raw[r.id])}
+                    fill={r.color}
+                    radius={[3, 3, 0, 0]}
+                    maxBarSize={18}
+                    isAnimationActive={false}
+                  />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()}
     </div>
   );
 }

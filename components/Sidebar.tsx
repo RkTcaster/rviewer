@@ -35,6 +35,7 @@ const NAV_SECTIONS = [
       // { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Zap },
       { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
       { id: 'economy',       label: 'Economy',       icon: DollarSign },
+      { id: 'post-pistol-force', label: 'Post Pistol Force', icon: DollarSign },
       { id: 'player-stats',  label: 'Player Stats',  icon: UserRound },
       // { id: 'playoff-pct',        label: 'Playoff %',          icon: Trophy }, 
     ],
@@ -49,7 +50,7 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
 
   function goToSection(section: string) {
     // Stats Rank y Maps Masters arrancan siempre con su configuración por defecto (sin filtros heredados)
-    if (section === 'stats-rank' || section === 'maps-masters' || section === 'neon-dependency') {
+    if (section === 'stats-rank' || section === 'maps-masters' || section === 'neon-dependency' || section === 'post-pistol-force') {
       commitParams(new URLSearchParams({ section }), { immediate: true });
       return;
     }

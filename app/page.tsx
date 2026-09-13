@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getVetoFlows, getTeamFormTimeline } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline } from '@/lib/data-service';
 import { STATS_RANK_DEFAULT_TOURS, OverallMapFullStat, TeamRankStats } from '@/lib/types';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
@@ -22,6 +22,7 @@ import { PlayoffPctSection } from '@/components/sections/PlayoffPctSection';
 import { StatsRankSection } from '@/components/sections/StatsRankSection';
 import { MapsMastersSection } from '@/components/sections/MapsMastersSection';
 import { NeonDependencySection } from '@/components/sections/NeonDependencySection';
+import { PostPistolForceSection } from '@/components/sections/PostPistolForceSection';
 import { VetoSection } from '@/components/sections/VetoSection';
 import { FormSection } from '@/components/sections/FormSection';
 
@@ -35,7 +36,7 @@ export default async function Page({
   const regArr = reg ? reg.split(',').filter(Boolean) : undefined;
   const reg2Arr = reg2 ? reg2.split(',').filter(Boolean) : undefined;
   // Neon + Phoenix, Stats Rank y Maps Masters conservan la selección de torneos por defecto
-  const effectiveTour = ((section === 'neon-dependency' || section === 'stats-rank' || section === 'maps-masters') && tour === undefined)
+  const effectiveTour = ((section === 'neon-dependency' || section === 'post-pistol-force' || section === 'stats-rank' || section === 'maps-masters') && tour === undefined)
     ? STATS_RANK_DEFAULT_TOURS.join(',')
     : tour;
   const hasTour = (effectiveTour?.split(',').filter(Boolean).length ?? 0) > 0;
@@ -48,6 +49,7 @@ export default async function Page({
   const isStatsRank = section === 'stats-rank';
   const isMapsMasters = section === 'maps-masters';
   const isNeonDependency = section === 'neon-dependency';
+  const isPostPistolForce = section === 'post-pistol-force';
   const isEconomy = section === 'economy';
   const isCompareEconomy = section === 'compare-economy';
   const isRelevantInfo = section === 'relevant-info';
@@ -119,7 +121,7 @@ export default async function Page({
     ? getAgentRoles()
     : Promise.resolve({});
 
-  const needsLogos = isStatsRank || isMapsMasters || isNeonDependency || section === 'compare-maps' || section === 'compare-stats';
+  const needsLogos = isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || section === 'compare-maps' || section === 'compare-stats';
   const teamLogosP = needsLogos ? getTeamLogos() : Promise.resolve({});
   const teamRegionsP = needsLogos ? getTeamRegions() : Promise.resolve({});
 
@@ -130,6 +132,10 @@ export default async function Page({
   const neonDepP = isNeonDependency
     ? getNeonDependencyStats({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
     : Promise.resolve({ stats: {}, maps: [] });
+
+  const postPistolForceP = isPostPistolForce
+    ? getPostPistolForce({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
+    : Promise.resolve({});
 
   const mapFullStatsP = (section === 'agent-picks')
     ? getOverallMapFullStats({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
@@ -191,7 +197,7 @@ export default async function Page({
   const simulationScenariosP = isPlayoffPct ? getSimulationScenarios() : Promise.resolve([]);
 
   // Tours source differs by context
-  const toursP = (isOverall || isMetaShift || isEconomy || isRelevantInfo || isStatsRank || isMapsMasters || isNeonDependency) ? getAllTours(regArr) : getTours(team, regArr);
+  const toursP = (isOverall || isMetaShift || isEconomy || isRelevantInfo || isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce) ? getAllTours(regArr) : getTours(team, regArr);
   const tours2P = isCompare
     ? getTours(team2, regArr)
     : isMetaShift
@@ -201,7 +207,7 @@ export default async function Page({
   const [
     result, resultB, compsA, compsB, rankings, economy, mapPicksFullStatsRaw,
     compositionsData, agentPickStats, agentCompositions, agentMatches,
-    mapImages, defaultHiddenMaps, agentImages, agentRoles, teamLogos, teamRegions, mapsMasters, neonDep,
+    mapImages, defaultHiddenMaps, agentImages, agentRoles, teamLogos, teamRegions, mapsMasters, neonDep, postPistolForce,
     mapFullStats, agentPickStatsLeft, agentPickStatsRight,
     playerStats, tournamentPlayerAvg, playerTimeline,
     regions, teams, lastUpdateDate, teams2,
@@ -210,7 +216,7 @@ export default async function Page({
   ] = await Promise.all([
     resultP, resultBP, compsAP, compsBP, rankingsP, economyP, mapPicksFullStatsP,
     compositionsDataP, agentPickStatsP, agentCompositionsP, agentMatchesP,
-    mapImagesP, defaultHiddenMapsP, agentImagesP, agentRolesP, teamLogosP, teamRegionsP, mapsMastersP, neonDepP,
+    mapImagesP, defaultHiddenMapsP, agentImagesP, agentRolesP, teamLogosP, teamRegionsP, mapsMastersP, neonDepP, postPistolForceP,
     mapFullStatsP, agentPickStatsLeftP, agentPickStatsRightP,
     playerStatsP, tournamentPlayerAvgP, playerTimelineP,
     getRegions(), getTeams(regArr), getLastUpdateDate(), teams2P,
@@ -264,6 +270,8 @@ export default async function Page({
         return <MapsMastersSection stats={mapsMasters.stats} maps={mapsMasters.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} />;
       case 'neon-dependency':
         return <NeonDependencySection stats={neonDep.stats} maps={neonDep.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} defaultHiddenMaps={defaultHiddenMaps} />;
+      case 'post-pistol-force':
+        return <PostPistolForceSection stats={postPistolForce} teamLogos={teamLogos} teamRegions={teamRegions} />;
       case 'veto':
         return <VetoSection flows={vetoFlows} teamName={team || ''} />;
       case 'form':
@@ -337,6 +345,7 @@ export default async function Page({
           'stats-rank': 'Stats Rank',
           'maps-masters': 'Maps Rank',
           'neon-dependency': 'Neon + Phoenix',
+          'post-pistol-force': 'Post Pistol Force',
           }[section] ?? section}</h1>
           {regArr && regArr.length > 0 && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">
@@ -376,7 +385,7 @@ export default async function Page({
                 tours={tours}
                 tours2={tours2}
                 teams2={teams2}
-                mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : (isStatsRank || isMapsMasters || isNeonDependency) ? 'stats-rank' : 'team'}
+                mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : (isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce) ? 'stats-rank' : 'team'}
               />
             </div>
           )}
@@ -384,7 +393,7 @@ export default async function Page({
 
         <main className="relative p-8 pt-6">
           <ContentOverlay />
-          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isStatsRank || isMapsMasters || isNeonDependency) ? (
+          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce) ? (
             renderSection()
           ) : !team ? (
             <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
