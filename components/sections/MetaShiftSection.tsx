@@ -153,9 +153,10 @@ function AgentIconLabel({ x, y, width, height, viewBox, index, data, agentImages
   );
 }
 
-// Delta al final de la barra, del lado hacia donde crece (0 cuenta como positivo). Si la
+// Delta sin signo (el lado de la barra y la leyenda ya dicen quien lleva la ventaja) al final
+// de la barra, del lado hacia donde crece (0 cuenta como positivo). Si la
 // barra es mas corta que el icono, se corre hasta el borde del icono para no quedar tapado.
-function DeltaLabel({ x, y, width, height, viewBox, index, data, unsigned }: any) {
+function DeltaLabel({ x, y, width, height, viewBox, index, data }: any) {
   const d = data[index];
   const box = { x, y, width, height, ...(viewBox ?? {}) };
   if (!d || box.x === undefined) return null;
@@ -165,7 +166,6 @@ function DeltaLabel({ x, y, width, height, viewBox, index, data, unsigned }: any
   const labelX = right
     ? Math.max(end + 5, zero + ICON_RADIUS + 4)
     : Math.min(end - 5, zero - ICON_RADIUS - 4);
-  const n = d.delta;
   return (
     <text
       x={labelX}
@@ -175,7 +175,7 @@ function DeltaLabel({ x, y, width, height, viewBox, index, data, unsigned }: any
       fill="#9ca3af"
       fontSize={11}
     >
-      {unsigned ? `${Math.abs(n)}%` : n > 0 ? `+${n}%` : `${n}%`}
+      {Math.abs(d.delta)}%
     </text>
   );
 }
@@ -204,7 +204,7 @@ function MinRateLabel({ x, y, width, height, viewBox, index, data }: any) {
   );
 }
 
-function CustomTooltip({ active, payload, left, right, teamRegions, unsigned, posColor, negColor }: any) {
+function CustomTooltip({ active, payload, left, right, teamRegions, posColor, negColor }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
@@ -212,13 +212,9 @@ function CustomTooltip({ active, payload, left, right, teamRegions, unsigned, po
       <p className="font-bold text-white mb-1">{d.agent}</p>
       <TooltipRow filters={left} teamRegions={teamRegions} value={d.leftRate} />
       <TooltipRow filters={right} teamRegions={teamRegions} value={d.rightRate} />
-      <p
-        className={unsigned ? undefined : d.delta >= 0 ? 'text-green-400' : 'text-red-400'}
-        style={unsigned ? { color: d.delta >= 0 ? posColor : negColor } : undefined}
-      >
-        Delta: <span className="font-bold">{unsigned ? Math.abs(d.delta) : `${d.delta > 0 ? '+' : ''}${d.delta}`}%</span>
-      </p>
-    </div>
+      <p style={{ color: d.delta >= 0 ? posColor : negColor }}>
+        Delta: <span className="font-bold">{Math.abs(d.delta)}%</span>
+      </p>    </div>
   );
 }
 
@@ -232,8 +228,6 @@ export function MetaShiftSection({ statsLeft, statsRight, agentImages, left, rig
   const canRegionColor = !left.team && !right.team && left.regIds.length === 1 && right.regIds.length === 1;
   const posColor = canRegionColor && regionColor ? (REGION_META[left.regIds[0]]?.color ?? FALLBACK_COLOR) : '#22c55e';
   const negColor = canRegionColor && regionColor ? (REGION_META[right.regIds[0]]?.color ?? FALLBACK_COLOR) : '#f87171';
-  // Con los colores de region el lado ya dice quien lleva la ventaja, asi que los valores van sin signo.
-  const unsigned = canRegionColor && regionColor;
 
   const chartData = useMemo(() => {
     const leftRates = aggregatePickRate(statsLeft);
@@ -326,14 +320,14 @@ export function MetaShiftSection({ statsLeft, statsRight, agentImages, left, rig
           <XAxis
             type="number"
             domain={xDomain}
-            tickFormatter={(v) => `${unsigned ? Math.abs(v) : v}%`}
+            tickFormatter={(v) => `${Math.abs(v)}%`}
             stroke="#6b7280"
             fontSize={11}
             tickLine={false}
           />
           {/* Los iconos van sobre el eje 0 (AgentIconLabel); el eje Y solo define las filas */}
           <YAxis type="category" dataKey="agent" hide />
-          <Tooltip content={<CustomTooltip left={left} right={right} teamRegions={teamRegions} unsigned={unsigned} posColor={posColor} negColor={negColor} />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+          <Tooltip content={<CustomTooltip left={left} right={right} teamRegions={teamRegions} posColor={posColor} negColor={negColor} />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
           <ReferenceLine x={0} stroke="#4b5563" strokeWidth={1} />
           <Bar dataKey="delta" radius={[0, 4, 4, 0]} maxBarSize={22}>
             {chartData.map((entry, i) => (
@@ -343,7 +337,7 @@ export function MetaShiftSection({ statsLeft, statsRight, agentImages, left, rig
               />
             ))}
             {showPickRate ? <LabelList content={<MinRateLabel data={chartData} />} /> : null}
-            <LabelList content={<DeltaLabel data={chartData} unsigned={unsigned} />} />
+            <LabelList content={<DeltaLabel data={chartData} />} />
             <LabelList content={<AgentIconLabel data={chartData} agentImages={agentImages} />} />
           </Bar>
         </BarChart>
