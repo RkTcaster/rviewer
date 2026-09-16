@@ -151,6 +151,7 @@ export type AgentPickStat = {
   timesPlayed: number;
   pickRate: number;
   totalMaps: number;
+  comps: number;        // composiciones jugadas en ese mapa (denominador de pickRate)
   nonMirrorPlayed?: number;
   nonMirrorWins?: number;
 };

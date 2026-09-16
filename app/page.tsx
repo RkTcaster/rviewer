@@ -123,7 +123,7 @@ export default async function Page({
 
   const needsLogos = isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || section === 'compare-maps' || section === 'compare-stats';
   const teamLogosP = needsLogos ? getTeamLogos() : Promise.resolve({});
-  const teamRegionsP = needsLogos ? getTeamRegions() : Promise.resolve({});
+  const teamRegionsP = (needsLogos || isMetaShift) ? getTeamRegions() : Promise.resolve({});
 
   const mapsMastersP = (isMapsMasters && hasTour)
     ? getMapsMastersStats({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
@@ -240,7 +240,14 @@ export default async function Page({
       case 'agent-picks':
         return <AgentPicksSection stats={agentPickStats} compositions={agentCompositions} agentMatches={agentMatches} mapImages={mapImages} agentImages={agentImages} agentRoles={agentRoles} mapFullStats={mapFullStats} />;
       case 'meta-shift':
-        return <MetaShiftSection statsLeft={agentPickStatsLeft} statsRight={agentPickStatsRight} agentImages={agentImages} />;
+        return <MetaShiftSection
+          statsLeft={agentPickStatsLeft}
+          statsRight={agentPickStatsRight}
+          agentImages={agentImages}
+          left={{ regIds: regArr ?? [], team: team || undefined }}
+          right={{ regIds: reg2Arr ?? [], team: team2 || undefined }}
+          teamRegions={teamRegions}
+        />;
       case 'graphs':
         return (
           <GraphsSection

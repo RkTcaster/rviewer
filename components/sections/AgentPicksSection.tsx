@@ -263,20 +263,21 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
         });
       const existingAgents = new Set(mapFiltered.map(s => s.agent));
       const totalMaps = mapFiltered[0]?.totalMaps ?? 0;
+      const comps = mapFiltered[0]?.comps ?? 0;
       for (const agent of Object.keys(agentImages)) {
         if (!existingAgents.has(agent)) {
-          mapFiltered.push({ agent, map: single, timesPlayed: 0, pickRate: 0, totalMaps, nonMirrorPlayed: 0, nonMirrorWins: 0, nmwr: undefined });
+          mapFiltered.push({ agent, map: single, timesPlayed: 0, pickRate: 0, totalMaps, comps, nonMirrorPlayed: 0, nonMirrorWins: 0, nmwr: undefined });
         }
       }
       return mapFiltered.sort(cmp);
     }
 
     const scope = stats.filter(s => inScope(s.map));
-    const mapTotals: Record<string, number> = {};
+    const mapComps: Record<string, number> = {};
     for (const s of scope) {
-      if (!(s.map in mapTotals)) mapTotals[s.map] = s.totalMaps;
+      if (!(s.map in mapComps)) mapComps[s.map] = s.comps;
     }
-    const totalDenominator = Object.values(mapTotals).reduce((a, b) => a + b, 0) * 2;
+    const totalDenominator = Object.values(mapComps).reduce((a, b) => a + b, 0);
 
     const byAgent: Record<string, { timesPlayed: number; nonMirrorPlayed: number; nonMirrorWins: number }> = {};
     for (const s of scope) {
@@ -298,6 +299,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
           timesPlayed: agg.timesPlayed,
           pickRate: totalDenominator > 0 ? Math.round((agg.timesPlayed / totalDenominator) * 100) : 0,
           totalMaps: 0,
+          comps: 0,
           nonMirrorPlayed,
           nonMirrorWins,
           nmwr: nmwr(nonMirrorWins, nonMirrorPlayed),

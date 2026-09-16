@@ -95,7 +95,7 @@ async function getNeonDependencyStats_impl(
   return { stats, maps };
 }
 
-export const getAgentPickStats = versioned('agent-pick-stats', getAgentPickStats_impl);
+export const getAgentPickStats = versioned('agent-pick-stats-v2', getAgentPickStats_impl);
 async function getAgentPickStats_impl(
   filters: { reg?: string[]; tour?: string; team?: string; bo?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<AgentPickStat[]> {
@@ -144,8 +144,10 @@ async function getAgentPickStats_impl(
     for (const [key, count] of Object.entries(agentCounts)) {
       const [mapName, agent] = key.split('__');
       const totalMaps = uniqueMapIds[mapName]?.size ?? 0;
-      const pickRate = totalMaps > 0 ? Math.round((count / totalMaps) * 100) : 0;
-      results.push({ agent, map: mapName, timesPlayed: count, pickRate, totalMaps });
+      // Solo el equipo filtrado: 1 composicion por mapa
+      const comps = totalMaps;
+      const pickRate = comps > 0 ? Math.round((count / comps) * 100) : 0;
+      results.push({ agent, map: mapName, timesPlayed: count, pickRate, totalMaps, comps });
     }
     return results.sort((a, b) => {
       const mapCmp = a.map.localeCompare(b.map);
@@ -230,7 +232,9 @@ async function getAgentPickStats_impl(
   for (const [key, count] of Object.entries(agentCounts)) {
     const [mapName, agent] = key.split('__');
     const totalMaps = uniqueMapIds[mapName]?.size ?? 0;
-    const pickRate = totalMaps > 0 ? Math.round((count / (totalMaps * 2)) * 100) : 0;
+    // Ambos equipos de cada mapa: 2 composiciones por mapa
+    const comps = totalMaps * 2;
+    const pickRate = comps > 0 ? Math.round((count / comps) * 100) : 0;
     const nm = nmStats[key];
     results.push({
       agent,
@@ -238,6 +242,7 @@ async function getAgentPickStats_impl(
       timesPlayed: count,
       pickRate,
       totalMaps,
+      comps,
       nonMirrorPlayed: nm?.nonMirrorPlayed ?? 0,
       nonMirrorWins: nm?.nonMirrorWins ?? 0,
     });
