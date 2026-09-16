@@ -121,9 +121,9 @@ export default async function Page({
     ? getAgentRoles()
     : Promise.resolve({});
 
-  const needsLogos = isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || section === 'compare-maps' || section === 'compare-stats';
+  const needsLogos = isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isMetaShift || section === 'compare-maps' || section === 'compare-stats';
   const teamLogosP = needsLogos ? getTeamLogos() : Promise.resolve({});
-  const teamRegionsP = (needsLogos || isMetaShift) ? getTeamRegions() : Promise.resolve({});
+  const teamRegionsP = needsLogos ? getTeamRegions() : Promise.resolve({});
 
   const mapsMastersP = (isMapsMasters && hasTour)
     ? getMapsMastersStats({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
@@ -247,6 +247,7 @@ export default async function Page({
           left={{ regIds: regArr ?? [], team: team || undefined }}
           right={{ regIds: reg2Arr ?? [], team: team2 || undefined }}
           teamRegions={teamRegions}
+          teamLogos={teamLogos}
         />;
       case 'graphs':
         return (
