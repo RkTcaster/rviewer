@@ -219,7 +219,7 @@ function CustomTooltip({ active, payload, left, right, teamRegions, posColor, ne
 }
 
 export function MetaShiftSection({ statsLeft, statsRight, agentImages, left, right, teamRegions, teamLogos }: Props) {
-  const [sortBy, setSortBy] = useState<'delta' | 'leftRate'>('delta');
+  const [sortBy, setSortBy] = useState<'delta' | 'absDelta' | 'leftRate'>('delta');
   const [regionColor, setRegionColor] = useState(false);
   const [showPickRate, setShowPickRate] = useState(false);
 
@@ -242,7 +242,12 @@ export function MetaShiftSection({ statsLeft, statsRight, agentImages, left, rig
         minRate: Math.min(leftRates[agent] ?? 0, rightRates[agent] ?? 0),
       }))
       .filter(d => d.leftRate > 0 || d.rightRate > 0)
-      .sort((a, b) => sortBy === 'delta' ? b.delta - a.delta : b.leftRate - a.leftRate);
+      .sort((a, b) => {
+        if (sortBy === 'delta') return b.delta - a.delta;
+        // Diferencia absoluta; a igual diferencia, primero el de mayor pick rate
+        if (sortBy === 'absDelta') return Math.abs(b.delta) - Math.abs(a.delta) || b.minRate - a.minRate;
+        return b.leftRate - a.leftRate;
+      });
   }, [statsLeft, statsRight, agentImages, sortBy]);
 
   const isEmpty = statsLeft.length === 0 && statsRight.length === 0;
@@ -302,10 +307,16 @@ export function MetaShiftSection({ statsLeft, statsRight, agentImages, left, rig
               Sort by delta
             </button>
             <button
+              onClick={() => setSortBy('absDelta')}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${sortBy === 'absDelta' ? 'bg-[#252a33] text-white' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              Sort by diff
+            </button>
+            <button
               onClick={() => setSortBy('leftRate')}
               className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${sortBy === 'leftRate' ? 'bg-[#252a33] text-white' : 'text-gray-500 hover:text-gray-300'}`}
             >
-              Sort by left pick rate
+              Sort by {sideItems(left, teamRegions).map(item => item.label).join(' · ')} pick rate
             </button>
           </div>
         </div>
