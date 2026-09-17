@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap, ListOrdered } from 'lucide-react';
+import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap, ListOrdered, Sparkles } from 'lucide-react';
 import { useNavigation, useFilterParams } from './NavigationContext';
 
 const NAV_SECTIONS = [
@@ -33,6 +33,7 @@ const NAV_SECTIONS = [
     title: 'Testing',
     items: [
       { id: 'veto', label: 'Veto Draft', icon: ListOrdered },
+      { id: 'veto-predictor', label: 'Veto Predictor', icon: Sparkles },
       // { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Zap },
       { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
       { id: 'economy',       label: 'Economy',       icon: DollarSign },

@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows } from '@/lib/data-service';
 import { STATS_RANK_DEFAULT_TOURS, OverallMapFullStat, TeamRankStats } from '@/lib/types';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
@@ -25,6 +25,7 @@ import { NeonDependencySection } from '@/components/sections/NeonDependencySecti
 import { PostPistolForceSection } from '@/components/sections/PostPistolForceSection';
 import { VetoSection } from '@/components/sections/VetoSection';
 import { FormSection } from '@/components/sections/FormSection';
+import { VetoPredictorSection } from '@/components/sections/VetoPredictorSection';
 
 export default async function Page({
   searchParams,
@@ -55,6 +56,7 @@ export default async function Page({
   const isRelevantInfo = section === 'relevant-info';
   const isSkirmish = section === 'skirmish-americas';
   const isPlayoffPct = section === 'playoff-pct';
+  const isVetoPredictor = section === 'veto-predictor';
 
   // Todas las consultas se construyen como promesas y se esperan juntas en un
   // solo Promise.all para evitar la cascada secuencial de awaits.
@@ -104,7 +106,7 @@ export default async function Page({
     ? getAgentNonMirrorMatches({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
     : Promise.resolve([]);
 
-  const mapImagesP = (section === 'agent-picks' || section === 'maps-masters' || section === 'neon-dependency' || section === 'compare-maps' || section === 'maps')
+  const mapImagesP = (section === 'agent-picks' || section === 'maps-masters' || section === 'neon-dependency' || section === 'compare-maps' || section === 'maps' || isVetoPredictor)
     ? getMapImages()
     : Promise.resolve({});
 
@@ -121,7 +123,7 @@ export default async function Page({
     ? getAgentRoles()
     : Promise.resolve({});
 
-  const needsLogos = isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isMetaShift || section === 'compare-maps' || section === 'compare-stats';
+  const needsLogos = isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isMetaShift || isVetoPredictor || section === 'compare-maps' || section === 'compare-stats';
   const teamLogosP = needsLogos ? getTeamLogos() : Promise.resolve({});
   const teamRegionsP = needsLogos ? getTeamRegions() : Promise.resolve({});
 
@@ -166,6 +168,8 @@ export default async function Page({
   const vetoFlowsP = (section === 'veto' && team)
     ? getVetoFlows({ team, tour, bo, reg: regArr, last, dateFrom, dateTo })
     : Promise.resolve([]);
+
+  const vetoModelP = isVetoPredictor ? getVetoModelRows() : Promise.resolve(null);
 
   const formTimelineP = (section === 'form' && team)
     ? getTeamFormTimeline({ team, tour, bo, reg: regArr, last, dateFrom, dateTo })
@@ -212,7 +216,7 @@ export default async function Page({
     playerStats, tournamentPlayerAvg, playerTimeline,
     regions, teams, lastUpdateDate, teams2,
     econCompareA, econCompareB, economyBins, longestMaps, topPerformances,
-    skirmishStats, simulationScenarios, tours, tours2, vetoFlows, formTimeline,
+    skirmishStats, simulationScenarios, tours, tours2, vetoFlows, formTimeline, vetoModel,
   ] = await Promise.all([
     resultP, resultBP, compsAP, compsBP, rankingsP, economyP, mapPicksFullStatsP,
     compositionsDataP, agentPickStatsP, agentCompositionsP, agentMatchesP,
@@ -221,7 +225,7 @@ export default async function Page({
     playerStatsP, tournamentPlayerAvgP, playerTimelineP,
     getRegions(), getTeams(regArr), getLastUpdateDate(), teams2P,
     econCompareAP, econCompareBP, economyBinsP, longestMapsP, topPerformancesP,
-    skirmishStatsP, simulationScenariosP, toursP, tours2P, vetoFlowsP, formTimelineP,
+    skirmishStatsP, simulationScenariosP, toursP, tours2P, vetoFlowsP, formTimelineP, vetoModelP,
   ]);
 
   const mapPicksFullStats = Object.values(mapPicksFullStatsRaw).sort((a, b) => b.picks - a.picks);
@@ -282,6 +286,8 @@ export default async function Page({
         return <PostPistolForceSection stats={postPistolForce} teamLogos={teamLogos} teamRegions={teamRegions} />;
       case 'veto':
         return <VetoSection flows={vetoFlows} teamName={team || ''} />;
+      case 'veto-predictor':
+        return <VetoPredictorSection model={vetoModel!} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} />;
       case 'form':
         return <FormSection points={formTimeline} teamName={team || ''} />;
       case 'charts':
@@ -346,6 +352,7 @@ export default async function Page({
             'economy': 'Economy',
             'compare-economy': 'Compare Economy',
             'veto': 'Veto Draft',
+            'veto-predictor': 'Veto Predictor',
             'form': 'Form Timeline',
           'relevant-info': 'Relevant Info',
           'skirmish-americas': 'Skirmish VCT Americas Stage 1',
@@ -385,7 +392,7 @@ export default async function Page({
               </p>
             )
           )}
-          {!isSkirmish && !isPlayoffPct && (
+          {!isSkirmish && !isPlayoffPct && !isVetoPredictor && (
             <div className="mt-4">
               <Filters
                 regions={regions}
@@ -401,7 +408,7 @@ export default async function Page({
 
         <main className="relative p-8 pt-6">
           <ContentOverlay />
-          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce) ? (
+          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isVetoPredictor || isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce) ? (
             renderSection()
           ) : !team ? (
             <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
