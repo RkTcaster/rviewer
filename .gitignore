@@ -43,3 +43,7 @@ next-env.d.ts
 # data
 data/*.csv
 data/veto_referencia.json
+
+# prediction model
+RKTDATA_CAMBIO_PLAYERS.md
+PREDICTION_MODEL_VETO.md
