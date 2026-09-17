@@ -158,6 +158,18 @@ export function VetoPredictorSection({ model, teamLogos = {}, teamRegions = {}, 
 
   return (
     <div className="flex flex-col gap-6">
+      <p className="text-xs text-gray-500">
+        Model used to get this data from:{' '}
+        <a
+          href="https://github.com/RkTcaster/Prediction-model"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-400 hover:text-blue-300 underline"
+        >
+          github.com/RkTcaster/Prediction-model
+        </a>
+      </p>
+
       {/* Selection: teams by region + map pool */}
       <div className="bg-[#1a1d23] rounded-xl border border-gray-800 p-4 flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2">
