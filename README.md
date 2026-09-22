@@ -63,6 +63,7 @@ split by domain:
 | `economy.ts` | `getEconomyDistribution`, `getEconomyCompare`, `getTournamentEconomy` |
 | `images.ts` | `getTeamLogos`, `getMapImages`, `getAgentImages`, `getAgentRoles`, `getTeamRegions`, `getOutOfRotationMaps` |
 | `misc.ts` | `getLongestMaps`, `getSkirmishStats`, `getSimulationScenarios` |
+| `series.ts` | `getSeriesOutcomes` — the only module that rolls maps up into a series result |
 | `helpers.ts` | `versioned`, `fetchAllPages`, `getLastUpdateDate` |
 | `rows.ts` | Row types for the Supabase tables |
 
@@ -117,6 +118,7 @@ Each sidebar item (`components/Sidebar.tsx`) is a `section` in the URL and a com
 | Section | `section` | What it shows |
 | --- | --- | --- |
 | Veto Draft | `veto` | The team's Ban → Pick → Ban 2 flow and repeated full sequences. Requires a selected team. |
+| Series Outcomes | `series-outcomes` | Circuit-wide KPIs plus a per-team table: series WR as team A (the side that opens the veto) vs as team B, and how the wins split into 2-0 / 2-1 after losing map 1 / 2-1 after losing map 2 — those are **Bo3 only**, the partition is exact only there. The two overtime columns (maps that played more than 24 rounds) are per map and cover **every format**, so the Bo5 finals count. The Serie BO5 chip and Last X matches are greyed out here, since neither applies. |
 | Relevant Info | `relevant-info` | Longest maps and top individual performances. |
 | Economy | `economy` | Credit histogram. |
 | Player Stats | `player-stats` | Per-player stats against the tournament average, plus a timeline. |

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap, ListOrdered, Sparkles } from 'lucide-react';
+import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap, ListOrdered, Sparkles, Swords } from 'lucide-react';
 import { useNavigation, useFilterParams } from './NavigationContext';
 
 const NAV_SECTIONS = [
@@ -34,6 +34,7 @@ const NAV_SECTIONS = [
     items: [
       { id: 'veto', label: 'Veto Draft', icon: ListOrdered },
       { id: 'veto-predictor', label: 'Veto Predictor', icon: Sparkles },
+      { id: 'series-outcomes', label: 'Series Outcomes', icon: Swords },
       // { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Zap },
       { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
       { id: 'economy',       label: 'Economy',       icon: DollarSign },
@@ -51,7 +52,7 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
 
   function goToSection(section: string) {
     // Stats Rank y Maps Masters arrancan siempre con su configuración por defecto (sin filtros heredados)
-    if (section === 'stats-rank' || section === 'maps-masters' || section === 'neon-dependency' || section === 'post-pistol-force') {
+    if (section === 'stats-rank' || section === 'maps-masters' || section === 'neon-dependency' || section === 'post-pistol-force' || section === 'series-outcomes') {
       commitParams(new URLSearchParams({ section }), { immediate: true });
       return;
     }

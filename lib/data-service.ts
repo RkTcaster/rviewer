@@ -8,4 +8,5 @@ export * from './data/players';
 export * from './data/economy';
 export * from './data/images';
 export * from './data/misc';
+export * from './data/series';
 export * from './data/vetoModel';

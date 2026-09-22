@@ -9,6 +9,28 @@ Last updated: 2026-09-11
 
 ## ✅ Done
 
+- **Series Outcomes** (sep 2026): new Testing section, the first aggregation the dashboard does at
+  **series** level — everything else reasons per map. Three independent blocks per team: win rate as
+  team A (the side that opens the veto, `draft.team`, the same notion as the existing `draftOrder`
+  counters) vs as team B; the exact partition of the series played into `2-0` / lost map 1 / won map 1
+  and lost map 2, with the series win rate inside each; and win rate on maps that went to overtime.
+  The series blocks are **Bo3 only** — that partition is exact only in a Bo3, and there are 533 Bo3
+  against 27 Bo5 — but the overtime block is per map and deliberately covers **every format**. That
+  split was a fix, not the first design: scoping OT to Bo3 as a side effect of the series scope
+  silently dropped the Bo5 playoff finals, which is exactly where the high-stakes OT maps are
+  (100T read 0-3 in OT because the Americas Stage 2 grand final, a Bo5 they won with two 14-12 maps,
+  was filtered out; it now reads 2-3). In the four default tours that filter was hiding 4 of 75 OT
+  maps across 8 Bo5 series, all of them `gf` or `lbf`. Two unused DB columns did the heavy lifting: `round_info.map_order` (0-based map index inside the
+  series), referenced by no file until now, which is what separates "lost map 1" from "lost map 2"
+  without inferring it from the veto; and overtime, not modelled anywhere, derived as
+  `MAX(round) > 24` (24 is the regulation maximum before a 12-12 tie; OT always comes in pairs).
+  `map_order` was verified to enumerate 0..n-1 in all 238 Bo3 series of the four default tours
+  (131 of shape `0,1` and 107 of `0,1,2`, zero anomalies). Numbers checked against an independent
+  recomputation straight from Supabase: 238 series, team A wins 118 (49.6% — opening the veto buys
+  nothing at series level), 131 sweeps + 58 comebacks + 49 closers = 238, and 75 of 616 maps in OT.
+  Per-team invariants hold on all 62 teams (`series = 2-0 + down01 + even11`,
+  `wins = 2-0 + down01Wins + even11Wins`).
+
 - **3.6 URL-backed filter model for the Overall table sections** (sep 2026): team (and map)
   selection in Stats Rank, Maps Rank and Neon + Phoenix moved from ephemeral `useState` into the URL,
   so a view is shareable by link and survives reload. Kept **off** the Next router: the selection is

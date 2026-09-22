@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows, getSeriesOutcomes, emptySeriesOutcomes } from '@/lib/data-service';
 import { STATS_RANK_DEFAULT_TOURS, OverallMapFullStat, TeamRankStats } from '@/lib/types';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
@@ -26,6 +26,7 @@ import { PostPistolForceSection } from '@/components/sections/PostPistolForceSec
 import { VetoSection } from '@/components/sections/VetoSection';
 import { FormSection } from '@/components/sections/FormSection';
 import { VetoPredictorSection } from '@/components/sections/VetoPredictorSection';
+import { SeriesOutcomesSection } from '@/components/sections/SeriesOutcomesSection';
 
 export default async function Page({
   searchParams,
@@ -37,7 +38,7 @@ export default async function Page({
   const regArr = reg ? reg.split(',').filter(Boolean) : undefined;
   const reg2Arr = reg2 ? reg2.split(',').filter(Boolean) : undefined;
   // Neon + Phoenix, Stats Rank y Maps Masters conservan la selección de torneos por defecto
-  const effectiveTour = ((section === 'neon-dependency' || section === 'post-pistol-force' || section === 'stats-rank' || section === 'maps-masters') && tour === undefined)
+  const effectiveTour = ((section === 'neon-dependency' || section === 'post-pistol-force' || section === 'stats-rank' || section === 'maps-masters' || section === 'series-outcomes') && tour === undefined)
     ? STATS_RANK_DEFAULT_TOURS.join(',')
     : tour;
   const hasTour = (effectiveTour?.split(',').filter(Boolean).length ?? 0) > 0;
@@ -57,6 +58,7 @@ export default async function Page({
   const isSkirmish = section === 'skirmish-americas';
   const isPlayoffPct = section === 'playoff-pct';
   const isVetoPredictor = section === 'veto-predictor';
+  const isSeriesOutcomes = section === 'series-outcomes';
 
   // Todas las consultas se construyen como promesas y se esperan juntas en un
   // solo Promise.all para evitar la cascada secuencial de awaits.
@@ -123,13 +125,18 @@ export default async function Page({
     ? getAgentRoles()
     : Promise.resolve({});
 
-  const needsLogos = isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isMetaShift || isVetoPredictor || section === 'compare-maps' || section === 'compare-stats';
+  const needsLogos = isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isMetaShift || isVetoPredictor || isSeriesOutcomes || section === 'compare-maps' || section === 'compare-stats';
   const teamLogosP = needsLogos ? getTeamLogos() : Promise.resolve({});
   const teamRegionsP = needsLogos ? getTeamRegions() : Promise.resolve({});
 
   const mapsMastersP = (isMapsMasters && hasTour)
     ? getMapsMastersStats({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
     : Promise.resolve({ stats: {}, maps: [] });
+
+  // Series Outcomes is Bo3-only by definition, so it ignores the bo filter
+  const seriesOutcomesP = (isSeriesOutcomes && hasTour)
+    ? getSeriesOutcomes({ tour: effectiveTour, reg: regArr, dateFrom, dateTo })
+    : Promise.resolve(emptySeriesOutcomes());
 
   const neonDepP = isNeonDependency
     ? getNeonDependencyStats({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
@@ -201,7 +208,7 @@ export default async function Page({
   const simulationScenariosP = isPlayoffPct ? getSimulationScenarios() : Promise.resolve([]);
 
   // Tours source differs by context
-  const toursP = (isOverall || isMetaShift || isEconomy || isRelevantInfo || isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce) ? getAllTours(regArr) : getTours(team, regArr);
+  const toursP = (isOverall || isMetaShift || isEconomy || isRelevantInfo || isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isSeriesOutcomes) ? getAllTours(regArr) : getTours(team, regArr);
   const tours2P = isCompare
     ? getTours(team2, regArr)
     : isMetaShift
@@ -216,7 +223,7 @@ export default async function Page({
     playerStats, tournamentPlayerAvg, playerTimeline,
     regions, teams, lastUpdateDate, teams2,
     econCompareA, econCompareB, economyBins, longestMaps, topPerformances,
-    skirmishStats, simulationScenarios, tours, tours2, vetoFlows, formTimeline, vetoModel,
+    skirmishStats, simulationScenarios, tours, tours2, vetoFlows, formTimeline, vetoModel, seriesOutcomes,
   ] = await Promise.all([
     resultP, resultBP, compsAP, compsBP, rankingsP, economyP, mapPicksFullStatsP,
     compositionsDataP, agentPickStatsP, agentCompositionsP, agentMatchesP,
@@ -225,7 +232,7 @@ export default async function Page({
     playerStatsP, tournamentPlayerAvgP, playerTimelineP,
     getRegions(), getTeams(regArr), getLastUpdateDate(), teams2P,
     econCompareAP, econCompareBP, economyBinsP, longestMapsP, topPerformancesP,
-    skirmishStatsP, simulationScenariosP, toursP, tours2P, vetoFlowsP, formTimelineP, vetoModelP,
+    skirmishStatsP, simulationScenariosP, toursP, tours2P, vetoFlowsP, formTimelineP, vetoModelP, seriesOutcomesP,
   ]);
 
   const mapPicksFullStats = Object.values(mapPicksFullStatsRaw).sort((a, b) => b.picks - a.picks);
@@ -288,6 +295,8 @@ export default async function Page({
         return <VetoSection flows={vetoFlows} teamName={team || ''} />;
       case 'veto-predictor':
         return <VetoPredictorSection model={vetoModel!} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} />;
+      case 'series-outcomes':
+        return <SeriesOutcomesSection data={seriesOutcomes} teamLogos={teamLogos} teamRegions={teamRegions} />;
       case 'form':
         return <FormSection points={formTimeline} teamName={team || ''} />;
       case 'charts':
@@ -353,6 +362,7 @@ export default async function Page({
             'compare-economy': 'Compare Economy',
             'veto': 'Veto Draft',
             'veto-predictor': 'Veto Predictor',
+            'series-outcomes': 'Series Outcomes',
             'form': 'Form Timeline',
           'relevant-info': 'Relevant Info',
           'skirmish-americas': 'Skirmish VCT Americas Stage 1',
@@ -400,7 +410,7 @@ export default async function Page({
                 tours={tours}
                 tours2={tours2}
                 teams2={teams2}
-                mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : (isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce) ? 'stats-rank' : 'team'}
+                mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : (isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isSeriesOutcomes) ? 'stats-rank' : 'team'}
               />
             </div>
           )}
@@ -408,7 +418,7 @@ export default async function Page({
 
         <main className="relative p-8 pt-6">
           <ContentOverlay />
-          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isVetoPredictor || isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce) ? (
+          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isVetoPredictor || isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isSeriesOutcomes) ? (
             renderSection()
           ) : !team ? (
             <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">

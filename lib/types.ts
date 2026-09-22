@@ -350,3 +350,30 @@ export type DashboardData = {
   lastMatchData: string | null;
   
 };
+// Series Outcomes (Bo3 only). Three independent blocks per team:
+// veto order (team A opens the veto = draft.team), how the 2-x series were won,
+// and overtime maps (a map went to OT when it played more than 24 rounds).
+export type SeriesOutcomeStats = {
+  series: number; wins: number;        // Bo3 series played / won
+  asA: number; asAWins: number;        // as team A (draft.team)
+  asB: number; asBWins: number;        // as team B (draft.rival)
+  sweeps: number;                      // won 2-0
+  down01: number; down01Wins: number;  // lost map 1 → of those, series won
+  even11: number; even11Wins: number;  // won map 1 and lost map 2 → of those, series won
+  maps: number; otMaps: number; otWins: number;
+};
+
+// Circuit-wide counters. Computed per series, not by summing teams (every series
+// has two, that would double-count). sweeps + comebacks + closers === series.
+export type SeriesOutcomeGlobal = {
+  series: number; teamAWins: number;   // series won by the veto's team A
+  sweeps: number;                      // 2-0
+  comebacks: number;                   // 2-1 where the winner lost map 1
+  closers: number;                     // 2-1 where the winner lost map 2
+  maps: number; otMaps: number;
+};
+
+export type SeriesOutcomesData = {
+  global: SeriesOutcomeGlobal;
+  teams: Record<string, SeriesOutcomeStats>;
+};

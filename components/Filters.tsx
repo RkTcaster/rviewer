@@ -26,6 +26,9 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
   const isEconomy = mode === 'economy';
   const isStatsRank = mode === 'stats-rank';
   const isRelevantInfo = section === 'relevant-info';
+  // Series Outcomes ignores both: its series blocks are Bo3 by definition and it has no
+  // team selected, so Bo5 and Last X are shown greyed out instead of pretending to work.
+  const isSeriesOutcomes = section === 'series-outcomes';
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(filterParams.toString());
@@ -190,16 +193,20 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
             <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Serie</label>
             <div className="flex flex-col gap-2 pt-1">
               {['3', '5'].map(v => {
-                const active = isBoth || bo === v;
+                const locked = isSeriesOutcomes && v === '5';
+                const active = isSeriesOutcomes ? v === '3' : (isBoth || bo === v);
+                const tone = locked
+                  ? 'bg-transparent border-gray-800 text-gray-600 opacity-50 cursor-default'
+                  : active
+                    ? `bg-blue-900/40 border-blue-700 text-blue-300 ${isSeriesOutcomes ? 'cursor-default' : 'hover:bg-blue-900/60'}`
+                    : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200';
                 return (
                   <button
                     key={v}
+                    disabled={isSeriesOutcomes}
                     onClick={() => updateFilter('bo', isBoth ? v : '')}
-                    className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
-                      active
-                        ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
-                        : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
-                    }`}
+                    title={isSeriesOutcomes ? 'Series Outcomes always uses Bo3 for the series columns; the OT columns cover every format' : undefined}
+                    className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${tone}`}
                   >
                     BO{v}
                   </button>
@@ -233,12 +240,14 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
       )}
 
       {!isOverall && !isEconomy && (
-        <div className="flex flex-col gap-1">
+        <div className={`flex flex-col gap-1 ${isSeriesOutcomes ? 'opacity-50' : ''}`}>
           <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Last X matches</label>
           <select
-            value={filterParams.get('last') || "all"}
+            value={isSeriesOutcomes ? 'all' : (filterParams.get('last') || "all")}
             onChange={(e) => updateFilter('last', e.target.value)}
-            className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600"
+            disabled={isSeriesOutcomes}
+            title={isSeriesOutcomes ? 'Series Outcomes aggregates every team, so there is no team to take the last N series of' : undefined}
+            className="border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:cursor-default"
           >
             <option value="all">All matches</option>
             <option value="1">Last Match</option>
@@ -267,7 +276,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
       <SearchableMultiSelect onClose={flush}
         label="Tournament"
         options={tours}
-        selected={filterParams.get('tour')?.split(',').filter(x => x !== "") || ((section === 'neon-dependency' || section === 'post-pistol-force' || section === 'stats-rank' || section === 'maps-masters') ? STATS_RANK_DEFAULT_TOURS : [])}
+        selected={filterParams.get('tour')?.split(',').filter(x => x !== "") || ((section === 'neon-dependency' || section === 'post-pistol-force' || section === 'stats-rank' || section === 'maps-masters' || section === 'series-outcomes') ? STATS_RANK_DEFAULT_TOURS : [])}
         onChange={(values) => updateMultiFilter('tour', values)}
         disabled={!isOverall && !isEconomy && !isRelevantInfo && !isStatsRank && !filterParams.get('team')}
       />

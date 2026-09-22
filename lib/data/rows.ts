@@ -28,6 +28,7 @@ export type RoundInfoRow = {
   map_id: string;
   map: string;
   round: number | string;
+  map_order: Num;
   side: string | null;
   winCon: string | null;
   teamA: string | null;
