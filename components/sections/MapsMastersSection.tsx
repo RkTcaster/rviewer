@@ -291,16 +291,16 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
           Select at least one team to see the maps...
         </div>
       ) : (
-      <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-x-auto">
+      <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-auto max-h-[85vh]">
         <table className="border-separate w-full" style={{ borderSpacing: '1px 2px' }}>
-          <thead className="bg-[#0f1115]">
+          <thead className="bg-[#0f1115] sticky top-0 z-20">
             <tr>
-              <th className="sticky left-0 z-10 bg-[#0f1115] border-b border-gray-800 w-8 text-center align-bottom pb-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+              <th className="sticky left-0 z-10 bg-[#0f1115] border-b border-gray-800 w-8 text-center align-bottom pb-2 text-[10px] font-bold uppercase tracking-widest text-gray-500" style={{ minWidth: 32 }}>
                 #
               </th>
               <th
-                className="sticky left-8 z-10 bg-[#0f1115] border-b border-r border-gray-800 px-5 text-left align-bottom pb-2 text-[10px] font-bold uppercase tracking-widest text-gray-500 whitespace-nowrap"
-                style={{ width: '1%' }}
+                className="sticky z-10 bg-[#0f1115] border-b border-r border-gray-800 px-5 text-left align-bottom pb-2 text-[10px] font-bold uppercase tracking-widest text-gray-500 whitespace-nowrap"
+                style={{ width: '1%', left: 'calc(2rem - 1px)' }}
               >
                 Team
               </th>
@@ -348,10 +348,10 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
           <tbody>
             {teams.map((team, rank) => (
               <tr key={team} className="hover:bg-[#252a33] transition-colors border-b border-gray-800">
-                <td className="sticky left-0 z-10 bg-[#1a1d23] w-8 text-center py-3 text-[11px] font-bold text-gray-600">
+                <td className="sticky left-0 z-10 bg-[#1a1d23] w-8 text-center py-3 text-[11px] font-bold text-gray-600" style={{ minWidth: 32 }}>
                   {rank + 1}
                 </td>
-                <td className="sticky left-8 z-10 bg-[#1a1d23] px-5 py-3 text-[11px] font-bold text-gray-300 border-r border-gray-800 whitespace-nowrap" style={{ width: '1%' }}>
+                <td className="sticky z-10 bg-[#1a1d23] px-5 py-3 text-[11px] font-bold text-gray-300 border-r border-gray-800 whitespace-nowrap" style={{ width: '1%', left: 'calc(2rem - 1px)' }}>
                   <div className="flex items-center gap-2">
                     {teamLogos[team] && (
                       <img src={teamLogos[team]} alt={team} className="w-5 h-5 object-contain shrink-0" />

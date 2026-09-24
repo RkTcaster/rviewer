@@ -442,9 +442,9 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
         </button>
       </div>
 
-      <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-x-auto">
+      <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-auto max-h-[85vh]">
         <table className="border-separate w-full" style={{ borderSpacing: '1px 2px' }}>
-          <thead className="bg-[#0f1115]">
+          <thead className="bg-[#0f1115] sticky top-0 z-20">
             <tr>
               <th className="sticky left-0 z-10 bg-[#0f1115] border-b border-gray-800 w-8 text-center align-bottom pb-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
                 #

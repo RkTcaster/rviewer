@@ -46,10 +46,13 @@ The test: Every changed line should trace directly to the user's request.
 
 **Define success criteria. Loop until verified.**
 
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
+Transform tasks into verifiable goals. This repo has no test runner, so the closing
+criteria are the ones in README.md and ROADMAP.md:
+- "Add a section" → "`npx tsc --noEmit` + `next build` clean, the section renders with
+  real data for the default tournament, and the numbers match a hand-counted case"
+- "Fix the bug" → "Reproduce it against the real data first, then show the same query
+  returning the corrected figure"
+- "Refactor X" → "Same output before and after, verified on real data"
 
 For multi-step tasks, state a brief plan:
 ```
