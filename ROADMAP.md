@@ -3,7 +3,7 @@
 Planning of improvements and features. Context: **personal** analysis/casting tool,
 used on desktop. Data depth is the priority; mobile and public polish come last.
 
-Last updated: 2026-09-11
+Last updated: 2026-09-24
 
 ---
 
@@ -178,6 +178,17 @@ Done when `grep` finds no Spanish comments left, at which point the README's con
 - **4.5 Color accessibility**: green/red as the only encoding doesn't work for colorblind users;
   pair it with font weight or a symbol.
 - **4.6 Responsive**: only if the tool ever goes public.
+
+## Phase 5 — Default tournaments from the DB
+
+- **5.1 Evaluate a boolean `default` column in `tournament`**: assess whether a `true/false` column
+  can replace the hardcoded `STATS_RANK_DEFAULT_TOURS` (`lib/types.ts`), so the default tournaments
+  are changed from the Supabase dashboard instead of a code edit + deploy (they change every few
+  weeks: the four Stage 2 + Champions 2026 as of sep 2026). Same pattern as the DB-driven default
+  hidden maps (`defaultHiddenMaps`). To evaluate before implementing: whether the CSV upload flow
+  (`scripts/upload.mjs`, `table_tournament.csv`) would overwrite the column, the cache TTL, and
+  collapsing the section list duplicated in `app/page.tsx`, `components/Filters.tsx` and
+  `components/Sidebar.tsx` into one place.
 
 ---
 

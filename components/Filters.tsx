@@ -276,7 +276,9 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
       <SearchableMultiSelect onClose={flush}
         label="Tournament"
         options={tours}
-        selected={filterParams.get('tour')?.split(',').filter(x => x !== "") || ((section === 'neon-dependency' || section === 'post-pistol-force' || section === 'stats-rank' || section === 'maps-masters' || section === 'series-outcomes') ? STATS_RANK_DEFAULT_TOURS : [])}
+        selected={(filterParams.get('tour')?.split(',').filter(x => x !== "") || ((section === 'neon-dependency' || section === 'post-pistol-force' || section === 'stats-rank' || section === 'maps-masters' || section === 'series-outcomes') ? STATS_RANK_DEFAULT_TOURS : []))
+          // Solo ids presentes en las opciones: con una región elegida los defaults de otras regiones no cuentan ni se arrastran a la URL
+          .filter(id => tours.some(t => t.tour_id === id))}
         onChange={(values) => updateMultiFilter('tour', values)}
         disabled={!isOverall && !isEconomy && !isRelevantInfo && !isStatsRank && !filterParams.get('team')}
       />

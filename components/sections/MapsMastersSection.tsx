@@ -108,7 +108,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
 
   function resetFilters() {
     setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
-    setHiddenMaps(new Set(maps.filter(m => m.toLowerCase() === 'bind')));
+    setHiddenMaps(new Set(maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase()))));
     setSortCol(null);
     setSortDir('desc');
     navigate('?section=maps-masters');

@@ -48,7 +48,7 @@ export type Tournament = {
   reg_id?: string;
 };
 
-// Tournaments preselected on the Neon + Phoenix tab: every regional Stage 2.
+// Tournaments preselected on the Overall table tabs: every regional Stage 2 plus Champions.
 // Read both by the server fetch (app/page.tsx) and by the Tournament filter chips
 // (components/Filters.tsx), so the two must stay in sync through this constant.
 export const STATS_RANK_DEFAULT_TOURS = [
@@ -56,6 +56,7 @@ export const STATS_RANK_DEFAULT_TOURS = [
   'vct_2026_emea_stage_2',
   'vct_2026_pacific_stage_2',
   'vct_2026_china_stage_2',
+  'valorant_champions_2026',
 ];
 
 // Equipos visibles por defecto en la tabla de Stats Rank y Neon + Phoenix
