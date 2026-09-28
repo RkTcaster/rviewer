@@ -864,6 +864,24 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
                           …
                         </span>
                       )}
+                      {/* Equipos que jugaron las comps que pasan el filtro (incluye las ocultas tras el "…") */}
+                      {compFilterActive && (() => {
+                        const byTeam: Record<string, number> = {};
+                        for (const c of comps) for (const t of c.teams ?? []) byTeam[t.team] = (byTeam[t.team] ?? 0) + t.played;
+                        const teams = Object.entries(byTeam).sort((a, b) => b[1] - a[1]);
+                        if (teams.length === 0) return null;
+                        return (
+                          <div className="mt-1 pt-1 border-t border-gray-800 text-[10px] text-gray-400 leading-tight">
+                            <span className="font-bold text-gray-500 uppercase tracking-wider">Teams: </span>
+                            {teams.map(([team, played], j) => (
+                              <span key={team}>
+                                {j > 0 && <span className="text-gray-600">, </span>}
+                                {team} <span className="text-gray-600">({played})</span>
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                     {/* Stats column (grouped view only) */}
                     {!single && mapFullStats[map] && (() => {
