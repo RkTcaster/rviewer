@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap, ListOrdered, Sparkles, Swords } from 'lucide-react';
 import { useNavigation, useFilterParams } from './NavigationContext';
+import { NewsButton } from './NewsButton';
+import type { NewsEntry } from '@/lib/news';
 
 const NAV_SECTIONS = [
   
@@ -44,11 +46,33 @@ const NAV_SECTIONS = [
   },
 ];
 
-export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) {
+export function Sidebar({ lastUpdateDate, news }: { lastUpdateDate?: string | null; news?: NewsEntry | null }) {
   const { commitParams } = useNavigation();
   const filterParams = useFilterParams();
   const currentSection = filterParams.get('section') || 'compare-maps';
   const [collapsed, setCollapsed] = useState(false);
+  const toggleTitle = `${collapsed ? 'Expandir' : 'Colapsar'} (Ctrl+B)`;
+
+  // El estado se recuerda en localStorage; se lee después de montar para no romper la hidratación.
+  useEffect(() => {
+    try { if (localStorage.getItem('sidebar-collapsed') === '1') setCollapsed(true); } catch {}
+  }, []);
+  const toggle = () => setCollapsed(c => {
+    try { localStorage.setItem('sidebar-collapsed', c ? '0' : '1'); } catch {}
+    return !c;
+  });
+
+  // Ctrl+B / Cmd+B alterna la barra
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toggle();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   function goToSection(section: string) {
     // Stats Rank y Maps Masters arrancan siempre con su configuración por defecto (sin filtros heredados)
@@ -80,21 +104,9 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
   return (
     <aside className={`${collapsed ? 'w-[60px]' : 'w-[220px]'} min-h-screen bg-[#0f1115] border-r border-gray-800 flex flex-col shrink-0 transition-all duration-200`}>
       <div className={collapsed ? 'p-3 pt-6 pb-4' : 'p-6 pb-4'}>
-        <div className="flex items-center justify-between">
-          {!collapsed && (
-            <h2 className="text-lg font-black tracking-widest uppercase text-gray-100">VCT Data</h2>
-          )}
-          <button
-            onClick={() => setCollapsed(c => !c)}
-            aria-label={collapsed ? 'Expandir' : 'Colapsar'}
-            title={collapsed ? 'Expandir' : 'Colapsar'}
-            className={`${collapsed ? 'mx-auto' : ''} p-1 rounded text-gray-400 hover:text-gray-200 hover:bg-[#1a1d23] transition-all`}
-          >
-            {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-          </button>
-        </div>
         {!collapsed && (
           <>
+            <h2 className="text-lg font-black tracking-widest uppercase text-gray-100">VCT Data</h2>
             <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">Analytics</p>
             {lastUpdateDate && (() => {
               const [y, m, d] = lastUpdateDate.split('T')[0].split('-');
@@ -102,6 +114,7 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
             })()}
           </>
         )}
+        {news && <NewsButton news={news} compact={collapsed} />}
       </div>
 
       <nav className="flex flex-col gap-4 px-3 mt-2">
@@ -166,6 +179,28 @@ export function Sidebar({ lastUpdateDate }: { lastUpdateDate?: string | null }) 
         </a>
       </div>
       )}
+
+      {/* Pestaña montada sobre el borde derecho, fija a media altura de la pantalla (la barra es más alta que el viewport) */}
+      <button
+        onClick={toggle}
+        aria-label={collapsed ? 'Expandir' : 'Colapsar'}
+        title={toggleTitle}
+        className={`fixed top-1/2 -translate-y-1/2 ${collapsed ? 'left-[48px]' : 'left-[208px]'} z-40 w-6 h-6 flex items-center justify-center rounded-full bg-[#1a1d23] border border-gray-700 text-gray-400 hover:text-gray-100 hover:border-blue-600 hover:bg-[#252a33] shadow-lg transition-all duration-200`}
+      >
+        {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+      </button>
+
+      {/* Segundo toggle, pegado al pie de la pantalla para no tener que volver arriba */}
+      <div className="sticky bottom-0 mt-auto p-3 border-t border-gray-800 bg-[#0f1115]">
+        <button
+          onClick={toggle}
+          aria-label={collapsed ? 'Expandir' : 'Colapsar'}
+          title={toggleTitle}
+          className={`w-full flex items-center rounded-lg py-2 text-xs font-semibold text-gray-400 hover:text-gray-200 hover:bg-[#1a1d23] transition-all ${collapsed ? 'justify-center' : 'gap-2 px-3'}`}
+        >
+          {collapsed ? <ChevronRight size={16} /> : <><ChevronLeft size={16} />Collapse</>}
+        </button>
+      </div>
     </aside>
   );
 }

@@ -1,6 +1,7 @@
 // app/page.tsx
 import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows, getSeriesOutcomes, emptySeriesOutcomes } from '@/lib/data-service';
 import { STATS_RANK_DEFAULT_TOURS, OverallMapFullStat, TeamRankStats } from '@/lib/types';
+import { getLatestNews } from '@/lib/news';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
 import { ContentOverlay } from '@/components/ContentOverlay';
@@ -125,7 +126,7 @@ export default async function Page({
     ? getAgentRoles()
     : Promise.resolve({});
 
-  const needsLogos = isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isMetaShift || isVetoPredictor || isSeriesOutcomes || section === 'compare-maps' || section === 'compare-stats';
+  const needsLogos = isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isMetaShift || isVetoPredictor || isSeriesOutcomes || section === 'compare-maps' || section === 'compare-stats' || isCompareEconomy;
   const teamLogosP = needsLogos ? getTeamLogos() : Promise.resolve({});
   const teamRegionsP = needsLogos ? getTeamRegions() : Promise.resolve({});
 
@@ -221,7 +222,7 @@ export default async function Page({
     mapImages, defaultHiddenMaps, agentImages, agentRoles, teamLogos, teamRegions, mapsMasters, neonDep, postPistolForce,
     mapFullStats, agentPickStatsLeft, agentPickStatsRight,
     playerStats, tournamentPlayerAvg, playerTimeline,
-    regions, teams, lastUpdateDate, teams2,
+    regions, teams, lastUpdateDate, news, teams2,
     econCompareA, econCompareB, economyBins, longestMaps, topPerformances,
     skirmishStats, simulationScenarios, tours, tours2, vetoFlows, formTimeline, vetoModel, seriesOutcomes,
   ] = await Promise.all([
@@ -230,7 +231,7 @@ export default async function Page({
     mapImagesP, defaultHiddenMapsP, agentImagesP, agentRolesP, teamLogosP, teamRegionsP, mapsMastersP, neonDepP, postPistolForceP,
     mapFullStatsP, agentPickStatsLeftP, agentPickStatsRightP,
     playerStatsP, tournamentPlayerAvgP, playerTimelineP,
-    getRegions(), getTeams(regArr), getLastUpdateDate(), teams2P,
+    getRegions(), getTeams(regArr), getLastUpdateDate(), getLatestNews(), teams2P,
     econCompareAP, econCompareBP, economyBinsP, longestMapsP, topPerformancesP,
     skirmishStatsP, simulationScenariosP, toursP, tours2P, vetoFlowsP, formTimelineP, vetoModelP, seriesOutcomesP,
   ]);
@@ -346,7 +347,7 @@ export default async function Page({
 
   return (
     <div className="flex min-h-screen bg-[#0f1115] text-gray-100">
-      <Sidebar lastUpdateDate={lastUpdateDate} />
+      <Sidebar lastUpdateDate={lastUpdateDate} news={news} />
       <div className="flex-1 flex flex-col min-w-0">
         <header className="p-8 pb-0">
           <h1 className="text-4xl font-bold text-gray-100">{{
@@ -410,6 +411,7 @@ export default async function Page({
                 tours={tours}
                 tours2={tours2}
                 teams2={teams2}
+                teamLogos={isCompare ? teamLogos : undefined}
                 mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : (isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isSeriesOutcomes) ? 'stats-rank' : 'team'}
               />
             </div>

@@ -13,10 +13,11 @@ interface FiltersProps {
   tours: Tournament[];
   tours2?: Tournament[];
   teams2?: string[];
+  teamLogos?: Record<string, string>;
   mode?: 'team' | 'overall' | 'meta-shift' | 'economy' | 'stats-rank';
 }
 
-export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode = 'team' }: FiltersProps) {
+export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamLogos, mode = 'team' }: FiltersProps) {
   const { commitParams, flush, hasPendingEdits } = useNavigation();
   const filterParams = useFilterParams();
   const section = filterParams.get('section') || 'compare-maps';
@@ -169,6 +170,32 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
 
   const isCompareStats = section === 'compare-stats' || section === 'compare-economy';
 
+  // Atajos de compare: toggles que pisan tour y tour2 con la unión de los torneos activos,
+  // buscados dentro de los torneos jugados por cada equipo (así Stage 2 cae en la región de
+  // cada uno). Si un equipo no jugó ninguno, su filtro queda vacío.
+  // logos: uno ocupa todo el chip; cuatro van en grilla 2x2 (como el toggle By region de Post-Pistol Force)
+  const quickTours: { label: string; title: string; logos: string[]; match: (id: string) => boolean }[] = [
+    { label: 'Champs', title: 'Champions 2026', logos: ['champs'], match: id => id === 'valorant_champions_2026' },
+    { label: 'Stage 2', title: 'Stage 2 2026 of each team region', logos: ['americas', 'emea', 'china', 'pacific'], match: id => /^vct_2026_.+_stage_2$/.test(id) },
+  ];
+  const selA = filterParams.get('tour')?.split(',').filter(Boolean) || [];
+  const selB = filterParams.get('tour2')?.split(',').filter(Boolean) || [];
+  const idsFor = (list: Tournament[], match: (id: string) => boolean) => list.filter(t => match(t.tour_id)).map(t => t.tour_id);
+  // Activo si matchea algo y todo lo que matchea ya está seleccionado en su lado.
+  const isQuickActive = (match: (id: string) => boolean) => {
+    const a = idsFor(tours, match), b = idsFor(tours2, match);
+    return a.length + b.length > 0 && a.every(id => selA.includes(id)) && b.every(id => selB.includes(id));
+  };
+  const toggleQuickTour = (label: string) => {
+    const active = quickTours.filter(q => (q.label === label) !== isQuickActive(q.match));
+    const params = new URLSearchParams(filterParams.toString());
+    const a = active.flatMap(q => idsFor(tours, q.match));
+    const b = active.flatMap(q => idsFor(tours2, q.match));
+    if (a.length > 0) params.set('tour', a.join(',')); else params.delete('tour');
+    if (b.length > 0) params.set('tour2', b.join(',')); else params.delete('tour2');
+    commitParams(params);
+  };
+
   return (
   <div className="flex flex-col gap-4 mb-8 bg-[#1a1d23] p-5 rounded-xl border border-gray-800 shadow-xl relative">
     <PendingBadge show={hasPendingEdits} className="top-3 right-4" />
@@ -182,6 +209,39 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
         selected={filterParams.get('reg')?.split(',').filter(Boolean) || []}
         onChange={(values) => updateRegFilter('reg', values)}
       />
+
+      {isCompare && (
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Quick Tournament</label>
+          <div className="flex flex-wrap gap-2">
+            {quickTours.map(q => {
+              const active = isQuickActive(q.match);
+              const imgTone = `object-contain transition-opacity ${active ? '' : 'opacity-40 grayscale'}`;
+              return (
+                <button
+                  key={q.label}
+                  disabled={!filterParams.get('team') && !filterParams.get('team2')}
+                  onClick={() => toggleQuickTour(q.label)}
+                  title={q.title}
+                  className={`w-[72px] flex flex-col items-center gap-1 px-2 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wide transition-colors border disabled:opacity-50 disabled:cursor-default ${active
+                    ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                    : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200 disabled:hover:border-gray-700 disabled:hover:text-gray-400'}`}
+                >
+                  {q.logos.length === 1
+                    ? <img src={`/region/${q.logos[0]}.png`} alt={q.title} className={`w-7 h-7 shrink-0 ${imgTone}`} />
+                    : (
+                      <div className="w-7 h-7 shrink-0 grid grid-cols-2 gap-0">
+                        {q.logos.map(l => <img key={l} src={`/region/${l}.png`} alt={l} className={`w-3.5 h-3.5 ${imgTone}`} />)}
+                      </div>
+                    )}
+                  <span>{q.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <span className="text-[10px] text-gray-500">First choose the teams</span>
+        </div>
+      )}
 
       {!isEconomy && (() => {
         // Sin filtro (o 'all') = ambos formatos: los dos chips activos.
@@ -265,11 +325,12 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
 
       {!isOverall && !isStatsRank && (
         <SearchableSelect onClose={flush}
-          label="Team"
+          label={section === 'compare-maps' ? 'Team Left' : 'Team'}
           options={teams}
           selected={filterParams.get('team') || ""}
           onChange={(val) => updateFilter('team', val)}
           placeholder="Choose a team"
+          logos={teamLogos}
         />
       )}
 
@@ -313,11 +374,12 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], mode 
       <div className="flex flex-wrap items-start gap-6 pt-3 border-t border-gray-800">
 
         <SearchableSelect onClose={flush}
-          label="Team B"
+          label={section === 'compare-maps' ? 'Team Right' : 'Team B'}
           options={teams}
           selected={filterParams.get('team2') || ''}
           onChange={(val) => updateFilter('team2', val)}
           placeholder="Choose Team B"
+          logos={teamLogos}
         />
 
         <SearchableMultiSelect onClose={flush}

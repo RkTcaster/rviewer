@@ -9,9 +9,11 @@ interface Props {
   onClose?: () => void;
   placeholder: string;
   label: string;
+  // Opcional: nombre de opción → ruta del logo, mostrado a la izquierda del texto
+  logos?: Record<string, string>;
 }
 
-export function SearchableSelect({ options, selected, onChange, onClose, placeholder, label }: Props) {
+export function SearchableSelect({ options, selected, onChange, onClose, placeholder, label, logos }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -41,7 +43,8 @@ export function SearchableSelect({ options, selected, onChange, onClose, placeho
       <div 
         onClick={() => { if (isOpen) close(); else setIsOpen(true); }}
         className="flex items-center justify-between border border-gray-700 p-2 rounded bg-[#252a33] text-gray-200 min-w-[140px] text-sm outline-none focus:ring-1 focus:ring-blue-600">
-        <span className={selected ? "text-gray-200 font-medium" : "text-gray-400"}>
+        <span className={`flex items-center gap-2 ${selected ? "text-gray-200 font-medium" : "text-gray-400"}`}>
+          {selected && logos?.[selected] && <img src={logos[selected]} alt="" className="w-5 h-5 object-contain shrink-0" />}
           {selected || placeholder}
         </span>
         <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -72,8 +75,9 @@ export function SearchableSelect({ options, selected, onChange, onClose, placeho
                 <div
                   key={opt}
                   onClick={() => { onChange(opt); setSearch(""); close(); }}
-                  className={`p-2 text-sm cursor-pointer hover:bg-blue-900 transition-colors ${selected === opt ? 'bg-blue-900 font-bold' : ''}`}
+                  className={`p-2 text-sm cursor-pointer hover:bg-blue-900 transition-colors flex items-center gap-2 ${selected === opt ? 'bg-blue-900 font-bold' : ''}`}
                 >
+                  {logos?.[opt] && <img src={logos[opt]} alt="" className="w-5 h-5 object-contain shrink-0" />}
                   {opt}
                 </div>
               ))
