@@ -3,7 +3,10 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeftRight, Info, Lock, RotateCcw, Undo2 } from 'lucide-react';
 import { Tooltip } from '@/components/Tooltip';
-import { buildSnapshot, knownTeam, stepProbabilities, vetoDistribution, SLOTS } from '@/lib/vetoPredict';
+import { buildSnapshot, enumerateSequences, knownTeam, stepProbabilities, vetoDistribution, SLOTS, SLOT_ACTOR } from '@/lib/vetoPredict';
+import type { TestMetrics } from '@/lib/vetoPredict';
+import { buildResultSnapshot, seriesPrediction, tripletsFromSequences, OUTCOMES } from '@/lib/resultPredict';
+import type { ResultModel, ResultSnapshot, SeriesPrediction } from '@/lib/resultPredict';
 import type { VetoModelRows } from '@/lib/data-service';
 
 interface Props {
@@ -26,19 +29,18 @@ const BAN_COLOR = '#f87171';
 const PICK_COLOR = '#60a5fa';
 const DECIDER_COLOR = '#9ca3af';
 
-// Veto order: who acts at each of the 7 slots (the decider has no actor)
-const SLOT_ACTOR: ('A' | 'B' | null)[] = ['A', 'B', 'A', 'B', 'A', 'B', null];
 const slotKind = (i: number) => (i === 6 ? 'Decider' : i === 2 || i === 3 ? 'Pick' : 'Ban');
 const slotColor = (i: number) => (i === 6 ? DECIDER_COLOR : i === 2 || i === 3 ? PICK_COLOR : BAN_COLOR);
 
-// Test metrics of the model (264 BO3 series since 2026-07-01), from the notebook report
-const ACCURACY: [string, string, string][] = [
-  ['Top-1 per step (given the real veto state)', '52%', '27%'],
-  ['Maps played (picks + decider), most likely veto', '58%', '43%'],
-  ['Decider, most likely veto', '22%', '14%'],
-  ['Bans and picks as sets', '3%', '1%'],
-  ['Exact 7-map sequence', '3%', '0.02%'],
+// Test metrics of the model, exported with the snapshot (veto_meta)
+const ACCURACY_ROWS: [string, keyof Omit<TestMetrics, 'since' | 'nSeries'>][] = [
+  ['Top-1 per step (given the real veto state)', 'top1Step'],
+  ['Maps played (picks + decider), most likely veto', 'played'],
+  ['Decider, most likely veto', 'decider'],
+  ['Bans and picks as sets', 'categories'],
+  ['Exact 7-map sequence', 'sequence'],
 ];
+const fmtAcc = (p: number) => `${(p * 100).toFixed(p < 0.01 ? 2 : 0)}%`;
 
 // Same palette as Maps Rank
 function heatmapBg(pct: number): string {
@@ -65,6 +67,22 @@ export function VetoPredictorSection({ model, teamLogos = {}, teamRegions = {}, 
   const dist = useMemo(
     () => (ready ? vetoDistribution(snap!, teamA, teamB, activePool, locked) : null),
     [ready, snap, teamA, teamB, activePool, locked]
+  );
+
+  // Win probability: result model averaged over every veto (vetoDistribution only keeps the top N)
+  const rs = useMemo(
+    () => (model && model.resultTeam.length > 0 ? buildResultSnapshot(model.resultTeam, model.resultTeamMap, model.resultMeta) : null),
+    [model]
+  );
+  const [resultModel, setResultModel] = useState<ResultModel | null>(null); // null = default model of the snapshot
+  const activeResultModel = resultModel ?? rs?.defaultModel ?? 'base';
+  const triplets = useMemo(
+    () => (ready && rs ? tripletsFromSequences(enumerateSequences(snap!, teamA, teamB, activePool, locked)) : null),
+    [ready, rs, snap, teamA, teamB, activePool, locked]
+  );
+  const prediction = useMemo(
+    () => (triplets ? seriesPrediction(rs!, activeResultModel, teamA, teamB, triplets) : null),
+    [triplets, rs, activeResultModel, teamA, teamB]
   );
 
   if (!snap) {
@@ -240,21 +258,27 @@ export function VetoPredictorSection({ model, teamLogos = {}, teamRegions = {}, 
             <Tooltip
               content={
                 <div className="flex flex-col gap-2 normal-case tracking-normal font-normal max-w-[380px]">
-                  <p className="text-xs text-gray-300">Accuracy on 264 unseen BO3 series (since 2026-07-01):</p>
-                  <table className="text-xs">
-                    <thead>
-                      <tr className="text-gray-500"><th className="text-left pr-3">Metric</th><th className="pr-3">Model</th><th>Random</th></tr>
-                    </thead>
-                    <tbody>
-                      {ACCURACY.map(([m, ours, random]) => (
-                        <tr key={m} className="text-gray-300">
-                          <td className="pr-3 py-0.5">{m}</td>
-                          <td className="pr-3 text-center font-bold">{ours}</td>
-                          <td className="text-center text-gray-500">{random}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  {snap.testMetrics && (
+                    <>
+                      <p className="text-xs text-gray-300">
+                        Accuracy on {snap.testMetrics.nSeries} unseen BO3 series (since {snap.testMetrics.since}):
+                      </p>
+                      <table className="text-xs">
+                        <thead>
+                          <tr className="text-gray-500"><th className="text-left pr-3">Metric</th><th className="pr-3">Model</th><th>Random</th></tr>
+                        </thead>
+                        <tbody>
+                          {ACCURACY_ROWS.map(([label, key]) => (
+                            <tr key={key} className="text-gray-300">
+                              <td className="pr-3 py-0.5">{label}</td>
+                              <td className="pr-3 text-center font-bold">{fmtAcc(snap.testMetrics![key].model)}</td>
+                              <td className="text-center text-gray-500">{fmtAcc(snap.testMetrics![key].chance)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </>
+                  )}
                   <p className="text-xs text-gray-400">
                     The map × slot heatmap is more reliable than the single most likely veto (there are 5040 possible vetos).
                     First bans are the most predictable; the decider is the weakest. BO3 only.
@@ -305,7 +329,7 @@ export function VetoPredictorSection({ model, teamLogos = {}, teamRegions = {}, 
                     style={{ borderColor: slotColor(i), borderStyle: isNext ? 'dashed' : 'solid' }}
                   >
                     <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: slotColor(i) }}>
-                      {slotKind(i)} {nameOf(SLOT_ACTOR[i])}
+                      {slotKind(i)} {nameOf(SLOT_ACTOR[SLOTS[i]])}
                     </span>
                     {mapImages[map] && <img src={mapImages[map]} alt={map} className="w-[90px] h-[50px] object-cover rounded" />}
                     <span className="flex items-center gap-1 text-sm font-bold text-gray-200">
@@ -321,7 +345,7 @@ export function VetoPredictorSection({ model, teamLogos = {}, teamRegions = {}, 
             {nextProbs.length > 0 && (
               <div className="flex flex-col gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
-                  Step {nextStep + 1}: {slotKind(nextStep)} {nameOf(SLOT_ACTOR[nextStep])} — choose the map
+                  Step {nextStep + 1}: {slotKind(nextStep)} {nameOf(SLOT_ACTOR[SLOTS[nextStep]])} — choose the map
                 </span>
                 <div className="flex flex-wrap gap-2">
                   {nextProbs.map(([map, p]) => (
@@ -349,7 +373,7 @@ export function VetoPredictorSection({ model, teamLogos = {}, teamRegions = {}, 
                   <th />
                   {SLOTS.map((slot, i) => (
                     <th key={slot} className="px-2 pb-2 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap" style={{ color: slotColor(i) }}>
-                      {slotKind(i)} {nameOf(SLOT_ACTOR[i])}
+                      {slotKind(i)} {nameOf(SLOT_ACTOR[SLOTS[i]])}
                     </th>
                   ))}
                 </tr>
@@ -380,6 +404,25 @@ export function VetoPredictorSection({ model, teamLogos = {}, teamRegions = {}, 
               </tbody>
             </table>
           </div>
+
+          {rs && prediction ? (
+            <WinProbabilityPanel
+              rs={rs}
+              prediction={prediction}
+              model={activeResultModel}
+              onModelChange={setResultModel}
+              teamA={teamA}
+              teamB={teamB}
+              // played maps of the most likely veto (follows the locks): pick A, pick B, decider
+              playedMaps={[2, 3, 6].map(i => ({ map: dist.mostLikely.maps[i], slot: i }))}
+              teamLogos={teamLogos}
+              mapImages={mapImages}
+            />
+          ) : (
+            <div className="p-6 text-center border-2 border-dashed rounded-2xl text-gray-400 text-sm">
+              No win probability data. Upload the result_* tables to Supabase.
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-6">
             {/* Top sequences */}
@@ -415,6 +458,140 @@ export function VetoPredictorSection({ model, teamLogos = {}, teamRegions = {}, 
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+const A_COLOR = '#60a5fa';
+const B_COLOR = '#fb923c';
+
+interface WinProbabilityProps {
+  rs: ResultSnapshot;
+  prediction: SeriesPrediction;
+  model: ResultModel;
+  onModelChange: (m: ResultModel) => void;
+  teamA: string;
+  teamB: string;
+  playedMaps: { map: string; slot: number }[];
+  teamLogos: Record<string, string>;
+  mapImages: Record<string, string>;
+}
+
+// Series and map win probability from the result model, always from team A's side
+function WinProbabilityPanel({ rs, prediction, model, onModelChange, teamA, teamB, playedMaps, teamLogos, mapImages }: WinProbabilityProps) {
+  const { pWin, outcomes, known } = prediction;
+  const metrics = rs.testMetrics;
+  const logo = (team: string) => teamLogos[team] && <img src={teamLogos[team]} alt={team} className="w-6 h-6 object-contain" />;
+  const outcomeLabel = (o: (typeof OUTCOMES)[number]) => {
+    const [a, b] = o.split('-').map(Number);
+    return a > b ? `${teamA} ${a}-${b}` : `${teamB} ${b}-${a}`;
+  };
+  // base: same strength on every map, so one row covers them all
+  const actorName = (slot: number) => {
+    const actor = SLOT_ACTOR[SLOTS[slot]];
+    return actor === 'A' ? teamA : actor === 'B' ? teamB : '';
+  };
+  const mapRows: { name: string; map: string; slot: number | null }[] = model === 'base'
+    ? [{ name: 'Any map', map: playedMaps[0].map, slot: null }]
+    : playedMaps.map(({ map, slot }) => ({ name: map, map, slot }));
+  const lineupNote = (isKnown: boolean, lineup: string[]) =>
+    isKnown
+      ? <span className="text-gray-300">{lineup.join(' · ')}</span>
+      : <span className="text-yellow-400">no data, using the average team</span>;
+
+  return (
+    <div className="bg-[#1a1d23] rounded-xl border border-gray-800 p-6 flex flex-col gap-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-sm font-bold uppercase tracking-widest text-gray-400">Win probability</h2>
+        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border border-yellow-700 text-yellow-400">
+          Experimental
+        </span>
+        <label className="ml-auto flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={model === 'map'}
+            onChange={e => onModelChange(e.target.checked ? 'map' : 'base')}
+            className="accent-blue-500"
+          />
+          Map-aware model (experimental)
+        </label>
+      </div>
+
+      {/* Series: split bar */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between text-sm font-bold">
+          <span className="flex items-center gap-2" style={{ color: A_COLOR }}>{logo(teamA)}{teamA} {fmt(pWin)}</span>
+          <span className="flex items-center gap-2" style={{ color: B_COLOR }}>{fmt(1 - pWin)} {teamB}{logo(teamB)}</span>
+        </div>
+        <div className="flex h-3 rounded-full overflow-hidden">
+          <div style={{ width: `${pWin * 100}%`, background: A_COLOR }} />
+          <div style={{ width: `${(1 - pWin) * 100}%`, background: B_COLOR }} />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-6">
+        {/* Series outcomes */}
+        <div className="flex flex-col gap-2 min-w-[260px] flex-1">
+          <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Series result</span>
+          {OUTCOMES.map(o => {
+            const color = o.startsWith('2') ? A_COLOR : B_COLOR;
+            return (
+              <div key={o} className="flex items-center gap-2 text-sm">
+                <span className="w-28 shrink-0 font-semibold text-gray-300">{outcomeLabel(o)}</span>
+                <div className="flex-1 h-2 rounded-full bg-[#0f1115] overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${outcomes[o] * 100}%`, background: color }} />
+                </div>
+                <span className="w-14 shrink-0 text-right font-bold text-gray-200">{fmt(outcomes[o])}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Per map */}
+        <div className="flex flex-col gap-2 min-w-[300px] flex-1">
+          <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+            {model === 'base' ? 'Per map' : 'Maps of the most likely veto'}
+          </span>
+          {mapRows.map(row => {
+            const mp = prediction.maps.get(row.map)!;
+            return (
+              <div key={row.name} className="flex items-center gap-3 text-sm">
+                {row.slot !== null && mapImages[row.map] && (
+                  <img src={mapImages[row.map]} alt={row.map} className="w-[40px] h-[28px] object-cover rounded" />
+                )}
+                <span className="flex-1 font-semibold text-gray-200">
+                  {row.name}
+                  {row.slot !== null && (
+                    <span className="ml-2 text-[10px] uppercase tracking-wide" style={{ color: slotColor(row.slot) }}>
+                      {slotKind(row.slot)} {actorName(row.slot)}
+                    </span>
+                  )}
+                </span>
+                <span className="font-bold" style={{ color: A_COLOR }}>{teamA} {fmt(mp.pWin)}</span>
+                <span className="w-24 text-right text-gray-400">likely {mp.mostLikelyScore[0]}-{mp.mostLikelyScore[1]}</span>
+              </div>
+            );
+          })}
+          {model === 'base' && (
+            <p className="text-xs text-gray-500">
+              The veto does not change this probability: map-specific strength did not improve predictions.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Lineups */}
+      <div className="flex flex-col gap-1 text-xs">
+        <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Lineup as of {rs.snapshotDate}</span>
+        <span><span className="font-bold" style={{ color: A_COLOR }}>{teamA}:</span> {lineupNote(known.a, prediction.teamA.lineup)}</span>
+        <span><span className="font-bold" style={{ color: B_COLOR }}>{teamB}:</span> {lineupNote(known.b, prediction.teamB.lineup)}</span>
+      </div>
+
+      <p className="text-xs text-gray-500">
+        Tested on {metrics.nMaps} maps since {metrics.since}: log loss {metrics[model].mapLogLoss.toFixed(3)} (Elo{' '}
+        {metrics.elo.mapLogLoss.toFixed(3)}, coin {metrics.coinLogLoss.toFixed(3)}). On that period no model, Elo included,
+        is meaningfully better than a coin flip: read these as rough estimates, not picks.
+      </p>
     </div>
   );
 }

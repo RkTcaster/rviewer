@@ -1,4 +1,4 @@
-// vetoPredict.ts — BO3 map veto predictor (conditional logit, "logit_turno_v1").
+// vetoPredict.ts — BO3 map veto predictor (conditional logit, "logit_turn_v1").
 //
 // Port of the Python model in map_veto_lightgbm.ipynb (section 9). No dependencies.
 // The snapshot (team×map stats, global map stats, coefficients) is exported by the notebook;
@@ -6,7 +6,7 @@
 // possible veto exactly (7! = 5040 sequences, 120 distinct states), optionally conditioned
 // on steps that already happened.
 //
-// Parity with Python is checked by parity.test.ts against export/veto_referencia.json.
+// Parity with Python is checked by parity.test.ts against export/veto_reference.json.
 // If the notebook's features change, regenerate the export and re-run that test.
 //
 // Usage:
@@ -27,11 +27,16 @@ const STEPS: { actor: 'A' | 'B'; isBan: boolean; secondBan: boolean }[] = [
   { actor: 'B', isBan: true, secondBan: true },
 ];
 
+/** Team that acts in each slot (null = decider, the leftover map). Derived from the veto order. */
+export const SLOT_ACTOR = Object.fromEntries(
+  SLOTS.map((s, i) => [s, STEPS[i]?.actor ?? null]),
+) as Record<Slot, 'A' | 'B' | null>;
+
 export const PRIOR_TEAM = '__prior__';
 
 const TEAM_STATS = ['ban_rate', 'pick_rate', 'fb_rate', 'winrate', 'played', 'rd_mean',
-  'es_permaban', 'wr_vs_propio', 'wr_vs_esperado'] as const;
-const MAP_STATS = ['ban_rate', 'pick_rate', 'ban_rate_60d', 'pick_rate_60d', 'series_en_pool'] as const;
+  'is_permaban', 'wr_vs_own', 'wr_vs_expected'] as const;
+const MAP_STATS = ['ban_rate', 'pick_rate', 'ban_rate_60d', 'pick_rate_60d', 'series_in_pool'] as const;
 
 type Num = number | string; // CSV / Supabase rows may come as strings
 
@@ -39,6 +44,19 @@ export type TeamMapRow = { team: string; map: string; n_series: Num } & Record<(
 export type MapRow = { map: string } & Record<(typeof MAP_STATS)[number], Num>;
 export type CoefRow = { feature: string; mu: Num; sg: Num; b_pick: Num; b_ban: Num; b_ban2: Num };
 export type MetaRow = { key: string; value: string };
+
+export interface TestMetric { model: number; chance: number }
+
+/** Held-out test metrics exported by the notebook, so the UI does not hardcode them. */
+export interface TestMetrics {
+  since: string;          // first date of the test period
+  nSeries: number;        // BO3 series in the test period
+  top1Step: TestMetric;   // right map at each step, given the real veto state
+  played: TestMetric;     // share of played maps (picks + decider) right, most likely veto
+  decider: TestMetric;    // decider right, most likely veto
+  categories: TestMetric; // bans and picks right as sets, most likely veto
+  sequence: TestMetric;   // all 7 maps in order, most likely veto
+}
 
 export interface VetoSnapshot {
   teamStats: Map<string, Map<string, Record<string, number>>>; // team -> map -> stat
@@ -48,6 +66,21 @@ export interface VetoSnapshot {
   snapshotDate: string;
   defaultPool: string[];
   model: string;
+  testMetrics: TestMetrics | null; // null for snapshots exported before the metrics existed
+}
+
+function parseTestMetrics(m: Record<string, string>): TestMetrics | null {
+  if (m.test_since === undefined) return null;
+  const metric = (k: string): TestMetric => ({ model: Number(m[`acc_${k}`]), chance: Number(m[`chance_${k}`]) });
+  return {
+    since: m.test_since,
+    nSeries: Number(m.n_series_test),
+    top1Step: metric('top1_step'),
+    played: metric('played'),
+    decider: metric('decider'),
+    categories: metric('categories'),
+    sequence: metric('sequence'),
+  };
 }
 
 export function buildSnapshot(teamMap: TeamMapRow[], maps: MapRow[], coef: CoefRow[], meta: MetaRow[]): VetoSnapshot {
@@ -78,6 +111,7 @@ export function buildSnapshot(teamMap: TeamMapRow[], maps: MapRow[], coef: CoefR
     teamStats, nSeries, mapStats, features,
     snapshotDate: m.snapshot_date, model: m.model,
     defaultPool: m.default_pool ? m.default_pool.split(',') : [],
+    testMetrics: parseTestMetrics(m),
   };
 }
 
