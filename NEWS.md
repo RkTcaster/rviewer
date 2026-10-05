@@ -7,10 +7,12 @@ Adding a new date brings back the unread dot.
 ## 2026-10-05
 - Player Stats: new Clutch% stat, each player's share of the clutches won by the team (overall only, vlr does not split clutches by side).
 - Player Stats: Clutch% cards with the team's share of the clutches won in its maps (team vs rivals) and the average of every team in the tournament.
+- Compare Maps: most likely veto between the two teams (same model as Veto Predictor), shown with the Add veto button next to Maps. The left team opens the veto; swap it with the button and lock real steps to recalculate. Each map in the table shows who bans or picks it (Ban 1 / Pick / Ban 2 / Decider) with the team logo and an arrow to its side.
 - Stats Rank: new Clutch Winrate column (clutches won by the team vs by its rivals in the same maps), with the W-L record in Detailed info.
 - Team logos in every Team selector and in the Exclude Teams lists.
 - Stats Rank, Maps Rank, Neon + Phoenix, Post-Pistol Force and Series Outcomes: the team panel folds into one line with the selected count; click Teams to open it (it remembers the choice). Team chips have the same size on every page.
 - Quick Tournament buttons (Champs / Stage 2) on every section. Outside Compare they start on, so pages open on Stage 2 + Champions; turn them off to see every tournament.
+- Compare Maps / Stats / Economy: Champs starts on for each team that played Champions; a team that didn't starts on all its tournaments.
 
 ## 2026-10-01
 - Veto Predictor: new Win probability panel (experimental) with the series winner, the 2-0 / 2-1 / 1-2 / 0-2 split, per-map win chance and likely score, and each team's current lineup.

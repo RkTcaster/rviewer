@@ -60,8 +60,12 @@ export const DEFAULT_TOURS = [
   'valorant_champions_2026',
 ];
 
-// Every section with a Tournament filter starts on DEFAULT_TOURS, except Compare, whose quick
-// tournament chips start off (each side's tours depend on the team picked there).
+// Compare starts each side on these tournaments, among the ones that side's team played; a team
+// that played none of them starts on all its tournaments.
+export const COMPARE_DEFAULT_TOURS = ['valorant_champions_2026'];
+
+// Every section with a Tournament filter starts on DEFAULT_TOURS, except Compare, which uses
+// COMPARE_DEFAULT_TOURS per side (each side's tours depend on the team picked there).
 export const sectionUsesDefaultTours = (section: string) =>
   section !== 'compare-maps' && section !== 'compare-stats' && section !== 'compare-economy';
 

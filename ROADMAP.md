@@ -26,8 +26,11 @@ Last updated: 2026-10-05
   Compare now show on every section with a Tournament filter, and the defaults are visible as chips
   that start active instead of a hidden preselection. Per section: the Stats Rank group, the team
   sections (once a team is picked; Stage 2 resolves to that team's region), Map/Agent Picks and
-  Meta Shift (both sides) start on `DEFAULT_TOURS` (renamed from `STATS_RANK_DEFAULT_TOURS`);
-  Compare keeps its chips off by default. `sectionUsesDefaultTours` (`lib/types.ts`) is the one
+  Meta Shift (both sides) start on `DEFAULT_TOURS` (renamed from `STATS_RANK_DEFAULT_TOURS`).
+  Compare (follow-up, same month) starts each side on `COMPARE_DEFAULT_TOURS` (Champions) only if
+  that side's team played it, otherwise on all its tournaments — so `app/page.tsx` awaits both
+  teams' `getTours` up front in Compare and reuses them for the Tournament selects. Since every
+  section now has defaults, an empty selection is always written as `tour=`. `sectionUsesDefaultTours` (`lib/types.ts`) is the one
   switch read by `app/page.tsx`, which resolves `tour`/`tour2` up front (replacing `effectiveTour`,
   so every fetch inherits it), and by `Filters.tsx`. A missing param means defaults; turning every
   chip off or clearing the Tournament select writes an explicit empty `tour=`, meaning all

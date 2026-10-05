@@ -1,7 +1,10 @@
 'use client';
 
 import { Fragment, useState } from 'react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { MapStat, MapCompositionStat } from '@/lib/types';
+import { CompareVetoPanel, slotColor, slotLabel, useCompareVeto } from '../CompareVetoPanel';
+import type { VetoModelCore } from '../CompareVetoPanel';
 
 interface Props {
   statsA: MapStat[];
@@ -16,6 +19,7 @@ interface Props {
   defaultHiddenMaps?: string[];
   draftOrderA: { a: number; b: number };
   draftOrderB: { a: number; b: number };
+  vetoModel?: VetoModelCore | null;
 }
 
 const EMPTY: MapStat = {
@@ -206,8 +210,15 @@ function CompCells({
   );
 }
 
-export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, teamAName, teamBName, teamLogos = {}, mapImages = {}, defaultHiddenMaps = [], draftOrderA, draftOrderB }: Props) {
+export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, teamAName, teamBName, teamLogos = {}, mapImages = {}, defaultHiddenMaps = [], draftOrderA, draftOrderB, vetoModel }: Props) {
   const [expandedMap, setExpandedMap] = useState<string | null>(null);
+
+  // Most likely veto Left vs Right (Left opens unless swapped); the table marks each map's slot.
+  // Hidden by default behind the "Add veto" toggle; while hidden nothing is computed.
+  const [showVeto, setShowVeto] = useState(false);
+  const veto = useCompareVeto(showVeto ? vetoModel : null, teamAName, teamBName);
+  const vetoSlotOf: Record<string, number> = {};
+  veto?.dist.mostLikely.maps.forEach((m, i) => { vetoSlotOf[m] = i; });
 
   // Build joined map index
   const mapIndex: Record<string, { a: MapStat | null; b: MapStat | null }> = {};
@@ -268,7 +279,22 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
         <div className="flex flex-col gap-4">
         {/* Map filter chips */}
         <div className="flex flex-col gap-2">
-          <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Maps</span>
+          <div className="flex items-center gap-3 px-1">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Maps</span>
+            {vetoModel && (
+              <button
+                onClick={() => setShowVeto(v => !v)}
+                title="Show the most likely veto between both teams and mark it in the table"
+                className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+                  showVeto
+                    ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                    : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                }`}
+              >
+                Add veto
+              </button>
+            )}
+          </div>
           <div className="flex flex-wrap gap-2 px-1">
             {allMaps.map(map => {
               const active = !hiddenMaps.has(map);
@@ -296,6 +322,8 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
             })}
           </div>
         </div>
+
+        {veto && <CompareVetoPanel veto={veto} teamLogos={teamLogos} mapImages={mapImages} />}
 
         <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800">
           <div>
@@ -431,6 +459,20 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
                             <span className="text-gray-500 text-[23px]">{isExpanded ? '▾' : '▸'}</span>
                             <span>{mapName}</span>
                           </div>
+                          {veto && vetoSlotOf[mapName] !== undefined && (() => {
+                            // Arrow and logo point to the column of the team that banned / picked it
+                            const i = vetoSlotOf[mapName];
+                            const side = veto.sideOf(i);
+                            const team = side === 'left' ? teamAName : side === 'right' ? teamBName : '';
+                            const logo = team && teamLogos[team] && <img src={teamLogos[team]} alt={team} className="w-4 h-4 object-contain shrink-0" />;
+                            return (
+                              <div className="flex items-center justify-center gap-1 mt-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: slotColor(i) }}>
+                                {side === 'left' && <><ArrowLeft className="w-3.5 h-3.5 shrink-0" />{logo}</>}
+                                <span>{slotLabel(i)}</span>
+                                {side === 'right' && <>{logo}<ArrowRight className="w-3.5 h-3.5 shrink-0" /></>}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Team B (mirrored) */}

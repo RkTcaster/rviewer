@@ -1,6 +1,6 @@
 // app/page.tsx
 import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows, getSeriesOutcomes, emptySeriesOutcomes } from '@/lib/data-service';
-import { DEFAULT_TOURS, sectionUsesDefaultTours, OverallMapFullStat, TeamRankStats } from '@/lib/types';
+import { DEFAULT_TOURS, COMPARE_DEFAULT_TOURS, sectionUsesDefaultTours, Tournament, OverallMapFullStat, TeamRankStats } from '@/lib/types';
 import { getLatestNews } from '@/lib/news';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
@@ -39,10 +39,16 @@ export default async function Page({
   const regArr = reg ? reg.split(',').filter(Boolean) : undefined;
   const reg2Arr = reg2 ? reg2.split(',').filter(Boolean) : undefined;
   // No `tour` param → DEFAULT_TOURS (tour2 too, only Meta Shift reads it outside Compare).
-  // An empty `tour=` means all tournaments.
+  // Compare: each side defaults to COMPARE_DEFAULT_TOURS among its team's tours, so those are
+  // fetched up front (and reused for the Tournament selects below). An empty `tour=` means all.
   const usesDefaultTours = sectionUsesDefaultTours(section);
-  const tour = (usesDefaultTours && tourParam === undefined) ? DEFAULT_TOURS.join(',') : tourParam;
-  const tour2 = (usesDefaultTours && tour2Param === undefined) ? DEFAULT_TOURS.join(',') : tour2Param;
+  const compareTours = usesDefaultTours ? null : await Promise.all([getTours(team, regArr), getTours(team2, regArr)]);
+  const compareDefault = (list: Tournament[]) => {
+    const ids = list.map(t => t.tour_id).filter(id => COMPARE_DEFAULT_TOURS.includes(id));
+    return ids.length > 0 ? ids.join(',') : undefined;
+  };
+  const tour = tourParam !== undefined ? tourParam : compareTours ? compareDefault(compareTours[0]) : DEFAULT_TOURS.join(',');
+  const tour2 = tour2Param !== undefined ? tour2Param : compareTours ? compareDefault(compareTours[1]) : DEFAULT_TOURS.join(',');
   const hasTour = (tour?.split(',').filter(Boolean).length ?? 0) > 0;
   const excludeTeamsA = excA ? excA.split(',') : [];
   const excludeTeamsB = excB ? excB.split(',') : [];
@@ -180,7 +186,7 @@ export default async function Page({
     ? getVetoFlows({ team, tour, bo, reg: regArr, last, dateFrom, dateTo })
     : Promise.resolve([]);
 
-  const vetoModelP = isVetoPredictor ? getVetoModelRows() : Promise.resolve(null);
+  const vetoModelP = (isVetoPredictor || section === 'compare-maps') ? getVetoModelRows() : Promise.resolve(null);
 
   const formTimelineP = (section === 'form' && team)
     ? getTeamFormTimeline({ team, tour, bo, reg: regArr, last, dateFrom, dateTo })
@@ -212,9 +218,10 @@ export default async function Page({
   const simulationScenariosP = isPlayoffPct ? getSimulationScenarios() : Promise.resolve([]);
 
   // Tours source differs by context
-  const toursP = (isOverall || isMetaShift || isEconomy || isRelevantInfo || isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isSeriesOutcomes) ? getAllTours(regArr) : getTours(team, regArr);
-  const tours2P = isCompare
-    ? getTours(team2, regArr)
+  const toursP = (isOverall || isMetaShift || isEconomy || isRelevantInfo || isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isSeriesOutcomes) ? getAllTours(regArr)
+    : compareTours ? Promise.resolve(compareTours[0]) : getTours(team, regArr);
+  const tours2P = compareTours
+    ? Promise.resolve(compareTours[1])
     : isMetaShift
       ? (team2 ? getTours(team2, reg2Arr) : getAllTours(reg2Arr))
       : Promise.resolve([]);
@@ -322,6 +329,8 @@ export default async function Page({
             defaultHiddenMaps={defaultHiddenMaps}
             draftOrderA={draftOrder}
             draftOrderB={resultB?.draftOrder || { a: 0, b: 0 }}
+            // Only the veto tables travel to the client; the result_* ones are Veto Predictor's
+            vetoModel={vetoModel && { teamMap: vetoModel.teamMap, maps: vetoModel.maps, coef: vetoModel.coef, meta: vetoModel.meta }}
           />
         );
       case 'compare-stats':

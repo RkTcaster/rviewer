@@ -1,5 +1,5 @@
 "use client";
-import { Region, Tournament, DEFAULT_TOURS, sectionUsesDefaultTours } from '@/lib/types';
+import { Region, Tournament, DEFAULT_TOURS, COMPARE_DEFAULT_TOURS, sectionUsesDefaultTours } from '@/lib/types';
 import { useNavigation, useFilterParams } from './NavigationContext';
 import { MultiSelect } from "./MultiSelect";
 import { SearchableSelect } from "./SearchableSelect";
@@ -67,7 +67,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
     const params = new URLSearchParams(filterParams.toString());
     if (values.length > 0) {
       params.set(key, values.join(',')); // Guardamos como "id1,id2,id3"
-    } else if (usesDefaultTours && (key === 'tour' || key === 'tour2')) {
+    } else if (key === 'tour' || key === 'tour2') {
       params.set(key, ''); // explicit "all tournaments": a missing param would bring the defaults back
     } else {
       params.delete(key);
@@ -86,7 +86,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
   // Without a param the section is on DEFAULT_TOURS (see app/page.tsx), so the chips read those
   const tourSel = (key: 'tour' | 'tour2') => {
     const v = filterParams.get(key);
-    return v !== null ? v.split(',').filter(Boolean) : usesDefaultTours ? DEFAULT_TOURS : [];
+    return v !== null ? v.split(',').filter(Boolean) : usesDefaultTours ? DEFAULT_TOURS : COMPARE_DEFAULT_TOURS;
   };
   const selA = tourSel('tour');
   const selB = tourSel('tour2');
@@ -100,9 +100,8 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
     const active = quickTours.filter(q => (q.label === label) !== isQuickActive(q.match));
     const params = new URLSearchParams(filterParams.toString());
     const setOrClear = (key: 'tour' | 'tour2', ids: string[]) => {
-      if (ids.length > 0) params.set(key, ids.join(','));
-      else if (usesDefaultTours) params.set(key, '');
-      else params.delete(key);
+      // Empty is written as `tour=` (all): a missing param would bring the defaults back
+      params.set(key, ids.join(','));
     };
     setOrClear('tour', active.flatMap(q => idsFor(tours, q.match)));
     // tour2 only exists in Compare and Meta Shift
@@ -420,7 +419,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
         <SearchableMultiSelect onClose={flush}
           label="Tournament (B)"
           options={tours2}
-          selected={filterParams.get('tour2')?.split(',').filter(x => x !== '') || []}
+          selected={selB.filter(id => tours2.some(t => t.tour_id === id))}
           onChange={(values) => updateMultiFilter('tour2', values)}
           disabled={!filterParams.get('team2')}
         />
