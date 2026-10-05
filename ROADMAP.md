@@ -9,6 +9,19 @@ Last updated: 2026-10-05
 
 ## ✅ Done
 
+- **6.3 Collapsible team panel + one chip size** (oct 2026): the team-chip panel was copied in five
+  sections (Stats Rank, Maps Rank, Neon + Phoenix, Post-Pistol Force, Series Outcomes) with three
+  chip sizes and small drifts (Maps Rank had no region bulk toggle nor hint). It is now one
+  `components/TeamChipsPanel.tsx`: region rows with the logo as bulk toggle, Add all / Clear, a
+  `headerExtra` slot (Series Outcomes keeps Legend + Reset there), and a collapsible body whose
+  header reads "N / M selected". It starts collapsed; open/closed is a per-viewer preference in
+  localStorage shared by the five pages, read through `useSyncExternalStore` (server snapshot =
+  collapsed) instead of a setState-in-effect. The chip standard is the compact one (58px, 20px logo,
+  12.8px text). The selection model is untouched — still the URL-backed `teams=` from 3.6. Of the
+  options considered (hide from the table row, a logo dropdown, presets) only the collapsible panel
+  was built. Verified on the built app: the five pages render collapsed with "16 / M selected" by
+  default and a `?teams=G2,FNC` link reads "2 / 62".
+
 - **6.2 Default tournaments → quick tournament chips** (oct 2026): the Champs / Stage 2 chips from
   Compare now show on every section with a Tournament filter, and the defaults are visible as chips
   that start active instead of a hidden preselection. Per section: the Stats Rank group, the team
@@ -217,12 +230,8 @@ Done when `grep` finds no Spanish comments left, at which point the README's con
 - **6.1 Team logos in the remaining selects**: done (see Done, oct 2026).
 - **6.2 Default tournaments → quick tournament chips**: done (see Done, oct 2026). Still relevant
   for 5.1: a DB-driven default would now decide which chips start active.
-- **6.3 Hiding teams in table pages like Stats Rank**: look for ways to hide teams quickly in
-  Stats Rank and similar pages (Maps Rank, Neon + Phoenix). Today the only control is the team-chip
-  panel grouped by region, which takes a lot of vertical space above the table. Options to evaluate:
-  collapsing the chip panel, hiding a team directly from its table row (e.g. a click/× on the row,
-  with a way to bring hidden teams back), or saved team presets. Whatever is chosen should keep the
-  URL-backed `teams=` shape from 3.6.
+- **6.3 Hiding teams in table pages like Stats Rank**: done (see Done, oct 2026) as a collapsible
+  panel. Still open if the need comes back: hiding a team from its table row, or saved presets.
 
 ---
 

@@ -6,6 +6,7 @@ import { DuoMapStat, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { Tooltip } from '../Tooltip';
 import { useUrlSet } from '@/hooks/useUrlSet';
+import { TeamChipsPanel } from '../TeamChipsPanel';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer } from 'recharts';
 
 interface Props {
@@ -209,32 +210,10 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
   const hiddenTeams = new Set(allTeams.filter(t => !selectedTeams.has(t)));
 
   const baseTeams = allTeams.filter(t => !hiddenTeams.has(t));
-  const allTeamsSelected = hiddenTeams.size === 0;
 
   // Mapas ocultos: por defecto los que están fuera de rotación, espejados en la URL (`hideMaps`).
   const [hiddenMaps, setHiddenMaps] = useUrlSet('hideMaps', maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase())));
   const visibleMaps = maps.filter(m => !hiddenMaps.has(m));
-
-  function toggleTeam(team: string) {
-    setSelectedTeams(prev => {
-      const next = new Set(prev);
-      if (next.has(team)) next.delete(team); else next.add(team);
-      return next;
-    });
-  }
-
-  // Region logo acts as a bulk toggle for its row: clears the whole region when every team in
-  // it is already on, otherwise turns them all on.
-  function toggleRegionTeams(rowTeams: string[]) {
-    setSelectedTeams(prev => {
-      const next = new Set(prev);
-      const allSelected = rowTeams.every(t => next.has(t));
-      for (const t of rowTeams) {
-        if (allSelected) next.delete(t); else next.add(t);
-      }
-      return next;
-    });
-  }
 
   function toggleMap(map: string) {
     setHiddenMaps(prev => {
@@ -300,31 +279,6 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
 
       {/* Filtros: equipos (por región) a la izquierda + mapas a la derecha */}
       {(() => {
-        const renderTeamChip = (team: string) => {
-          const active = !hiddenTeams.has(team);
-          const logo = teamLogos[team];
-          return (
-            <button
-              key={team}
-              onClick={() => toggleTeam(team)}
-              className={`w-[58px] flex flex-col items-center gap-1 px-1.5 py-1.5 rounded-lg text-[12.8px] font-bold uppercase tracking-wide transition-colors border ${
-                active
-                  ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
-                  : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
-              }`}
-            >
-              {logo && (
-                <img
-                  src={logo}
-                  alt={team}
-                  className={`w-5 h-5 object-contain shrink-0 transition-opacity ${active ? '' : 'opacity-40 grayscale'}`}
-                />
-              )}
-              <span className={active ? '' : 'line-through'}>{team}</span>
-            </button>
-          );
-        };
-
         const renderMapChip = (map: string) => {
           const active = !hiddenMaps.has(map);
           const img = mapImages[map];
@@ -350,60 +304,15 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
           );
         };
 
-        const knownRegions = new Set(REGION_ROWS.map(r => r.id));
-        const rows: { label: string; logo: string | null; teams: string[] }[] = REGION_ROWS.map(r => ({
-          label: r.label,
-          logo: `/region/${r.label.toLowerCase()}.png`,
-          teams: allTeams.filter(t => teamRegions[t] === r.id),
-        }));
-        const otherTeams = allTeams.filter(t => !knownRegions.has(teamRegions[t]));
-        if (otherTeams.length > 0) rows.push({ label: 'Other', logo: null, teams: otherTeams });
-        const visibleRows = rows.filter(row => row.teams.length > 0);
-
         return (
           <div className="flex flex-wrap gap-x-10 gap-y-4">
-            {/* Teams — columna izquierda */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-3 px-1">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Teams</span>
-                <button
-                  onClick={() => setSelectedTeams(allTeamsSelected ? new Set() : new Set(allTeams))}
-                  className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200"
-                >
-                  {allTeamsSelected ? 'Clear' : 'Add all'}
-                </button>
-                <span className="text-[10px] text-gray-600">
-                  Click a region logo to add / remove all teams from that region
-                </span>
-              </div>
-              <div className="flex flex-col gap-2 px-1">
-                {visibleRows.map(row => (
-                  <div key={row.label} className="flex items-center gap-3">
-                    {(() => {
-                      // The logo replaces the name; 'Other' has no logo and falls back to text.
-                      // Dimmed like an inactive chip when no team of the row is selected.
-                      const anyVisible = row.teams.some(t => !hiddenTeams.has(t));
-                      return (
-                        <button
-                          onClick={() => toggleRegionTeams(row.teams)}
-                          title={`${row.label} — select / clear the whole region`}
-                          className={`w-12 shrink-0 flex items-center justify-start text-[10px] font-bold uppercase tracking-widest transition-opacity hover:opacity-100 ${
-                            anyVisible ? 'text-gray-400' : 'text-gray-600 opacity-50'
-                          }`}
-                        >
-                          {row.logo
-                            ? <img src={row.logo} alt={row.label} className={`w-[30px] h-[30px] object-contain shrink-0 transition-all ${anyVisible ? '' : 'grayscale'}`} />
-                            : row.label}
-                        </button>
-                      );
-                    })()}
-                    <div className="flex flex-wrap gap-2">
-                      {row.teams.map(renderTeamChip)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <TeamChipsPanel
+              allTeams={allTeams}
+              selectedTeams={selectedTeams}
+              setSelectedTeams={setSelectedTeams}
+              teamLogos={teamLogos}
+              teamRegions={teamRegions}
+            />
 
             {/* Maps */}
             <div className="flex flex-col gap-2">

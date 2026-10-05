@@ -7,6 +7,7 @@ import { useNavigation } from '../NavigationContext';
 import { Tooltip } from '../Tooltip';
 import { KPICard } from '../KPICard';
 import { useUrlSet } from '@/hooks/useUrlSet';
+import { TeamChipsPanel } from '../TeamChipsPanel';
 
 interface Props {
   data: SeriesOutcomesData;
@@ -176,7 +177,6 @@ export function SeriesOutcomesSection({ data, teamLogos = {}, teamRegions = {} }
   const allTeams = Object.keys(data.teams).sort();
   const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
   const baseTeams = allTeams.filter(t => selectedTeams.has(t));
-  const allTeamsSelected = baseTeams.length === allTeams.length;
 
   if (allTeams.length === 0) {
     return (
@@ -187,25 +187,6 @@ export function SeriesOutcomesSection({ data, teamLogos = {}, teamRegions = {} }
   }
 
   const teamStat = (team: string) => data.teams[team] ?? sumStats([]);
-
-  function toggleTeam(team: string) {
-    setSelectedTeams(prev => {
-      const next = new Set(prev);
-      if (next.has(team)) next.delete(team); else next.add(team);
-      return next;
-    });
-  }
-
-  function toggleRegionTeams(rowTeams: string[]) {
-    setSelectedTeams(prev => {
-      const next = new Set(prev);
-      const allSelected = rowTeams.every(t => next.has(t));
-      for (const t of rowTeams) {
-        if (allSelected) next.delete(t); else next.add(t);
-      }
-      return next;
-    });
-  }
 
   function resetFilters() {
     setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
@@ -227,15 +208,6 @@ export function SeriesOutcomesSection({ data, teamLogos = {}, teamRegions = {} }
     if (vb === null) return -1;
     return sortDir === 'asc' ? va - vb : vb - va;
   });
-
-  const knownRegions = new Set(REGION_ROWS.map(r => r.id));
-  const chipRows: { label: string; logo: string | null; teams: string[] }[] = REGION_ROWS.map(r => ({
-    label: r.label,
-    logo: `/region/${r.label.toLowerCase()}.png`,
-    teams: allTeams.filter(t => teamRegions[t] === r.id),
-  }));
-  const otherTeams = allTeams.filter(t => !knownRegions.has(teamRegions[t]));
-  if (otherTeams.length > 0) chipRows.push({ label: 'Other', logo: null, teams: otherTeams });
 
   // Circuit-wide, counted per series (not by summing teams), so it ignores the chips
   const g = data.global;
@@ -259,16 +231,13 @@ export function SeriesOutcomesSection({ data, teamLogos = {}, teamRegions = {} }
         <KPICard title="Overtime maps" label={`${g.otMaps} of ${g.maps} · all formats`} value={kpiPct(g.otMaps, g.maps)} />
       </div>
 
-      {/* Teams by region */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-3 px-1">
-          <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Teams</span>
-          <button
-            onClick={() => setSelectedTeams(allTeamsSelected ? new Set() : new Set(allTeams))}
-            className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200"
-          >
-            {allTeamsSelected ? 'Clear' : 'Add all'}
-          </button>
+      <TeamChipsPanel
+        allTeams={allTeams}
+        selectedTeams={selectedTeams}
+        setSelectedTeams={setSelectedTeams}
+        teamLogos={teamLogos}
+        teamRegions={teamRegions}
+        headerExtra={<>
           <Tooltip content={LEGEND} className="items-center">
             <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-gray-200 hover:text-white transition-colors cursor-help">
               <Info className="w-3.5 h-3.5 shrink-0" />
@@ -281,53 +250,8 @@ export function SeriesOutcomesSection({ data, teamLogos = {}, teamRegions = {} }
           >
             Reset filters
           </button>
-          <span className="text-[10px] text-gray-600">
-            Click a region logo to add / remove all teams from that region
-          </span>
-        </div>
-        <div className="flex flex-col gap-2 px-1">
-          {chipRows.filter(row => row.teams.length > 0).map(row => {
-            const anyVisible = row.teams.some(t => selectedTeams.has(t));
-            return (
-              <div key={row.label} className="flex items-center gap-3">
-                <button
-                  onClick={() => toggleRegionTeams(row.teams)}
-                  title={`${row.label} — select / clear the whole region`}
-                  className={`w-12 shrink-0 flex items-center justify-start text-[10px] font-bold uppercase tracking-widest transition-opacity hover:opacity-100 ${
-                    anyVisible ? 'text-gray-400' : 'text-gray-600 opacity-50'
-                  }`}
-                >
-                  {row.logo
-                    ? <img src={row.logo} alt={row.label} className={`w-[30px] h-[30px] object-contain shrink-0 transition-all ${anyVisible ? '' : 'grayscale'}`} />
-                    : row.label}
-                </button>
-                <div className="flex flex-wrap gap-2">
-                  {row.teams.map(team => {
-                    const active = selectedTeams.has(team);
-                    const logo = teamLogos[team];
-                    return (
-                      <button
-                        key={team}
-                        onClick={() => toggleTeam(team)}
-                        className={`w-[58px] flex flex-col items-center gap-1 px-1.5 py-1.5 rounded-lg text-[12.8px] font-bold uppercase tracking-wide transition-colors border ${
-                          active
-                            ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
-                            : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
-                        }`}
-                      >
-                        {logo && (
-                          <img src={logo} alt={team} className={`w-5 h-5 object-contain shrink-0 transition-opacity ${active ? '' : 'opacity-40 grayscale'}`} />
-                        )}
-                        <span className={active ? '' : 'line-through'}>{team}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+        </>}
+      />
 
       <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-x-auto">
         <table className="w-full min-w-[1230px] table-fixed border-collapse">

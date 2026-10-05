@@ -9,6 +9,7 @@ Adding a new date brings back the unread dot.
 - Player Stats: Clutch% cards with the team's share of the clutches won in its maps (team vs rivals) and the average of every team in the tournament.
 - Stats Rank: new Clutch Winrate column (clutches won by the team vs by its rivals in the same maps), with the W-L record in Detailed info.
 - Team logos in every Team selector and in the Exclude Teams lists.
+- Stats Rank, Maps Rank, Neon + Phoenix, Post-Pistol Force and Series Outcomes: the team panel folds into one line with the selected count; click Teams to open it (it remembers the choice). Team chips have the same size on every page.
 - Quick Tournament buttons (Champs / Stage 2) on every section. Outside Compare they start on, so pages open on Stage 2 + Champions; turn them off to see every tournament.
 
 ## 2026-10-01

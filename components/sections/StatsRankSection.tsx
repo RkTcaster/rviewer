@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { TeamRankStats, TeamEconomyCompare, EconomyCategoryStats, EconomyMatchup, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { useUrlSet } from '@/hooks/useUrlSet';
+import { TeamChipsPanel } from '../TeamChipsPanel';
 
 interface Props {
   rankings: Record<string, TeamRankStats>;
@@ -39,13 +40,6 @@ function ecoMatchup(economy: Record<string, TeamEconomyCompare>, team: string, c
 function ecoValue(m: EconomyMatchup | undefined): number | null {
   return m && m.played > 0 ? Math.round((m.wins / m.played) * 100) : null;
 }
-
-const REGION_ROWS: { id: string; label: string }[] = [
-  { id: 'reg_0', label: 'Americas' },
-  { id: 'reg_1', label: 'EMEA' },
-  { id: 'reg_2', label: 'China' },
-  { id: 'reg_3', label: 'Pacific' },
-];
 
 function pct(wins: number, total: number): number | null {
   return total > 0 ? Math.round((wins / total) * 100) : null;
@@ -115,27 +109,6 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(
     () => new Set(ECO_CATEGORIES.map(c => c.key))
   );
-
-  function toggleTeam(team: string) {
-    setSelectedTeams(prev => {
-      const next = new Set(prev);
-      if (next.has(team)) next.delete(team); else next.add(team);
-      return next;
-    });
-  }
-
-  // Region logo acts as a bulk toggle for its row: clears the whole region when every team in
-  // it is already selected, otherwise adds them all.
-  function toggleRegionTeams(rowTeams: string[]) {
-    setSelectedTeams(prev => {
-      const next = new Set(prev);
-      const allSelected = rowTeams.every(t => next.has(t));
-      for (const t of rowTeams) {
-        if (allSelected) next.delete(t); else next.add(t);
-      }
-      return next;
-    });
-  }
 
   function toggleGroup(id: string) {
     setHiddenGroups(prev => {
@@ -217,92 +190,17 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
     }
   }
 
-  // El botón alterna entre agregar todos los equipos del torneo y limpiar la selección
-  const allTeamsSelected = allTeams.every(t => selectedTeams.has(t));
 
   return (
     <div className="flex flex-col gap-4">
 
-    {/* Teams subtitle */}
-    <div className="flex items-center gap-3 px-1">
-      <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Teams</span>
-      <button
-        onClick={() => setSelectedTeams(allTeamsSelected ? new Set() : new Set(allTeams))}
-        className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200"
-      >
-        {allTeamsSelected ? 'Clear' : 'Add all'}
-      </button>
-      <span className="text-[10px] text-gray-600">
-        Click a region logo to add / remove all teams from that region
-      </span>
-    </div>
-
-    {/* Team filter chips — one row per region */}
-    {(() => {
-      const renderChip = (team: string) => {
-        const active = selectedTeams.has(team);
-        const logo = teamLogos[team];
-        return (
-          <button
-            key={team}
-            onClick={() => toggleTeam(team)}
-            className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl text-[16px] font-bold uppercase tracking-wide transition-colors border ${
-              active
-                ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
-                : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
-            }`}
-          >
-            {logo && (
-              <img
-                src={logo}
-                alt={team}
-                className={`w-6 h-6 object-contain shrink-0 transition-opacity ${active ? '' : 'opacity-40 grayscale'}`}
-              />
-            )}
-            <span className={active ? '' : 'line-through'}>{team}</span>
-          </button>
-        );
-      };
-
-      const knownRegions = new Set(REGION_ROWS.map(r => r.id));
-      const rows: { label: string; logo: string | null; teams: string[] }[] = REGION_ROWS.map(r => ({
-        label: r.label,
-        logo: `/region/${r.label.toLowerCase()}.png`,
-        teams: allTeams.filter(t => teamRegions[t] === r.id),
-      }));
-      const otherTeams = allTeams.filter(t => !knownRegions.has(teamRegions[t]));
-      if (otherTeams.length > 0) rows.push({ label: 'Other', logo: null, teams: otherTeams });
-
-      return (
-        <div className="flex flex-col gap-2 px-1">
-          {rows.filter(row => row.teams.length > 0).map(row => (
-            <div key={row.label} className="flex items-center gap-3">
-              {(() => {
-                // The logo replaces the name; 'Other' has no logo and falls back to text.
-                // Dimmed like an inactive chip when no team of the row is selected.
-                const anySelected = row.teams.some(t => selectedTeams.has(t));
-                return (
-                  <button
-                    onClick={() => toggleRegionTeams(row.teams)}
-                    title={`${row.label} — select / clear the whole region`}
-                    className={`w-12 shrink-0 flex items-center justify-start text-[10px] font-bold uppercase tracking-widest transition-opacity hover:opacity-100 ${
-                      anySelected ? 'text-gray-400' : 'text-gray-600 opacity-50'
-                    }`}
-                  >
-                    {row.logo
-                      ? <img src={row.logo} alt={row.label} className={`w-[30px] h-[30px] object-contain shrink-0 transition-all ${anySelected ? '' : 'grayscale'}`} />
-                      : row.label}
-                  </button>
-                );
-              })()}
-              <div className="flex flex-wrap gap-2">
-                {row.teams.map(renderChip)}
-              </div>
-            </div>
-          ))}
-        </div>
-      );
-    })()}
+    <TeamChipsPanel
+      allTeams={allTeams}
+      selectedTeams={selectedTeams}
+      setSelectedTeams={setSelectedTeams}
+      teamLogos={teamLogos}
+      teamRegions={teamRegions}
+    />
 
     {/* Table info subtitle + group filter chips */}
     <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Table info</span>

@@ -5,6 +5,7 @@ import { Check, Minus, X } from 'lucide-react';
 import { MapWL, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { useUrlSet } from '@/hooks/useUrlSet';
+import { TeamChipsPanel } from '../TeamChipsPanel';
 
 interface Props {
   stats: Record<string, Record<string, MapWL>>;
@@ -15,13 +16,6 @@ interface Props {
   hasTour?: boolean;
   defaultHiddenMaps?: string[];
 }
-
-const REGION_ROWS: { id: string; label: string }[] = [
-  { id: 'reg_0', label: 'Americas' },
-  { id: 'reg_1', label: 'EMEA' },
-  { id: 'reg_2', label: 'China' },
-  { id: 'reg_3', label: 'Pacific' },
-];
 
 const OVERALL_COL = -1;
 
@@ -89,14 +83,6 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
   const [hiddenMaps, setHiddenMaps] = useUrlSet('hideMaps', maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase())));
   const visibleMaps = maps.filter(m => !hiddenMaps.has(m));
 
-  function toggleTeam(team: string) {
-    setSelectedTeams(prev => {
-      const next = new Set(prev);
-      if (next.has(team)) next.delete(team); else next.add(team);
-      return next;
-    });
-  }
-
   function toggleMap(map: string) {
     setHiddenMaps(prev => {
       const next = new Set(prev);
@@ -157,39 +143,12 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
     }
   }
 
-  // El botón alterna entre agregar todos los equipos del torneo y limpiar la selección
-  const allTeamsSelected = allTeams.every(t => selectedTeams.has(t));
 
   return (
     <div className="flex flex-col gap-4">
 
       {/* Filtros: equipos (2 columnas) a la izquierda + mapas a la derecha */}
       {(() => {
-        const renderTeamChip = (team: string) => {
-          const active = selectedTeams.has(team);
-          const logo = teamLogos[team];
-          return (
-            <button
-              key={team}
-              onClick={() => toggleTeam(team)}
-              className={`w-[72px] flex flex-col items-center gap-1.5 px-2 py-2 rounded-xl text-[16px] font-bold uppercase tracking-wide transition-colors border ${
-                active
-                  ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
-                  : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
-              }`}
-            >
-              {logo && (
-                <img
-                  src={logo}
-                  alt={team}
-                  className={`w-6 h-6 object-contain shrink-0 transition-opacity ${active ? '' : 'opacity-40 grayscale'}`}
-                />
-              )}
-              <span className={active ? '' : 'line-through'}>{team}</span>
-            </button>
-          );
-        };
-
         const renderMapChip = (map: string) => {
           const active = !hiddenMaps.has(map);
           const img = mapImages[map];
@@ -215,45 +174,15 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
           );
         };
 
-        const knownRegions = new Set(REGION_ROWS.map(r => r.id));
-        const rows: { label: string; logo: string | null; teams: string[] }[] = REGION_ROWS.map(r => ({
-          label: r.label,
-          logo: `/region/${r.label.toLowerCase()}.png`,
-          teams: allTeams.filter(t => teamRegions[t] === r.id),
-        }));
-        const otherTeams = allTeams.filter(t => !knownRegions.has(teamRegions[t]));
-        if (otherTeams.length > 0) rows.push({ label: 'Other', logo: null, teams: otherTeams });
-        const visibleRows = rows.filter(row => row.teams.length > 0);
-
         return (
           <div className="flex flex-wrap gap-x-10 gap-y-4">
-            {/* Teams — columna izquierda */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-3 px-1">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Teams</span>
-                <button
-                  onClick={() => setSelectedTeams(allTeamsSelected ? new Set() : new Set(allTeams))}
-                  className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200"
-                >
-                  {allTeamsSelected ? 'Clear' : 'Add all'}
-                </button>
-              </div>
-              <div className="flex flex-col gap-2 px-1">
-                {visibleRows.map(row => (
-                  <div key={row.label} className="flex items-center gap-3">
-                    <span className="w-12 shrink-0 flex items-center justify-end text-[10px] font-bold uppercase tracking-widest text-gray-600">
-                      {/* El logo reemplaza al nombre; 'Other' no tiene logo y cae al texto */}
-                      {row.logo
-                        ? <img src={row.logo} alt={row.label} title={row.label} className="w-[30px] h-[30px] object-contain shrink-0" />
-                        : row.label}
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {row.teams.map(renderTeamChip)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <TeamChipsPanel
+              allTeams={allTeams}
+              selectedTeams={selectedTeams}
+              setSelectedTeams={setSelectedTeams}
+              teamLogos={teamLogos}
+              teamRegions={teamRegions}
+            />
 
             {/* Maps */}
             <div className="flex flex-col gap-2">
