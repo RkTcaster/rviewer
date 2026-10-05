@@ -48,16 +48,22 @@ export type Tournament = {
   reg_id?: string;
 };
 
-// Tournaments preselected on the Overall table tabs: every regional Stage 2 plus Champions.
-// Read both by the server fetch (app/page.tsx) and by the Tournament filter chips
-// (components/Filters.tsx), so the two must stay in sync through this constant.
-export const STATS_RANK_DEFAULT_TOURS = [
+// Tournaments preselected when the URL has no `tour` param: every regional Stage 2 plus Champions.
+// Read both by the server fetch (app/page.tsx) and by the Tournament filter and quick-tournament
+// chips (components/Filters.tsx), so the two must stay in sync through this constant.
+// An empty `tour=` param means "all tournaments" and overrides the defaults.
+export const DEFAULT_TOURS = [
   'vct_2026_americas_stage_2',
   'vct_2026_emea_stage_2',
   'vct_2026_pacific_stage_2',
   'vct_2026_china_stage_2',
   'valorant_champions_2026',
 ];
+
+// Every section with a Tournament filter starts on DEFAULT_TOURS, except Compare, whose quick
+// tournament chips start off (each side's tours depend on the team picked there).
+export const sectionUsesDefaultTours = (section: string) =>
+  section !== 'compare-maps' && section !== 'compare-stats' && section !== 'compare-economy';
 
 // Equipos visibles por defecto en la tabla de Stats Rank y Neon + Phoenix
 export const STATS_RANK_DEFAULT_TEAMS = [
@@ -99,6 +105,9 @@ export type TeamRankStats = {
   postPlantDe: number;
   first3Lost: number;
   first3Total: number;
+  // Clutches ganados por el equipo / ganados por equipo + rival (solo mapas con data de ambos)
+  clutchWon: number;
+  clutchTotal: number;
 };
 
 // Maps Masters: por equipo y por mapa, victorias/jugados
@@ -190,6 +199,8 @@ export type PlayerStat = {
   fkfd: number; fkfdAtk: number; fkfdDef: number;
   kast: number; kastAtk: number; kastDef: number;
   entry: number; entryAtk: number; entryDef: number;
+  // % de los clutches ganados por el equipo (sin lado: vlr no lo separa)
+  clutch: number;
 };
 
 export type TournamentPlayerAvg = {
@@ -200,6 +211,9 @@ export type TournamentPlayerAvg = {
   hs: number;   hsAtk: number;   hsDef: number;
   fkfd: number; fkfdAtk: number; fkfdDef: number;
   kast: number; kastAtk: number; kastDef: number;
+  // Clutch% de equipo = ganados / (ganados + ganados por el rival en esos mapas)
+  clutchTeams: Record<string, { won: number; total: number }>;
+  clutch: number;   // promedio simple de los Clutch% de los equipos
 };
 
 export type EconomyBin = { label: string; count: number; wins: number };
@@ -240,6 +254,7 @@ export type PlayerMatchPoint = {
   fkfd: number;   fkfdAtk: number;   fkfdDef: number;
   kast: number;   kastAtk: number;   kastDef: number;
   entry: number;  entryAtk: number;  entryDef: number;
+  clutch: number;
   won: boolean;
 };
 

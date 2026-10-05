@@ -3,11 +3,33 @@
 Planning of improvements and features. Context: **personal** analysis/casting tool,
 used on desktop. Data depth is the priority; mobile and public polish come last.
 
-Last updated: 2026-09-24
+Last updated: 2026-10-05
 
 ---
 
 ## ✅ Done
+
+- **6.2 Default tournaments → quick tournament chips** (oct 2026): the Champs / Stage 2 chips from
+  Compare now show on every section with a Tournament filter, and the defaults are visible as chips
+  that start active instead of a hidden preselection. Per section: the Stats Rank group, the team
+  sections (once a team is picked; Stage 2 resolves to that team's region), Map/Agent Picks and
+  Meta Shift (both sides) start on `DEFAULT_TOURS` (renamed from `STATS_RANK_DEFAULT_TOURS`);
+  Compare keeps its chips off by default. `sectionUsesDefaultTours` (`lib/types.ts`) is the one
+  switch read by `app/page.tsx`, which resolves `tour`/`tour2` up front (replacing `effectiveTour`,
+  so every fetch inherits it), and by `Filters.tsx`. A missing param means defaults; turning every
+  chip off or clearing the Tournament select writes an explicit empty `tour=`, meaning all
+  tournaments — `updateMultiFilter` used to delete the param, which would have brought the defaults
+  straight back. Verified on the built app (chip state on 9 URLs across the four kinds of section)
+  and against an independent `round_info` count: G2 reads 37 maps / 23 wins on the defaults and
+  107 / 66 on all tournaments, matching `getMapStats`.
+
+- **6.1 Team logos in every team select** (oct 2026): `app/page.tsx` now fetches `teamLogos` for
+  every section that renders `Filters` (`showsFilters`: all but Skirmish, Playoff % and Veto
+  Predictor, which has its own) instead of growing a per-section list, and always forwards them.
+  `Filters.tsx` passes them to the Team select of every team-mode section, Team A/B in Meta Shift,
+  and the three Exclude Teams multiselects through `StringMultiSelect`'s existing `renderOption`
+  (no new prop). All 64 teams in `getTeams()` have a logo. Verified on the built app: the selected
+  team's logo renders in the trigger for Maps, Economy, Meta Shift, Player Stats and Relevant Info.
 
 - **Series Outcomes** (sep 2026): new Testing section, the first aggregation the dashboard does at
   **series** level — everything else reasons per map. Three independent blocks per team: win rate as
@@ -182,13 +204,25 @@ Done when `grep` finds no Spanish comments left, at which point the README's con
 ## Phase 5 — Default tournaments from the DB
 
 - **5.1 Evaluate a boolean `default` column in `tournament`**: assess whether a `true/false` column
-  can replace the hardcoded `STATS_RANK_DEFAULT_TOURS` (`lib/types.ts`), so the default tournaments
+  can replace the hardcoded `DEFAULT_TOURS` (`lib/types.ts`), so the default tournaments
   are changed from the Supabase dashboard instead of a code edit + deploy (they change every few
   weeks: the four Stage 2 + Champions 2026 as of sep 2026). Same pattern as the DB-driven default
   hidden maps (`defaultHiddenMaps`). To evaluate before implementing: whether the CSV upload flow
   (`scripts/upload.mjs`, `table_tournament.csv`) would overwrite the column, the cache TTL, and
   collapsing the section list duplicated in `app/page.tsx`, `components/Filters.tsx` and
   `components/Sidebar.tsx` into one place.
+
+## Phase 6 — Filters UX
+
+- **6.1 Team logos in the remaining selects**: done (see Done, oct 2026).
+- **6.2 Default tournaments → quick tournament chips**: done (see Done, oct 2026). Still relevant
+  for 5.1: a DB-driven default would now decide which chips start active.
+- **6.3 Hiding teams in table pages like Stats Rank**: look for ways to hide teams quickly in
+  Stats Rank and similar pages (Maps Rank, Neon + Phoenix). Today the only control is the team-chip
+  panel grouped by region, which takes a lot of vertical space above the table. Options to evaluate:
+  collapsing the chip panel, hiding a team directly from its table row (e.g. a click/× on the row,
+  with a way to bring hidden teams back), or saved team presets. Whatever is chosen should keep the
+  URL-backed `teams=` shape from 3.6.
 
 ---
 

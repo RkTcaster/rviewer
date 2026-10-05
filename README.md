@@ -83,8 +83,8 @@ if the URL hasn't caught up — and `flush()` forces the navigation when a dropd
 section changes. `ContentOverlay` shows the spinner while the transition is pending.
 
 **Types.** `lib/types.ts` holds the domain types (`MapStat`, `TeamRankStats`, `CompositionStat`,
-`VetoFlow`, …) plus two defaults constants: `STATS_RANK_DEFAULT_TOURS` and
-`STATS_RANK_DEFAULT_TEAMS`.
+`VetoFlow`, …) plus two defaults constants: `DEFAULT_TOURS` (with `sectionUsesDefaultTours`, every
+section but Compare) and `STATS_RANK_DEFAULT_TEAMS`.
 
 ---
 
@@ -134,7 +134,7 @@ by rounds or maps, points colored by result), `skirmish-americas` and `playoff-p
 | `section` | Visible section (default `compare-maps`) |
 | `reg`, `reg2` | Regions, comma-separated (`reg_0`…`reg_4`) |
 | `team`, `team2` | Team A / B |
-| `tour`, `tour2` | Tournaments, comma-separated |
+| `tour`, `tour2` | Tournaments, comma-separated. Missing → `DEFAULT_TOURS` (except Compare); empty (`tour=`) → all tournaments |
 | `bo` | Series format: `3` or `5`; absent (or `all`) = both |
 | `last` | Last N series for the team (`1`, `3`, `5`, `10`, `all`) |
 | `dateFrom`, `dateTo`, `dateFrom2`, `dateTo2` | Date range per side |

@@ -54,6 +54,8 @@ async function getTournamentRankings_impl(
       postPlantDe: 0,
       first3Lost: 0,
       first3Total: 0,
+      clutchWon: 0,
+      clutchTotal: 0,
     };
   };
 
@@ -177,17 +179,18 @@ async function getTournamentRankings_impl(
   // Retake efficiency from player_performance
   const perfRows = await fetchAllPages<PlayerPerformanceRow>((from, to) =>
     supabase.from('player_performance')
-      .select('map_id, team, DE, PL')
+      .select('map_id, team, DE, PL, "1v1", "1v2", "1v3", "1v4", "1v5"')
       .in('series_id', seriesIds)
       .range(from, to)
   );
 
-  const perfByMapTeam: Record<string, { de: number; pl: number }> = {};
+  const perfByMapTeam: Record<string, { de: number; pl: number; clutch: number }> = {};
   for (const p of perfRows) {
     const k = `${p.map_id}__${p.team?.trim()}`;
-    if (!perfByMapTeam[k]) perfByMapTeam[k] = { de: 0, pl: 0 };
+    if (!perfByMapTeam[k]) perfByMapTeam[k] = { de: 0, pl: 0, clutch: 0 };
     perfByMapTeam[k].de += Number(p.DE) || 0;
     perfByMapTeam[k].pl += Number(p.PL) || 0;
+    perfByMapTeam[k].clutch += (Number(p['1v1']) || 0) + (Number(p['1v2']) || 0) + (Number(p['1v3']) || 0) + (Number(p['1v4']) || 0) + (Number(p['1v5']) || 0);
   }
 
   Object.entries(mapLastRound).forEach(([map_id, r]) => {
@@ -206,6 +209,11 @@ async function getTournamentRankings_impl(
     if (perfB) teamStats[tA].postPlantDe += perfB.de;
     if (perfB) teamStats[tB].postPlantPl += perfB.pl;
     if (perfA) teamStats[tB].postPlantDe += perfA.de;
+
+    if (perfA && perfB) {
+      teamStats[tA].clutchWon += perfA.clutch; teamStats[tA].clutchTotal += perfA.clutch + perfB.clutch;
+      teamStats[tB].clutchWon += perfB.clutch; teamStats[tB].clutchTotal += perfA.clutch + perfB.clutch;
+    }
   });
 
   return teamStats;

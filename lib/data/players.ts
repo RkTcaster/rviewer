@@ -2,7 +2,11 @@
 import { supabase } from '../supabase';
 import { fetchAllPages } from './helpers';
 import { PlayerMatchPoint, PlayerStat, PlayerTimelineData, TopPlayerPerformance, TournamentPlayerAvg } from '../types';
-import { PlayerStatsCoreStats, PlayerStatsRow, RoundInfoRow } from './rows';
+import { PlayerClutchRow, PlayerStatsCoreStats, PlayerStatsRow, RoundInfoRow } from './rows';
+
+const CLUTCH_COLS = '"1v1", "1v2", "1v3", "1v4", "1v5"';
+const sumClutches = (r: Omit<PlayerClutchRow, 'series_id' | 'map_id' | 'team' | 'player'>) =>
+  (Number(r['1v1']) || 0) + (Number(r['1v2']) || 0) + (Number(r['1v3']) || 0) + (Number(r['1v4']) || 0) + (Number(r['1v5']) || 0);
 
 export async function getPlayerStats(
   filters: { team: string; reg?: string[]; tour?: string; bo?: string; dateFrom?: string; dateTo?: string }
@@ -26,12 +30,24 @@ export async function getPlayerStats(
     .select('player, agent, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, assistsBoth, assistsT, assistsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT')
     .eq('team', filters.team);
 
-  if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
-  if (filters.reg)  query = query.in('reg_id', filters.reg!);
-  if (seriesIds)    query = query.in('series_id', seriesIds);
+  let perfQuery = supabase
+    .from('player_performance')
+    .select(`player, ${CLUTCH_COLS}`)
+    .eq('team', filters.team);
 
-  const rows = await fetchAllPages<Pick<PlayerStatsRow, 'player' | 'agent' | 'assistsBoth' | 'assistsT' | 'assistsCT'> & PlayerStatsCoreStats>((from, to) => query.range(from, to));
+  if (filters.tour) { query = query.in('tour_id', filters.tour.split(',')); perfQuery = perfQuery.in('tour_id', filters.tour.split(',')); }
+  if (filters.reg)  { query = query.in('reg_id', filters.reg!);             perfQuery = perfQuery.in('reg_id', filters.reg!); }
+  if (seriesIds)    { query = query.in('series_id', seriesIds);             perfQuery = perfQuery.in('series_id', seriesIds); }
+
+  const [rows, perfRows] = await Promise.all([
+    fetchAllPages<Pick<PlayerStatsRow, 'player' | 'agent' | 'assistsBoth' | 'assistsT' | 'assistsCT'> & PlayerStatsCoreStats>((from, to) => query.range(from, to)),
+    fetchAllPages<Pick<PlayerClutchRow, 'player' | '1v1' | '1v2' | '1v3' | '1v4' | '1v5'>>((from, to) => perfQuery.range(from, to)),
+  ]);
   if (!rows || rows.length === 0) return [];
+
+  const clutches: Record<string, number> = {};
+  for (const r of perfRows) if (r.player) clutches[r.player] = (clutches[r.player] || 0) + sumClutches(r);
+  const teamClutches = Object.values(clutches).reduce((s, n) => s + n, 0);
 
   type Acc = {
     kills: number; deaths: number; killsT: number; deadT: number; killsCT: number; deadCT: number;
@@ -131,6 +147,7 @@ export async function getPlayerStats(
       entry:    r2((a.sFk  + a.sFd)  / (teamFk  + teamFd  || 1) * 100),
       entryAtk: r2((a.sFkT + a.sFdT) / (teamFkT + teamFdT || 1) * 100),
       entryDef: r2((a.sFkCT+ a.sFdCT)/ (teamFkCT+ teamFdCT|| 1) * 100),
+      clutch:   r2((clutches[player] || 0) / (teamClutches || 1) * 100),
     };
   }).sort((a, b) => b.kd - a.kd);
 }
@@ -153,14 +170,50 @@ export async function getTournamentPlayerAvg(
 
   let query = supabase
     .from('player_stats')
-    .select('player, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT');
+    .select('player, map_id, team, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT');
 
-  if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
-  if (filters.reg)  query = query.in('reg_id', filters.reg!);
-  if (seriesIds)    query = query.in('series_id', seriesIds);
+  let perfQuery = supabase
+    .from('player_performance')
+    .select(`map_id, team, ${CLUTCH_COLS}`);
 
-  const rows = await fetchAllPages<Pick<PlayerStatsRow, 'player'> & PlayerStatsCoreStats>((from, to) => query.range(from, to));
+  if (filters.tour) { query = query.in('tour_id', filters.tour.split(',')); perfQuery = perfQuery.in('tour_id', filters.tour.split(',')); }
+  if (filters.reg)  { query = query.in('reg_id', filters.reg!);             perfQuery = perfQuery.in('reg_id', filters.reg!); }
+  if (seriesIds)    { query = query.in('series_id', seriesIds);             perfQuery = perfQuery.in('series_id', seriesIds); }
+
+  const [rows, perfRows] = await Promise.all([
+    fetchAllPages<Pick<PlayerStatsRow, 'player' | 'map_id' | 'team'> & PlayerStatsCoreStats>((from, to) => query.range(from, to)),
+    fetchAllPages<Omit<PlayerClutchRow, 'series_id' | 'player'>>((from, to) => perfQuery.range(from, to)),
+  ]);
   if (!rows || rows.length === 0) return null;
+
+  // Clutches ganados por mapa y equipo → cada equipo suma los suyos y los del rival de ese mapa.
+  // Los dos equipos de cada mapa salen de player_stats: player_performance tiene filas con el
+  // team mal parseado (ej. 'rock lovers' de BBL → team 'rock'), que así quedan afuera.
+  // Mapas sin data de clutch de los dos equipos se descartan para no inflar el %
+  // (mismo criterio que Clutch Winrate en stats-rank).
+  const mapTeams: Record<string, Set<string>> = {};
+  for (const r of rows) {
+    const t = r.team?.trim();
+    if (t) (mapTeams[r.map_id] ??= new Set()).add(t);
+  }
+  const clutchByMap: Record<string, Record<string, number>> = {};
+  for (const r of perfRows) {
+    const t = r.team?.trim();
+    if (!t) continue;
+    const m = (clutchByMap[r.map_id] ??= {});
+    m[t] = (m[t] || 0) + sumClutches(r);
+  }
+  const clutchTeams: Record<string, { won: number; total: number }> = {};
+  for (const [mapId, byTeam] of Object.entries(clutchByMap)) {
+    const teams = [...(mapTeams[mapId] ?? [])];
+    if (teams.length !== 2 || teams.some(t => byTeam[t] == null)) continue;
+    const total = byTeam[teams[0]] + byTeam[teams[1]];
+    for (const t of teams) {
+      const c = (clutchTeams[t] ??= { won: 0, total: 0 });
+      c.won += byTeam[t]; c.total += total;
+    }
+  }
+  const teamPcts = Object.values(clutchTeams).filter(c => c.total > 0).map(c => c.won / c.total * 100);
 
   type Acc2 = {
     kills: number; deaths: number; killsT: number; deadT: number; killsCT: number; deadCT: number;
@@ -225,6 +278,7 @@ export async function getTournamentPlayerAvg(
 
   const r2 = (n: number) => Math.round(n * 100) / 100;
   const mean = (vals: number[]) => r2(vals.reduce((a, b) => a + b, 0) / vals.length);
+  const tournClutch = teamPcts.length ? mean(teamPcts) : 0;
 
   return {
     kd:        mean(players.map(a => a.deaths === 0 ? a.kills   : a.kills   / a.deaths)),
@@ -248,6 +302,8 @@ export async function getTournamentPlayerAvg(
     kast:      mean(players.map(a => a.sKast   / a.maps)),
     kastAtk:   mean(players.map(a => a.sKastT  / a.maps)),
     kastDef:   mean(players.map(a => a.sKastCT / a.maps)),
+    clutchTeams,
+    clutch:    tournClutch,
   };
 }
 
@@ -282,7 +338,7 @@ export async function getPlayerTimeline(
   const seriesIds = [...seriesMap.keys()];
   if (seriesIds.length === 0) return [];
 
-  const [psRows, riRows] = await Promise.all([
+  const [psRows, riRows, perfRows] = await Promise.all([
     fetchAllPages<Pick<PlayerStatsRow, 'series_id' | 'player' | 'agent'> & PlayerStatsCoreStats>((from, to) =>
       supabase
         .from('player_stats')
@@ -295,6 +351,14 @@ export async function getPlayerTimeline(
       supabase
         .from('round_info')
         .select('series_id, map_id, round, teamA, rndA')
+        .in('series_id', seriesIds)
+        .range(from, to)
+    ),
+    fetchAllPages<Omit<PlayerClutchRow, 'map_id' | 'team'>>((from, to) =>
+      supabase
+        .from('player_performance')
+        .select(`series_id, player, ${CLUTCH_COLS}`)
+        .eq('team', filters.team)
         .in('series_id', seriesIds)
         .range(from, to)
     ),
@@ -401,6 +465,16 @@ export async function getPlayerTimeline(
     }
   }
 
+  // Clutches ganados por jugador y por serie, y el total del equipo por serie
+  const playerSeriesClutches: Record<string, Record<string, number>> = {};
+  const teamSeriesClutches: Record<string, number> = {};
+  for (const r of perfRows) {
+    if (!r.player || !r.series_id) continue;
+    const n = sumClutches(r);
+    (playerSeriesClutches[r.player] ??= {})[r.series_id] = (playerSeriesClutches[r.player][r.series_id] || 0) + n;
+    teamSeriesClutches[r.series_id] = (teamSeriesClutches[r.series_id] || 0) + n;
+  }
+
   const chronologicalIds = [...seriesIds].reverse();
 
   const result: PlayerTimelineData = Object.entries(playerSeriesAcc).map(([player, bySeriesId]) => {
@@ -445,6 +519,7 @@ export async function getPlayerTimeline(
         entry:     r2((a.sFk  + a.sFd)  / (teamSeriesTotals[sid].fk  + teamSeriesTotals[sid].fd  || 1) * 100),
         entryAtk:  r2((a.sFkT + a.sFdT) / (teamSeriesTotals[sid].fkT + teamSeriesTotals[sid].fdT || 1) * 100),
         entryDef:  r2((a.sFkCT+ a.sFdCT)/ (teamSeriesTotals[sid].fkCT+ teamSeriesTotals[sid].fdCT|| 1) * 100),
+        clutch:    r2((playerSeriesClutches[player]?.[sid] || 0) / (teamSeriesClutches[sid] || 1) * 100),
         won:       seriesWon[sid] ?? false,
       }];
     });

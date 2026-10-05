@@ -1,5 +1,5 @@
 "use client";
-import { Region, Tournament, STATS_RANK_DEFAULT_TOURS } from '@/lib/types';
+import { Region, Tournament, DEFAULT_TOURS, sectionUsesDefaultTours } from '@/lib/types';
 import { useNavigation, useFilterParams } from './NavigationContext';
 import { MultiSelect } from "./MultiSelect";
 import { SearchableSelect } from "./SearchableSelect";
@@ -20,6 +20,15 @@ interface FiltersProps {
 export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamLogos, mode = 'team' }: FiltersProps) {
   const { commitParams, flush, hasPendingEdits } = useNavigation();
   const filterParams = useFilterParams();
+
+  // Option renderer for the Exclude Teams multiselects (same logo markup as SearchableSelect)
+  const withLogo = (team: string) => (
+    <span className="flex items-center gap-2">
+      {teamLogos?.[team] && <img src={teamLogos[team]} alt="" className="w-5 h-5 object-contain shrink-0" />}
+      {team}
+    </span>
+  );
+
   const section = filterParams.get('section') || 'compare-maps';
   const isCompare = section === 'compare-maps' || section === 'compare-stats' || section === 'compare-economy';
   const isOverall = mode === 'overall';
@@ -30,6 +39,9 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
   // Series Outcomes ignores both: its series blocks are Bo3 by definition and it has no
   // team selected, so Bo5 and Last X are shown greyed out instead of pretending to work.
   const isSeriesOutcomes = section === 'series-outcomes';
+  const usesDefaultTours = sectionUsesDefaultTours(section);
+  // Team sections list only the tournaments the selected team played
+  const tourNeedsTeam = !isOverall && !isEconomy && !isRelevantInfo && !isStatsRank;
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(filterParams.toString());
@@ -55,11 +67,80 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
     const params = new URLSearchParams(filterParams.toString());
     if (values.length > 0) {
       params.set(key, values.join(',')); // Guardamos como "id1,id2,id3"
+    } else if (usesDefaultTours && (key === 'tour' || key === 'tour2')) {
+      params.set(key, ''); // explicit "all tournaments": a missing param would bring the defaults back
     } else {
       params.delete(key);
     }
     commitParams(params);
   };
+
+  // Quick tournament chips: toggles that overwrite tour and tour2 with the union of the active
+  // chips, matched against each side's tour options (so in Compare, Stage 2 lands on each team's
+  // region). If a side played none of them, its filter ends up empty.
+  // logos: one fills the whole chip; four go in a 2x2 grid (like Post-Pistol Force's By region toggle)
+  const quickTours: { label: string; title: string; logos: string[]; match: (id: string) => boolean }[] = [
+    { label: 'Champs', title: 'Champions 2026', logos: ['champs'], match: id => id === 'valorant_champions_2026' },
+    { label: 'Stage 2', title: 'Stage 2 2026 of each team region', logos: ['americas', 'emea', 'china', 'pacific'], match: id => /^vct_2026_.+_stage_2$/.test(id) },
+  ];
+  // Without a param the section is on DEFAULT_TOURS (see app/page.tsx), so the chips read those
+  const tourSel = (key: 'tour' | 'tour2') => {
+    const v = filterParams.get(key);
+    return v !== null ? v.split(',').filter(Boolean) : usesDefaultTours ? DEFAULT_TOURS : [];
+  };
+  const selA = tourSel('tour');
+  const selB = tourSel('tour2');
+  const idsFor = (list: Tournament[], match: (id: string) => boolean) => list.filter(t => match(t.tour_id)).map(t => t.tour_id);
+  // Active when it matches something and everything it matches is already selected on its side.
+  const isQuickActive = (match: (id: string) => boolean) => {
+    const a = idsFor(tours, match), b = idsFor(tours2, match);
+    return a.length + b.length > 0 && a.every(id => selA.includes(id)) && b.every(id => selB.includes(id));
+  };
+  const toggleQuickTour = (label: string) => {
+    const active = quickTours.filter(q => (q.label === label) !== isQuickActive(q.match));
+    const params = new URLSearchParams(filterParams.toString());
+    const setOrClear = (key: 'tour' | 'tour2', ids: string[]) => {
+      if (ids.length > 0) params.set(key, ids.join(','));
+      else if (usesDefaultTours) params.set(key, '');
+      else params.delete(key);
+    };
+    setOrClear('tour', active.flatMap(q => idsFor(tours, q.match)));
+    // tour2 only exists in Compare and Meta Shift
+    if (isCompare || isMetaShift) setOrClear('tour2', active.flatMap(q => idsFor(tours2, q.match)));
+    commitParams(params);
+  };
+  const quickTourChips = (disabled: boolean, hint?: string) => (
+    <div className="flex flex-col gap-1">
+      <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Quick Tournament</label>
+      <div className="flex flex-wrap gap-2">
+        {quickTours.map(q => {
+          const active = isQuickActive(q.match);
+          const imgTone = `object-contain transition-opacity ${active ? '' : 'opacity-40 grayscale'}`;
+          return (
+            <button
+              key={q.label}
+              disabled={disabled}
+              onClick={() => toggleQuickTour(q.label)}
+              title={q.title}
+              className={`w-[72px] flex flex-col items-center gap-1 px-2 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wide transition-colors border disabled:opacity-50 disabled:cursor-default ${active
+                ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200 disabled:hover:border-gray-700 disabled:hover:text-gray-400'}`}
+            >
+              {q.logos.length === 1
+                ? <img src={`/region/${q.logos[0]}.png`} alt={q.title} className={`w-7 h-7 shrink-0 ${imgTone}`} />
+                : (
+                  <div className="w-7 h-7 shrink-0 grid grid-cols-2 gap-0">
+                    {q.logos.map(l => <img key={l} src={`/region/${l}.png`} alt={l} className={`w-3.5 h-3.5 ${imgTone}`} />)}
+                  </div>
+                )}
+              <span>{q.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {hint && <span className="text-[10px] text-gray-500">{hint}</span>}
+    </div>
+  );
 
   if (isMetaShift) {
     const dateInput = (key: string, label: string, color: string) => (
@@ -89,6 +170,10 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
         >
           Reset filters
         </button>
+        {quickTourChips(false)}
+
+        <div className="self-stretch border-l border-gray-700 mx-1" />
+
         {/* LEFT side */}
         <div className="flex flex-wrap items-start gap-4">
           <RegionChips
@@ -104,6 +189,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
             selected={filterParams.get('team') || ''}
             onChange={(val) => updateFilter('team', val)}
             placeholder="All teams"
+            logos={teamLogos}
           />
           {!filterParams.get('team') && (
             <StringMultiSelect onClose={flush}
@@ -112,13 +198,14 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
               selected={filterParams.get('excA')?.split(',').filter(x => x !== '') || []}
               onChange={(values) => updateMultiFilter('excA', values)}
               placeholder="Exclude teams..."
+              renderOption={withLogo}
               labelColor="text-blue-400"
             />
           )}
           <SearchableMultiSelect onClose={flush}
             label="Tournament A"
             options={tours}
-            selected={filterParams.get('tour')?.split(',').filter(x => x !== '') || []}
+            selected={selA.filter(id => tours.some(t => t.tour_id === id))}
             onChange={(values) => updateMultiFilter('tour', values)}
             disabled={false}
           />
@@ -143,6 +230,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
             selected={filterParams.get('team2') || ''}
             onChange={(val) => updateFilter('team2', val)}
             placeholder="All teams"
+            logos={teamLogos}
           />
           {!filterParams.get('team2') && (
             <StringMultiSelect onClose={flush}
@@ -151,13 +239,14 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
               selected={filterParams.get('excB')?.split(',').filter(x => x !== '') || []}
               onChange={(values) => updateMultiFilter('excB', values)}
               placeholder="Exclude teams..."
+              renderOption={withLogo}
               labelColor="text-orange-400"
             />
           )}
           <SearchableMultiSelect onClose={flush}
             label="Tournament B"
             options={tours2}
-            selected={filterParams.get('tour2')?.split(',').filter(x => x !== '') || []}
+            selected={selB.filter(id => tours2.some(t => t.tour_id === id))}
             onChange={(values) => updateMultiFilter('tour2', values)}
             disabled={false}
           />
@@ -169,32 +258,6 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
   }
 
   const isCompareStats = section === 'compare-stats' || section === 'compare-economy';
-
-  // Atajos de compare: toggles que pisan tour y tour2 con la unión de los torneos activos,
-  // buscados dentro de los torneos jugados por cada equipo (así Stage 2 cae en la región de
-  // cada uno). Si un equipo no jugó ninguno, su filtro queda vacío.
-  // logos: uno ocupa todo el chip; cuatro van en grilla 2x2 (como el toggle By region de Post-Pistol Force)
-  const quickTours: { label: string; title: string; logos: string[]; match: (id: string) => boolean }[] = [
-    { label: 'Champs', title: 'Champions 2026', logos: ['champs'], match: id => id === 'valorant_champions_2026' },
-    { label: 'Stage 2', title: 'Stage 2 2026 of each team region', logos: ['americas', 'emea', 'china', 'pacific'], match: id => /^vct_2026_.+_stage_2$/.test(id) },
-  ];
-  const selA = filterParams.get('tour')?.split(',').filter(Boolean) || [];
-  const selB = filterParams.get('tour2')?.split(',').filter(Boolean) || [];
-  const idsFor = (list: Tournament[], match: (id: string) => boolean) => list.filter(t => match(t.tour_id)).map(t => t.tour_id);
-  // Activo si matchea algo y todo lo que matchea ya está seleccionado en su lado.
-  const isQuickActive = (match: (id: string) => boolean) => {
-    const a = idsFor(tours, match), b = idsFor(tours2, match);
-    return a.length + b.length > 0 && a.every(id => selA.includes(id)) && b.every(id => selB.includes(id));
-  };
-  const toggleQuickTour = (label: string) => {
-    const active = quickTours.filter(q => (q.label === label) !== isQuickActive(q.match));
-    const params = new URLSearchParams(filterParams.toString());
-    const a = active.flatMap(q => idsFor(tours, q.match));
-    const b = active.flatMap(q => idsFor(tours2, q.match));
-    if (a.length > 0) params.set('tour', a.join(',')); else params.delete('tour');
-    if (b.length > 0) params.set('tour2', b.join(',')); else params.delete('tour2');
-    commitParams(params);
-  };
 
   return (
   <div className="flex flex-col gap-4 mb-8 bg-[#1a1d23] p-5 rounded-xl border border-gray-800 shadow-xl relative">
@@ -210,38 +273,9 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
         onChange={(values) => updateRegFilter('reg', values)}
       />
 
-      {isCompare && (
-        <div className="flex flex-col gap-1">
-          <label className="text-[11px] font-bold text-gray-200 uppercase tracking-wider">Quick Tournament</label>
-          <div className="flex flex-wrap gap-2">
-            {quickTours.map(q => {
-              const active = isQuickActive(q.match);
-              const imgTone = `object-contain transition-opacity ${active ? '' : 'opacity-40 grayscale'}`;
-              return (
-                <button
-                  key={q.label}
-                  disabled={!filterParams.get('team') && !filterParams.get('team2')}
-                  onClick={() => toggleQuickTour(q.label)}
-                  title={q.title}
-                  className={`w-[72px] flex flex-col items-center gap-1 px-2 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wide transition-colors border disabled:opacity-50 disabled:cursor-default ${active
-                    ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
-                    : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200 disabled:hover:border-gray-700 disabled:hover:text-gray-400'}`}
-                >
-                  {q.logos.length === 1
-                    ? <img src={`/region/${q.logos[0]}.png`} alt={q.title} className={`w-7 h-7 shrink-0 ${imgTone}`} />
-                    : (
-                      <div className="w-7 h-7 shrink-0 grid grid-cols-2 gap-0">
-                        {q.logos.map(l => <img key={l} src={`/region/${l}.png`} alt={l} className={`w-3.5 h-3.5 ${imgTone}`} />)}
-                      </div>
-                    )}
-                  <span>{q.label}</span>
-                </button>
-              );
-            })}
-          </div>
-          <span className="text-[10px] text-gray-500">First choose the teams</span>
-        </div>
-      )}
+      {isCompare
+        ? quickTourChips(!filterParams.get('team') && !filterParams.get('team2'), 'First choose the teams')
+        : quickTourChips(tourNeedsTeam && !filterParams.get('team'), tourNeedsTeam && !filterParams.get('team') ? 'First choose a team' : undefined)}
 
       {!isEconomy && (() => {
         // Sin filtro (o 'all') = ambos formatos: los dos chips activos.
@@ -296,6 +330,7 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
           selected={filterParams.get('excA')?.split(',').filter(x => x !== '') || []}
           onChange={(values) => updateMultiFilter('excA', values)}
           placeholder="Exclude teams..."
+          renderOption={withLogo}
         />
       )}
 
@@ -337,11 +372,11 @@ export function Filters({ regions, teams, tours, tours2 = [], teams2 = [], teamL
       <SearchableMultiSelect onClose={flush}
         label="Tournament"
         options={tours}
-        selected={(filterParams.get('tour')?.split(',').filter(x => x !== "") || ((section === 'neon-dependency' || section === 'post-pistol-force' || section === 'stats-rank' || section === 'maps-masters' || section === 'series-outcomes') ? STATS_RANK_DEFAULT_TOURS : []))
+        selected={selA
           // Solo ids presentes en las opciones: con una región elegida los defaults de otras regiones no cuentan ni se arrastran a la URL
           .filter(id => tours.some(t => t.tour_id === id))}
         onChange={(values) => updateMultiFilter('tour', values)}
-        disabled={!isOverall && !isEconomy && !isRelevantInfo && !isStatsRank && !filterParams.get('team')}
+        disabled={tourNeedsTeam && !filterParams.get('team')}
       />
 
       {(isCompareStats || isEconomy || isStatsRank || section === 'map-picks' || section === 'agent-picks' || !section || section === 'maps' || section === 'compare-maps' || section === 'player-stats') && (

@@ -1,6 +1,6 @@
 // app/page.tsx
 import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows, getSeriesOutcomes, emptySeriesOutcomes } from '@/lib/data-service';
-import { STATS_RANK_DEFAULT_TOURS, OverallMapFullStat, TeamRankStats } from '@/lib/types';
+import { DEFAULT_TOURS, sectionUsesDefaultTours, OverallMapFullStat, TeamRankStats } from '@/lib/types';
 import { getLatestNews } from '@/lib/news';
 import { Filters } from '@/components/Filters';
 import { Sidebar } from '@/components/Sidebar';
@@ -35,14 +35,15 @@ export default async function Page({
   searchParams: Promise<{ reg?: string; team?: string; tour?: string; bo?: string; last?: string; section?: string; team2?: string; tour2?: string; reg2?: string; dateFrom?: string; dateTo?: string; dateFrom2?: string; dateTo2?: string; excA?: string; excB?: string }>;
 }) {
   const params = await searchParams;
-  const { reg, team, tour, bo, last, section = 'compare-maps', team2, tour2, reg2, dateFrom, dateTo, dateFrom2, dateTo2, excA, excB } = params;
+  const { reg, team, tour: tourParam, bo, last, section = 'compare-maps', team2, tour2: tour2Param, reg2, dateFrom, dateTo, dateFrom2, dateTo2, excA, excB } = params;
   const regArr = reg ? reg.split(',').filter(Boolean) : undefined;
   const reg2Arr = reg2 ? reg2.split(',').filter(Boolean) : undefined;
-  // Neon + Phoenix, Stats Rank y Maps Masters conservan la selección de torneos por defecto
-  const effectiveTour = ((section === 'neon-dependency' || section === 'post-pistol-force' || section === 'stats-rank' || section === 'maps-masters' || section === 'series-outcomes') && tour === undefined)
-    ? STATS_RANK_DEFAULT_TOURS.join(',')
-    : tour;
-  const hasTour = (effectiveTour?.split(',').filter(Boolean).length ?? 0) > 0;
+  // No `tour` param → DEFAULT_TOURS (tour2 too, only Meta Shift reads it outside Compare).
+  // An empty `tour=` means all tournaments.
+  const usesDefaultTours = sectionUsesDefaultTours(section);
+  const tour = (usesDefaultTours && tourParam === undefined) ? DEFAULT_TOURS.join(',') : tourParam;
+  const tour2 = (usesDefaultTours && tour2Param === undefined) ? DEFAULT_TOURS.join(',') : tour2Param;
+  const hasTour = (tour?.split(',').filter(Boolean).length ?? 0) > 0;
   const excludeTeamsA = excA ? excA.split(',') : [];
   const excludeTeamsB = excB ? excB.split(',') : [];
 
@@ -81,11 +82,11 @@ export default async function Page({
     : Promise.resolve([]);
 
   const rankingsP = (section === 'compare-stats' || section === 'graphs' || (isStatsRank && hasTour))
-    ? getTournamentRankings({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
+    ? getTournamentRankings({ tour, reg: regArr, bo, last, dateFrom, dateTo })
     : Promise.resolve<Record<string, TeamRankStats>>({});
 
   const economyP = (isStatsRank && hasTour)
-    ? getTournamentEconomy({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
+    ? getTournamentEconomy({ tour, reg: regArr, bo, last, dateFrom, dateTo })
     : Promise.resolve({});
 
   // Overall data (only for overall sections)
@@ -127,24 +128,26 @@ export default async function Page({
     : Promise.resolve({});
 
   const needsLogos = isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isMetaShift || isVetoPredictor || isSeriesOutcomes || section === 'compare-maps' || section === 'compare-stats' || isCompareEconomy;
-  const teamLogosP = needsLogos ? getTeamLogos() : Promise.resolve({});
+  // Every section that renders Filters gets logos for its team selects
+  const showsFilters = !isSkirmish && !isPlayoffPct && !isVetoPredictor;
+  const teamLogosP = (needsLogos || showsFilters) ? getTeamLogos() : Promise.resolve({});
   const teamRegionsP = needsLogos ? getTeamRegions() : Promise.resolve({});
 
   const mapsMastersP = (isMapsMasters && hasTour)
-    ? getMapsMastersStats({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
+    ? getMapsMastersStats({ tour, reg: regArr, bo, last, dateFrom, dateTo })
     : Promise.resolve({ stats: {}, maps: [] });
 
   // Series Outcomes is Bo3-only by definition, so it ignores the bo filter
   const seriesOutcomesP = (isSeriesOutcomes && hasTour)
-    ? getSeriesOutcomes({ tour: effectiveTour, reg: regArr, dateFrom, dateTo })
+    ? getSeriesOutcomes({ tour, reg: regArr, dateFrom, dateTo })
     : Promise.resolve(emptySeriesOutcomes());
 
   const neonDepP = isNeonDependency
-    ? getNeonDependencyStats({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
+    ? getNeonDependencyStats({ tour, reg: regArr, bo, last, dateFrom, dateTo })
     : Promise.resolve({ stats: {}, maps: [] });
 
   const postPistolForceP = isPostPistolForce
-    ? getPostPistolForce({ tour: effectiveTour, reg: regArr, bo, last, dateFrom, dateTo })
+    ? getPostPistolForce({ tour, reg: regArr, bo, last, dateFrom, dateTo })
     : Promise.resolve({});
 
   const mapFullStatsP = (section === 'agent-picks')
@@ -273,7 +276,7 @@ export default async function Page({
           />
         );
       case 'player-stats':
-        return <PlayerStatsSection stats={playerStats} tournamentAvg={tournamentPlayerAvg} timeline={playerTimeline} />;
+        return <PlayerStatsSection stats={playerStats} tournamentAvg={tournamentPlayerAvg} timeline={playerTimeline} team={team} />;
       case 'economy':
         return <EconomySection bins={economyBins} />;
       case 'compare-economy':
@@ -403,7 +406,7 @@ export default async function Page({
               </p>
             )
           )}
-          {!isSkirmish && !isPlayoffPct && !isVetoPredictor && (
+          {showsFilters && (
             <div className="mt-4">
               <Filters
                 regions={regions}
@@ -411,7 +414,7 @@ export default async function Page({
                 tours={tours}
                 tours2={tours2}
                 teams2={teams2}
-                teamLogos={isCompare ? teamLogos : undefined}
+                teamLogos={teamLogos}
                 mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : (isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isSeriesOutcomes) ? 'stats-rank' : 'team'}
               />
             </div>
