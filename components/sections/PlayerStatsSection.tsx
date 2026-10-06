@@ -7,7 +7,7 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 
-type StatKey = 'kd' | 'rating' | 'acs' | 'adr' | 'hs' | 'fkfd' | 'kast' | 'entry' | 'clutch';
+type StatKey = 'kd' | 'rating' | 'acs' | 'adr' | 'hs' | 'fkfd' | 'kast' | 'entry';
 type SideKey = 'both' | 'atk' | 'def';
 
 interface StatCfg {
@@ -20,7 +20,6 @@ interface StatCfg {
   taAtk:  (ta: TournamentPlayerAvg) => number;
   taDef:  (ta: TournamentPlayerAvg) => number;
   hideTourn?: boolean;
-  noSide?: boolean;   // el dato no se separa por lado → solo Both
 }
 
 const STAT_CONFIG: Record<StatKey, StatCfg> = {
@@ -65,15 +64,9 @@ const STAT_CONFIG: Record<StatKey, StatCfg> = {
     taBoth: () => 0,             taAtk: () => 0,                taDef: () => 0,
     hideTourn: true,
   },
-  clutch: {
-    label: 'Clutch%', decimals: 1,
-    both: s => s.clutch,         atk: s => s.clutch,            def: s => s.clutch,
-    taBoth: () => 0,             taAtk: () => 0,                taDef: () => 0,
-    hideTourn: true, noSide: true,
-  },
 };
 
-const STAT_ORDER: StatKey[] = ['kd', 'rating', 'acs', 'adr', 'hs', 'fkfd', 'kast', 'entry', 'clutch'];
+const STAT_ORDER: StatKey[] = ['kd', 'rating', 'acs', 'adr', 'hs', 'fkfd', 'kast', 'entry'];
 const PLAYER_COLORS = ['#60a5fa', '#f472b6', '#34d399', '#fb923c', '#a78bfa'];
 
 function resolveValue(m: PlayerMatchPoint, stat: StatKey, side: SideKey): number {
@@ -84,7 +77,6 @@ function resolveValue(m: PlayerMatchPoint, stat: StatKey, side: SideKey): number
   if (stat === 'fkfd')   return side === 'both' ? m.fkfd   : side === 'atk' ? m.fkfdAtk   : m.fkfdDef;
   if (stat === 'kast')   return (side === 'both' ? m.kast  : side === 'atk' ? m.kastAtk   : m.kastDef) * 100;
   if (stat === 'entry')  return side === 'both' ? m.entry  : side === 'atk' ? m.entryAtk  : m.entryDef;
-  if (stat === 'clutch') return m.clutch;
   return (side === 'both' ? m.hs : side === 'atk' ? m.hsAtk : m.hsDef) * 100;
 }
 
@@ -118,7 +110,7 @@ function ChartTooltip({ active, payload, label, decimals }: { active?: boolean; 
   );
 }
 
-function KpiCard({ title, both, atk, def, decimals, bothSub, atkSub, defSub }: { title: string; both: number; atk?: number; def?: number; decimals: number; bothSub?: string; atkSub?: string; defSub?: string }) {
+function KpiCard({ title, both, atk, def, decimals, bothSub, atkSub, defSub }: { title: string; both: number; atk: number; def: number; decimals: number; bothSub?: string; atkSub?: string; defSub?: string }) {
   return (
     <div className="bg-[#1a1d23] border border-gray-800 rounded-xl p-4 flex items-center gap-6">
       <div>
@@ -126,7 +118,6 @@ function KpiCard({ title, both, atk, def, decimals, bothSub, atkSub, defSub }: {
         <p className="text-2xl font-bold text-gray-100 mt-1">{both.toFixed(decimals)}</p>
         {bothSub && <p className="text-[11px] text-gray-400 mt-0.5">({bothSub})</p>}
       </div>
-      {atk != null && def != null && <>
       <div className="h-10 w-px bg-gray-800" />
       <div>
         <p className="text-[11px] font-semibold" style={{ color: '#ef4444' }}>ATK</p>
@@ -139,7 +130,6 @@ function KpiCard({ title, both, atk, def, decimals, bothSub, atkSub, defSub }: {
         <p className="text-xl font-bold text-gray-100">{def.toFixed(decimals)}</p>
         {defSub && <p className="text-[11px] text-gray-400 mt-0.5">({defSub})</p>}
       </div>
-      </>}
     </div>
   );
 }
@@ -148,17 +138,14 @@ export function PlayerStatsSection({
   stats,
   tournamentAvg,
   timeline,
-  team,
 }: {
   stats: PlayerStat[];
   tournamentAvg?: TournamentPlayerAvg | null;
   timeline: PlayerTimelineData;
-  team?: string;
 }) {
   const [stat, setStat] = useState<StatKey>('kd');
-  const [sideSel, setSide] = useState<SideKey>('both');
+  const [side, setSide] = useState<SideKey>('both');
   const cfg = STAT_CONFIG[stat];
-  const side: SideKey = cfg.noSide ? 'both' : sideSel;
 
   const seriesDateMap = new Map<string, string>();
   for (const pt of timeline) {
@@ -189,7 +176,7 @@ export function PlayerStatsSection({
         if (stat === 'adr')    return side === 'both' ? tournamentAvg.adr    : side === 'atk' ? tournamentAvg.adrAtk    : tournamentAvg.adrDef;
         if (stat === 'fkfd')   return side === 'both' ? tournamentAvg.fkfd   : side === 'atk' ? tournamentAvg.fkfdAtk   : tournamentAvg.fkfdDef;
         if (stat === 'kast')   return (side === 'both' ? tournamentAvg.kast  : side === 'atk' ? tournamentAvg.kastAtk   : tournamentAvg.kastDef) * 100;
-        if (stat === 'entry' || stat === 'clutch') return null;
+        if (stat === 'entry')  return null;
         return (side === 'both' ? tournamentAvg.hs : side === 'atk' ? tournamentAvg.hsAtk : tournamentAvg.hsDef) * 100;
       })()
     : null;
@@ -261,9 +248,7 @@ export function PlayerStatsSection({
             <button
               key={s}
               onClick={() => setSide(s)}
-              disabled={cfg.noSide && s !== 'both'}
-              title={cfg.noSide && s !== 'both' ? 'vlr does not split clutches by side' : undefined}
-              className={`px-3 py-1 rounded-lg text-xs font-bold border transition-colors disabled:opacity-40 disabled:cursor-default ${
+              className={`px-3 py-1 rounded-lg text-xs font-bold border transition-colors ${
                 side === s
                   ? 'bg-blue-600 border-blue-500 text-white'
                   : 'bg-[#1a1d23] border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
@@ -276,24 +261,7 @@ export function PlayerStatsSection({
       </div>
 
       {/* KPI cards */}
-      {stats.length > 0 && stat === 'clutch' && (() => {
-        // Promediar shares da siempre ~100/jugadores: se muestra el líder del período
-        const top = stats.reduce((a, b) => (b.clutch > a.clutch ? b : a));
-        const teamClutch = team ? tournamentAvg?.clutchTeams[team] : undefined;
-        const nTeams = tournamentAvg ? Object.values(tournamentAvg.clutchTeams).filter(c => c.total > 0).length : 0;
-        return (
-          <div className="flex gap-4 flex-wrap">
-            <KpiCard title="Top clutch share" both={top.clutch} decimals={cfg.decimals} bothSub={top.player} />
-            {teamClutch && teamClutch.total > 0 && (
-              <KpiCard title="Team clutch% — vs rivals" both={teamClutch.won / teamClutch.total * 100} decimals={cfg.decimals} bothSub={`${teamClutch.won} / ${teamClutch.total}`} />
-            )}
-            {nTeams > 0 && (
-              <KpiCard title="Tournament avg — Team clutch%" both={tournamentAvg!.clutch} decimals={cfg.decimals} bothSub={`${nTeams} teams`} />
-            )}
-          </div>
-        );
-      })()}
-      {stats.length > 0 && stat !== 'clutch' && (
+      {stats.length > 0 && (
         <div className="flex gap-4 flex-wrap">
           <KpiCard
             title={stat === 'entry' ? 'Max entry load' : `Team avg — ${cfg.label}`}

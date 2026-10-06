@@ -109,9 +109,6 @@ export type TeamRankStats = {
   postPlantDe: number;
   first3Lost: number;
   first3Total: number;
-  // Clutches ganados por el equipo / ganados por equipo + rival (solo mapas con data de ambos)
-  clutchWon: number;
-  clutchTotal: number;
 };
 
 // Maps Masters: por equipo y por mapa, victorias/jugados
@@ -203,8 +200,6 @@ export type PlayerStat = {
   fkfd: number; fkfdAtk: number; fkfdDef: number;
   kast: number; kastAtk: number; kastDef: number;
   entry: number; entryAtk: number; entryDef: number;
-  // % de los clutches ganados por el equipo (sin lado: vlr no lo separa)
-  clutch: number;
 };
 
 export type TournamentPlayerAvg = {
@@ -215,9 +210,6 @@ export type TournamentPlayerAvg = {
   hs: number;   hsAtk: number;   hsDef: number;
   fkfd: number; fkfdAtk: number; fkfdDef: number;
   kast: number; kastAtk: number; kastDef: number;
-  // Clutch% de equipo = ganados / (ganados + ganados por el rival en esos mapas)
-  clutchTeams: Record<string, { won: number; total: number }>;
-  clutch: number;   // promedio simple de los Clutch% de los equipos
 };
 
 export type EconomyBin = { label: string; count: number; wins: number };
@@ -258,7 +250,6 @@ export type PlayerMatchPoint = {
   fkfd: number;   fkfdAtk: number;   fkfdDef: number;
   kast: number;   kastAtk: number;   kastDef: number;
   entry: number;  entryAtk: number;  entryDef: number;
-  clutch: number;
   won: boolean;
 };
 

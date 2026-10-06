@@ -69,7 +69,6 @@ const METRICS: RowDef[] = [
   { label: 'Plant Rate DEF',         getValue: s => pct(s.retakePl, s.defTotal), lowerIsBetter: true, getWL: s => ({ wins: s.retakePl, total: s.defTotal }) },
   { label: 'Retake Eff',             getValue: s => pct(s.retakeDe, s.retakePl),                 getWL: s => ({ wins: s.retakeDe, total: s.retakePl }) },
   { label: 'Atk Loss by Time',       getValue: s => s.timeoutLosses, lowerIsBetter: true, countOnly: true },
-  { label: 'Clutch Winrate',         getValue: s => pct(s.clutchWon, s.clutchTotal),              getWL: s => ({ wins: s.clutchWon, total: s.clutchTotal }) },
   { separator: true, label: 'First 3 rounds performance' },
   { label: 'Pistol Winrate',         getValue: s => pct(s.pistolWins, s.pistolTotal),            getWL: s => ({ wins: s.pistolWins, total: s.pistolTotal }) },
   { label: 'Post Pistol Into Win',   getValue: s => pct(s.antiEcoWins, s.antiEcoTotal),          getWL: s => ({ wins: s.antiEcoWins, total: s.antiEcoTotal }) },

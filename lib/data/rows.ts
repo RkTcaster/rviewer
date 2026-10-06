@@ -42,16 +42,6 @@ export type PlayerPerformanceRow = {
   team: string | null;
   DE: Num;
   PL: Num;
-  '1v1': Num; '1v2': Num; '1v3': Num; '1v4': Num; '1v5': Num;
-};
-
-// Clutches ganados de player_performance (vlr solo da los ganados, no los intentos)
-export type PlayerClutchRow = {
-  series_id: string;
-  map_id: string;
-  team: string | null;
-  player: string | null;
-  '1v1': Num; '1v2': Num; '1v3': Num; '1v4': Num; '1v5': Num;
 };
 
 export type PlayerStatsRow = {

@@ -283,7 +283,7 @@ export default async function Page({
           />
         );
       case 'player-stats':
-        return <PlayerStatsSection stats={playerStats} tournamentAvg={tournamentPlayerAvg} timeline={playerTimeline} team={team} />;
+        return <PlayerStatsSection stats={playerStats} tournamentAvg={tournamentPlayerAvg} timeline={playerTimeline} />;
       case 'economy':
         return <EconomySection bins={economyBins} />;
       case 'compare-economy':
