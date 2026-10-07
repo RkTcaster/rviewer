@@ -28,6 +28,19 @@ import { VetoSection } from '@/components/sections/VetoSection';
 import { FormSection } from '@/components/sections/FormSection';
 import { VetoPredictorSection } from '@/components/sections/VetoPredictorSection';
 import { SeriesOutcomesSection } from '@/components/sections/SeriesOutcomesSection';
+import type { Metadata } from 'next';
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ section?: string; team?: string; team2?: string }>;
+}): Promise<Metadata> {
+  const { section = 'compare-maps', team, team2 } = await searchParams;
+  if ((section === 'compare-maps' || section === 'compare-stats' || section === 'compare-economy') && team && team2) {
+    return { title: `${team} vs ${team2} VCT Data` };
+  }
+  return {};
+}
 
 export default async function Page({
   searchParams,

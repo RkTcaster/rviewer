@@ -4,6 +4,9 @@ Shown by the "News" button in the sidebar. Only the topmost entry is displayed.
 Format: a `## date` heading (YYYY-MM-DD) followed by one `- ` bullet per change.
 Adding a new date brings back the unread dot.
 
+## 2026-10-07
+- Compare Maps / Stats / Economy: with both teams selected, the browser tab shows "Team A vs Team B VCT Data".
+
 ## 2026-10-05
 - Compare Maps: most likely veto between the two teams (same model as Veto Predictor), shown with the Add veto button next to Maps. The left team opens the veto; swap it with the button and lock real steps to recalculate. Each map in the table shows who bans or picks it (Ban 1 / Pick / Ban 2 / Decider) with the team logo and an arrow to its side.
 - Team logos in every Team selector and in the Exclude Teams lists.
