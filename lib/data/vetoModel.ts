@@ -1,6 +1,8 @@
 // lib/data/vetoModel.ts — snapshot of the veto predictor model (exported by the notebook)
+import { createHash } from 'crypto';
+import { unstable_cache } from 'next/cache';
 import { supabase } from '../supabase';
-import { versioned, fetchAllPages } from './helpers';
+import { fetchAllPages, getLastUpdateDate } from './helpers';
 import type { TeamMapRow, MapRow, CoefRow, MetaRow } from '../vetoPredict';
 import type { ResultTeamRow, ResultTeamMapRow } from '../resultPredict';
 
@@ -10,8 +12,27 @@ export interface VetoModelRows {
   resultTeam: ResultTeamRow[]; resultTeamMap: ResultTeamMapRow[]; resultMeta: MetaRow[];
 }
 
-// v2: rows now include the result_* tables and the English veto columns
-export const getVetoModelRows = versioned('veto-model-v2', getVetoModelRows_impl);
+// Fingerprint of the uploaded snapshot: hash of veto_meta + result_meta (snapshot date, hyper-
+// parameters, test metrics), which change on every retrain. Uploading a new model does not touch
+// `draft`, so getLastUpdateDate alone kept serving the old snapshot for up to 24 h. Cached 5 min
+// like getLastUpdateDate, so a new upload shows up within 5 minutes.
+async function getModelVersion_impl(): Promise<string> {
+  const [veto, result] = await Promise.all([
+    supabase.from('veto_meta').select('key, value'),
+    supabase.from('result_meta').select('key, value'),
+  ]);
+  const rows = [...(veto.data ?? []).map(r => `veto:${r.key}=${r.value}`),
+                ...(result.data ?? []).map(r => `result:${r.key}=${r.value}`)].sort();
+  return createHash('sha1').update(rows.join('\n')).digest('hex').slice(0, 16);
+}
+const getModelVersion = unstable_cache(getModelVersion_impl, ['veto-model-version'], { revalidate: 300 });
+
+// v3: cache key also includes the snapshot fingerprint (v2 keys only followed `draft`)
+export async function getVetoModelRows(): Promise<VetoModelRows> {
+  const [lastUpdate, model] = await Promise.all([getLastUpdateDate(), getModelVersion()]);
+  return unstable_cache(getVetoModelRows_impl, ['veto-model-v3', lastUpdate ?? 'none', model],
+    { revalidate: 86400, tags: ['vct-data'] })();
+}
 async function getVetoModelRows_impl(): Promise<VetoModelRows> {
   const [teamMap, maps, coef, meta, resultTeam, resultTeamMap, resultMeta] = await Promise.all([
     // grows with teams × maps; paginate like any table that can pass 1000 rows

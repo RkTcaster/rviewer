@@ -136,9 +136,10 @@ missing from the snapshot; a UI that only offers snapshot maps never hits those.
 
 The rviewer data layer (`lib/data/vetoModel.ts`, `getVetoModelRows`) returns **plain rows**
 (serialisable for `unstable_cache` and for client props); the `VetoSnapshot` with its `Map`s is
-built on the client with `useMemo`. Cache caveat: `versioned` invalidates when the latest match
-date in `draft` changes, so a snapshot uploaded without new `draft` data can stay cached for up
-to 24 h (or until the `vct-data` tag is revalidated).
+built on the client with `useMemo`. Cache: the key (`veto-model-v3`) combines the latest `draft`
+date with a hash of `veto_meta` + `result_meta` (`getModelVersion`, cached 5 min), so a newly
+uploaded snapshot shows up within ~5 minutes even without new `draft` data. (Up to v2 the key
+only followed `draft`, and a new snapshot could stay hidden for 24 h.)
 
 In rviewer, `VetoPredictorSection.tsx` still holds hand-copied `ACCURACY` and `SLOT_ACTOR`
 constants. They can now be replaced by `snap.testMetrics` and the exported `SLOT_ACTOR`, so a
