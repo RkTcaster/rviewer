@@ -27,13 +27,14 @@ const SIDES: { key: Side; label: string }[] = [
   { key: 'def', label: 'DEF' },
 ];
 
-type ColKey = 'pick' | 'opWr' | 'noOpWr' | 'kept' | 'full' | 'half';
+type ColKey = 'pick' | 'opWr' | 'noOpWr' | 'kept' | 'save' | 'full' | 'half';
 // Each column is a numerator / denominator over one side (or both merged)
 const COLS: { key: ColKey; label: string; frac: (s: OperatorUseSide) => [number, number] }[] = [
   { key: 'pick',   label: 'Op pick rate', frac: s => [s.op, s.eligible] },
   { key: 'opWr',   label: 'Op WR',        frac: s => [s.opWins, s.opDecided] },
   { key: 'noOpWr', label: 'No-Op WR',     frac: s => [s.noOpWins, s.noOpDecided] },
   { key: 'kept',   label: 'Kept',         frac: s => [s.kept, s.op] },
+  { key: 'save',   label: 'Save Op',      frac: s => [s.saved, s.kept] },
   { key: 'full',   label: 'Full buy',     frac: s => [s.fullOp, s.fullEligible] },
   { key: 'half',   label: 'Half buy',     frac: s => [s.halfOp, s.halfEligible] },
 ];
@@ -64,6 +65,13 @@ const LEGEND = (
       </dd>
     </div>
     <div>
+      <dt className="font-bold text-gray-100">Save Op</dt>
+      <dd className="text-gray-400">
+        Kept rounds where the team lost the previous round: the Op was saved instead of dying with
+        it. Over Kept rounds, so the rest of Kept came after a won round.
+      </dd>
+    </div>
+    <div>
       <dt className="font-bold text-gray-100">Full buy / Half buy</dt>
       <dd className="text-gray-400">
         Op pick rate only in the rounds where the team&apos;s loadout was 20000 or more (full) or
@@ -85,11 +93,11 @@ const LEGEND = (
 );
 
 function emptySide(): OperatorUseSide {
-  return { eligible: 0, op: 0, kept: 0, opDecided: 0, opWins: 0, noOpDecided: 0, noOpWins: 0, fullEligible: 0, fullOp: 0, halfEligible: 0, halfOp: 0, agents: {} };
+  return { eligible: 0, op: 0, kept: 0, saved: 0, opDecided: 0, opWins: 0, noOpDecided: 0, noOpWins: 0, fullEligible: 0, fullOp: 0, halfEligible: 0, halfOp: 0, agents: {} };
 }
 
 function addSide(into: OperatorUseSide, from: OperatorUseSide) {
-  into.eligible += from.eligible; into.op += from.op; into.kept += from.kept;
+  into.eligible += from.eligible; into.op += from.op; into.kept += from.kept; into.saved += from.saved;
   into.opDecided += from.opDecided; into.opWins += from.opWins;
   into.noOpDecided += from.noOpDecided; into.noOpWins += from.noOpWins;
   into.fullEligible += from.fullEligible; into.fullOp += from.fullOp;

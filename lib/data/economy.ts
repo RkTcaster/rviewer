@@ -287,6 +287,7 @@ async function getPostPistolForce_impl(filters: {
 // A round counts for a team when it is not 1, 2, 13 or 14 (pistols and their follow-ups);
 // it is an Op round when any of the team's five players held an Operator. round_buy's weapon is the
 // weapon held, so an Op with spend < OP_PRICE was kept (or picked up), not bought that round.
+// Saved = kept after a round the team lost (the previous round can be 2 or 14, which are not counted).
 // Round winner and team loadout come from team_economy, joined on map_id + round with the same team_a.
 // Per player, the same counters only over the rounds that player played.
 const OP_SKIP_ROUNDS = new Set([1, 2, 13, 14]);
@@ -297,10 +298,11 @@ type RoundBuyRow = { map_id: string; round: number; team_a: string; team_b: stri
 type OpEcoRow = { map_id: string; round: number; team_a: string; win_A: number; team_a_economy: number | null; team_b_economy: number | null };
 
 function emptyOpSide(): OperatorUseSide {
-  return { eligible: 0, op: 0, kept: 0, opDecided: 0, opWins: 0, noOpDecided: 0, noOpWins: 0, fullEligible: 0, fullOp: 0, halfEligible: 0, halfOp: 0, agents: {} };
+  return { eligible: 0, op: 0, kept: 0, saved: 0, opDecided: 0, opWins: 0, noOpDecided: 0, noOpWins: 0, fullEligible: 0, fullOp: 0, halfEligible: 0, halfOp: 0, agents: {} };
 }
 
-export const getOperatorUseStats = versioned('operator-use-stats', getOperatorUseStats_impl);
+// v2: entries cached while round_buy had no RLS read policy hold empty results
+export const getOperatorUseStats = versioned('operator-use-stats-v2', getOperatorUseStats_impl);
 async function getOperatorUseStats_impl(
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<OperatorUseData> {
@@ -337,9 +339,9 @@ async function getOperatorUseStats_impl(
   for (const e of ecoRows) eco[`${e.map_id}|${Number(e.round)}`] = e;
 
   // won / loadout are null when the round has no matching team_economy row
-  const add = (st: OperatorUseSide, hasOp: boolean, kept: boolean, won: boolean | null, loadout: number | null, agents: string[]) => {
+  const add = (st: OperatorUseSide, hasOp: boolean, kept: boolean, saved: boolean, won: boolean | null, loadout: number | null, agents: string[]) => {
     st.eligible++;
-    if (hasOp) { st.op++; if (kept) st.kept++; }
+    if (hasOp) { st.op++; if (kept) { st.kept++; if (saved) st.saved++; } }
     if (won !== null) {
       if (hasOp) { st.opDecided++; if (won) st.opWins++; }
       else       { st.noOpDecided++; if (won) st.noOpWins++; }
@@ -365,11 +367,14 @@ async function getOperatorUseStats_impl(
     maps.add(map);
     const e = eco[`${r.map_id}|${Number(r.round)}`];
     const ecoOk = !!e && e.team_a?.trim() === r.team_a?.trim();
+    const prev = eco[`${r.map_id}|${Number(r.round) - 1}`];
+    const prevOk = !!prev && prev.team_a?.trim() === r.team_a?.trim();
     for (const s of ['a', 'b'] as const) {
       const team = (s === 'a' ? r.team_a : r.team_b)?.trim();
       if (!team) continue;
       const atk = (r.side_team_a === 'atk') === (s === 'a');
       const won = ecoOk ? (Number(e.win_A) === 1) === (s === 'a') : null;
+      const lostPrev = prevOk && (Number(prev.win_A) === 1) !== (s === 'a');
       const loadoutRaw = ecoOk ? (s === 'a' ? e.team_a_economy : e.team_b_economy) : null;
       const loadout = loadoutRaw == null ? null : Number(loadoutRaw);
 
@@ -382,13 +387,13 @@ async function getOperatorUseStats_impl(
         }));
       const hasOp = holders.length > 0;
       // Team-level kept: nobody bought an Op that round
-      add(side(stats[team] ??= {}, map, atk), hasOp, hasOp && holders.every(h => h.kept), won, loadout, holders.map(h => h.agent).filter(Boolean));
+      add(side(stats[team] ??= {}, map, atk), hasOp, hasOp && holders.every(h => h.kept), lostPrev, won, loadout, holders.map(h => h.agent).filter(Boolean));
 
       for (const i of [1, 2, 3, 4, 5]) {
         const player = String(r[`player_${i}_team_${s}`] ?? '').trim();
         if (!player) continue;
         const h = holders.find(x => x.player === player);
-        add(side((players[team] ??= {})[player] ??= {}, map, atk), !!h, !!h?.kept, won, loadout, h?.agent ? [h.agent] : []);
+        add(side((players[team] ??= {})[player] ??= {}, map, atk), !!h, !!h?.kept, lostPrev, won, loadout, h?.agent ? [h.agent] : []);
       }
     }
   }

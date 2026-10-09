@@ -244,6 +244,7 @@ export type TeamPostPistolForce = {
 export type OperatorUseSide = {
   eligible: number; op: number;
   kept: number;                            // Op rounds where the Op was not bought (spend < 4700)
+  saved: number;                           // kept rounds whose previous round the team lost
   opDecided: number; opWins: number;       // Op rounds with a known winner / won
   noOpDecided: number; noOpWins: number;   // same, for rounds without an Op
   fullEligible: number; fullOp: number;    // team loadout fullBuy (>= 20000)

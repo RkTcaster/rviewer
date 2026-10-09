@@ -247,6 +247,9 @@ maps are summed, Both / ATK / DEF chips pick the side, Detail info adds the `x/y
 - **Op pick rate**: eligible rounds where ≥1 player held an Operator. `round_buy`'s weapon is the
   weapon *held*, not bought: 280 of 549 Operator entries had spend < 4700 (kept or picked up),
   so the metric counts holding, and **Kept** (Op rounds where no Op was bought) breaks it down.
+- **Save Op**: Kept rounds whose previous round the team lost (`team_economy.win_A` of round − 1;
+  rounds 2 and 14 count as the previous round), over Kept. PRX: 6/25 (something 4/18, d4v41 2/8),
+  matching an independent count.
 - **Op WR / No-Op WR**: round win rate (`team_economy.win_A`) with and without an Op.
 - **Full buy / Half buy**: Op rate by team loadout, reusing `classifyEconomy` (full ≥ 20000,
   half = semiBuy 15000–19999, lower buys left out).
@@ -267,7 +270,12 @@ all 16 default teams (`opDecided + noOpDecided = eligible`, `kept <= op`, per pl
 - **7.2 Check the chips in the browser**: team, map, side and Detail info chips, sortable
   headers and team expansion were not tested by hand yet.
 - **7.3 Cache staleness**: `versioned()` keys on the latest `draft` date, so uploading
-  `round_buy` rows without new `draft` rows can show stale data for up to 24 h.
+  `round_buy` rows without new `draft` rows can show stale data for up to 24 h. It already bit
+  once (oct 2026): `round_buy` went to production without an RLS read policy (local uses the
+  service_role key, which skips RLS), every filter combination opened then cached an empty result,
+  and those kept showing "No Operator data" after the policy was added, while combinations never
+  opened before worked. Fixed by bumping the key to `operator-use-stats-v2`. A new table needs its
+  read policy before the first deploy that reads it.
 - **7.4 Next iterations, to decide**: Op round WR, Op by agent and buy context are done.
   Still open: per-map columns (the per-map counters already exist), Op vs Op rounds, and double Op
   once more tournaments are loaded.
