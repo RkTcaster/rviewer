@@ -238,6 +238,26 @@ export type TeamPostPistolForce = {
   r2PostPlant: PostPistolForceStat; r14PostPlant: PostPistolForceStat;
 };
 
+// Operator Use, per team and map, from round_buy + team_economy. eligible = rounds played minus
+// 1, 2, 13 and 14 (pistols and their follow-ups); op = eligible rounds where at least one player
+// held an Operator (bought that round or kept from the previous one).
+export type OperatorUseSide = {
+  eligible: number; op: number;
+  kept: number;                            // Op rounds where the Op was not bought (spend < 4700)
+  opDecided: number; opWins: number;       // Op rounds with a known winner / won
+  noOpDecided: number; noOpWins: number;   // same, for rounds without an Op
+  fullEligible: number; fullOp: number;    // team loadout fullBuy (>= 20000)
+  halfEligible: number; halfOp: number;    // team loadout semiEco + semiBuy (5000-19999)
+  agents: Record<string, number>;          // Op holders by agent
+};
+export type OperatorUseStat = { atk: OperatorUseSide; def: OperatorUseSide };
+export type OperatorUseData = {
+  stats: Record<string, Record<string, OperatorUseStat>>;
+  // team -> player -> map; for a player, op = eligible rounds where that player held the Operator
+  players: Record<string, Record<string, Record<string, OperatorUseStat>>>;
+  maps: string[];
+};
+
 export type PlayerMatchPoint = {
   seriesId: string;
   date: string;

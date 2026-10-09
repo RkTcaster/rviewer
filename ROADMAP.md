@@ -236,6 +236,42 @@ Done when `grep` finds no Spanish comments left, at which point the README's con
 - **6.3 Hiding teams in table pages like Stats Rank**: done (see Done, oct 2026) as a collapsible
   panel. Still open if the need comes back: hiding a team from its table row, or saved presets.
 
+## Phase 7 — Operator Use (in progress)
+
+First version shipped oct 2026 under Testing (`components/sections/OperatorUseSection.tsx`,
+`getOperatorUseStats` in `lib/data/economy.ts`), reading the new `round_buy` table joined with
+`team_economy` (`map_id` + `round`, same `team_a`; 1180/1180 rows match on Champions 2026).
+Eligible rounds = played minus 1, 2, 13 and 14. Same filters as Maps Rank; map chips filter which
+maps are summed, Both / ATK / DEF chips pick the side, Detail info adds the `x/y` counts. Columns:
+
+- **Op pick rate**: eligible rounds where ≥1 player held an Operator. `round_buy`'s weapon is the
+  weapon *held*, not bought: 280 of 549 Operator entries had spend < 4700 (kept or picked up),
+  so the metric counts holding, and **Kept** (Op rounds where no Op was bought) breaks it down.
+- **Op WR / No-Op WR**: round win rate (`team_economy.win_A`) with and without an Op.
+- **Full buy / Half buy**: Op rate by team loadout, reusing `classifyEconomy` (full ≥ 20000,
+  half = semiEco + semiBuy, eco left out).
+- **Agents**: Op holders by agent (icons from `getAgentImages`).
+
+Clicking a team expands its players with the same columns, counted over the rounds where *that
+player* held the Op (kept by the player's own spend; WR and loadout are the team's). Double Op was
+considered and dropped: 5 rounds in all of Champions 2026.
+
+Verified against an independent count from Supabase on PRX: 51/146 Op rounds, 25 kept, Op WR
+27/51, No-Op WR 45/95, full buy 50/110, half buy 1/35, agents Chamber 26 / Yoru 24 / Viper 1 /
+Sage 1; something 35/146 (19 won, 18 kept), d4v41 17/146 (9 won, 8 kept). Invariants hold on
+all 16 default teams (`opDecided + noOpDecided = eligible`, `kept <= op`, per player
+`sum(agents) = op`). Still to work on:
+
+- **7.1 More data in `round_buy`**: only Champions 2026 is loaded (24 series). The section picks
+  up other tournaments on its own once their rows are uploaded.
+- **7.2 Check the chips in the browser**: team, map, side and Detail info chips, sortable
+  headers and team expansion were not tested by hand yet.
+- **7.3 Cache staleness**: `versioned()` keys on the latest `draft` date, so uploading
+  `round_buy` rows without new `draft` rows can show stale data for up to 24 h.
+- **7.4 Next iterations, to decide**: Op round WR, Op by agent and buy context are done.
+  Still open: per-map columns (the per-map counters already exist), Op vs Op rounds, and double Op
+  once more tournaments are loaded.
+
 ---
 
 ## General closing criteria per item

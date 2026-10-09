@@ -1,7 +1,7 @@
 // lib/data/economy.ts — economía por ronda (distribución, compare, torneo)
 import { supabase } from '../supabase';
 import { versioned, fetchAllPages } from './helpers';
-import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare, TeamPostPistolForce } from '../types';
+import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare, TeamPostPistolForce, OperatorUseData, OperatorUseStat, OperatorUseSide } from '../types';
 
 export async function getEconomyDistribution(filters: {
   reg?: string[]; tour?: string; team?: string;
@@ -281,4 +281,117 @@ async function getPostPistolForce_impl(filters: {
   }
 
   return result;
+}
+
+// Operator Use: series picked from draft with the same filters as Maps Rank, then round_buy.
+// A round counts for a team when it is not 1, 2, 13 or 14 (pistols and their follow-ups);
+// it is an Op round when any of the team's five players held an Operator. round_buy's weapon is the
+// weapon held, so an Op with spend < OP_PRICE was kept (or picked up), not bought that round.
+// Round winner and team loadout come from team_economy, joined on map_id + round with the same team_a.
+// Per player, the same counters only over the rounds that player played.
+const OP_SKIP_ROUNDS = new Set([1, 2, 13, 14]);
+const OP_PRICE = 4700;
+const OP_PLAYER_COLS = (['a', 'b'] as const).flatMap(s => [1, 2, 3, 4, 5].flatMap(i =>
+  ['', '_weapon', '_agent', '_spend'].map(c => `player_${i}_team_${s}${c}`)));
+type RoundBuyRow = { map_id: string; round: number; team_a: string; team_b: string; side_team_a: string } & Record<string, string | number | null>;
+type OpEcoRow = { map_id: string; round: number; team_a: string; win_A: number; team_a_economy: number | null; team_b_economy: number | null };
+
+function emptyOpSide(): OperatorUseSide {
+  return { eligible: 0, op: 0, kept: 0, opDecided: 0, opWins: 0, noOpDecided: 0, noOpWins: 0, fullEligible: 0, fullOp: 0, halfEligible: 0, halfOp: 0, agents: {} };
+}
+
+export const getOperatorUseStats = versioned('operator-use-stats', getOperatorUseStats_impl);
+async function getOperatorUseStats_impl(
+  filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
+): Promise<OperatorUseData> {
+  let idQuery = supabase.from('draft').select('series_id');
+  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
+  if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
+  if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
+  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
+  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
+  if (filters.last && filters.last !== 'all') idQuery = idQuery.order('date', { ascending: false }).limit(parseInt(filters.last));
+
+  const { data: idList } = await idQuery;
+  if (!idList || idList.length === 0) return { stats: {}, players: {}, maps: [] };
+
+  const seriesIds = [...new Set(idList.map(x => x.series_id))];
+  // Ordered by the PK so the pages never overlap or skip rows
+  const [rows, ecoRows] = await Promise.all([
+    fetchAllPages<RoundBuyRow>((from, to) =>
+      supabase.from('round_buy')
+        .select(`map_id, round, team_a, team_b, side_team_a, ${OP_PLAYER_COLS.join(', ')}`)
+        .in('series_id', seriesIds)
+        .order('team_map_round_id')
+        .range(from, to) as unknown as PromiseLike<{ data: RoundBuyRow[] | null; error: unknown }>
+    ),
+    fetchAllPages<OpEcoRow>((from, to) =>
+      supabase.from('team_economy')
+        .select('map_id, round, team_a, win_A, team_a_economy, team_b_economy')
+        .in('series_id', seriesIds)
+        .order('team_map_round_id')
+        .range(from, to)
+    ),
+  ]);
+  const eco: Record<string, OpEcoRow> = {};
+  for (const e of ecoRows) eco[`${e.map_id}|${Number(e.round)}`] = e;
+
+  // won / loadout are null when the round has no matching team_economy row
+  const add = (st: OperatorUseSide, hasOp: boolean, kept: boolean, won: boolean | null, loadout: number | null, agents: string[]) => {
+    st.eligible++;
+    if (hasOp) { st.op++; if (kept) st.kept++; }
+    if (won !== null) {
+      if (hasOp) { st.opDecided++; if (won) st.opWins++; }
+      else       { st.noOpDecided++; if (won) st.noOpWins++; }
+    }
+    if (loadout !== null) {
+      const cat = classifyEconomy(loadout);
+      if (cat === 'fullBuy') { st.fullEligible++; if (hasOp) st.fullOp++; }
+      else if (cat !== 'eco') { st.halfEligible++; if (hasOp) st.halfOp++; }
+    }
+    for (const a of agents) st.agents[a] = (st.agents[a] ?? 0) + 1;
+  };
+  const side = (byMap: Record<string, OperatorUseStat>, map: string, atk: boolean) =>
+    (byMap[map] ??= { atk: emptyOpSide(), def: emptyOpSide() })[atk ? 'atk' : 'def'];
+
+  const stats: Record<string, Record<string, OperatorUseStat>> = {};
+  const players: Record<string, Record<string, Record<string, OperatorUseStat>>> = {};
+  const maps = new Set<string>();
+  for (const r of rows) {
+    if (OP_SKIP_ROUNDS.has(Number(r.round))) continue;
+    // map_id is "<series_id>-<Map>"
+    const map = r.map_id?.slice(r.map_id.indexOf('-') + 1);
+    if (!map) continue;
+    maps.add(map);
+    const e = eco[`${r.map_id}|${Number(r.round)}`];
+    const ecoOk = !!e && e.team_a?.trim() === r.team_a?.trim();
+    for (const s of ['a', 'b'] as const) {
+      const team = (s === 'a' ? r.team_a : r.team_b)?.trim();
+      if (!team) continue;
+      const atk = (r.side_team_a === 'atk') === (s === 'a');
+      const won = ecoOk ? (Number(e.win_A) === 1) === (s === 'a') : null;
+      const loadoutRaw = ecoOk ? (s === 'a' ? e.team_a_economy : e.team_b_economy) : null;
+      const loadout = loadoutRaw == null ? null : Number(loadoutRaw);
+
+      const holders = [1, 2, 3, 4, 5]
+        .filter(i => r[`player_${i}_team_${s}_weapon`] === 'Operator')
+        .map(i => ({
+          player: String(r[`player_${i}_team_${s}`] ?? '').trim(),
+          agent: String(r[`player_${i}_team_${s}_agent`] ?? '').trim(),
+          kept: Number(r[`player_${i}_team_${s}_spend`] ?? 0) < OP_PRICE,
+        }));
+      const hasOp = holders.length > 0;
+      // Team-level kept: nobody bought an Op that round
+      add(side(stats[team] ??= {}, map, atk), hasOp, hasOp && holders.every(h => h.kept), won, loadout, holders.map(h => h.agent).filter(Boolean));
+
+      for (const i of [1, 2, 3, 4, 5]) {
+        const player = String(r[`player_${i}_team_${s}`] ?? '').trim();
+        if (!player) continue;
+        const h = holders.find(x => x.player === player);
+        add(side((players[team] ??= {})[player] ??= {}, map, atk), !!h, !!h?.kept, won, loadout, h?.agent ? [h.agent] : []);
+      }
+    }
+  }
+
+  return { stats, players, maps: [...maps].sort() };
 }
