@@ -347,7 +347,7 @@ async function getOperatorUseStats_impl(
     if (loadout !== null) {
       const cat = classifyEconomy(loadout);
       if (cat === 'fullBuy') { st.fullEligible++; if (hasOp) st.fullOp++; }
-      else if (cat !== 'eco') { st.halfEligible++; if (hasOp) st.halfOp++; }
+      else if (cat === 'semiBuy') { st.halfEligible++; if (hasOp) st.halfOp++; }
     }
     for (const a of agents) st.agents[a] = (st.agents[a] ?? 0) + 1;
   };

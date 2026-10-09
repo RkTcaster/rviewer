@@ -247,7 +247,7 @@ export type OperatorUseSide = {
   opDecided: number; opWins: number;       // Op rounds with a known winner / won
   noOpDecided: number; noOpWins: number;   // same, for rounds without an Op
   fullEligible: number; fullOp: number;    // team loadout fullBuy (>= 20000)
-  halfEligible: number; halfOp: number;    // team loadout semiEco + semiBuy (5000-19999)
+  halfEligible: number; halfOp: number;    // team loadout semiBuy (15000-19999)
   agents: Record<string, number>;          // Op holders by agent
 };
 export type OperatorUseStat = { atk: OperatorUseSide; def: OperatorUseSide };

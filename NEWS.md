@@ -6,7 +6,7 @@ Adding a new date brings back the unread dot.
 
 ## 2026-10-09
 - New Operator Use section (Testing): per team, % of rounds where at least one player had an Operator (bought or kept from the previous round). Rounds 1, 2, 13 and 14 are left out. Champions 2026 only for now.
-- Columns: Op WR and No-Op WR (round win rate with and without an Op), Kept (Op rounds where it wasn't bought), Full buy / Half buy (how often the Op shows up in each kind of buy) and the agents that held it. Click any header to sort.
+- Columns: Op WR and No-Op WR (round win rate with and without an Op), Kept (Op rounds where it wasn't bought), Full buy / Half buy (Op rate when the team's loadout is 20000+ / 15000–19999) and the agents that held it. Click any header to sort.
 - Both / ATK / DEF buttons switch the whole table between both sides, attack only and defense only; Detail info shows the counts under each %. Click a team to expand it and see the same numbers per player. The map chips choose which maps are added up.
 
 ## 2026-10-07

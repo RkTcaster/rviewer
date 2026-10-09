@@ -249,7 +249,7 @@ maps are summed, Both / ATK / DEF chips pick the side, Detail info adds the `x/y
   so the metric counts holding, and **Kept** (Op rounds where no Op was bought) breaks it down.
 - **Op WR / No-Op WR**: round win rate (`team_economy.win_A`) with and without an Op.
 - **Full buy / Half buy**: Op rate by team loadout, reusing `classifyEconomy` (full ≥ 20000,
-  half = semiEco + semiBuy, eco left out).
+  half = semiBuy 15000–19999, lower buys left out).
 - **Agents**: Op holders by agent (icons from `getAgentImages`).
 
 Clicking a team expands its players with the same columns, counted over the rounds where *that
@@ -257,7 +257,7 @@ player* held the Op (kept by the player's own spend; WR and loadout are the team
 considered and dropped: 5 rounds in all of Champions 2026.
 
 Verified against an independent count from Supabase on PRX: 51/146 Op rounds, 25 kept, Op WR
-27/51, No-Op WR 45/95, full buy 50/110, half buy 1/35, agents Chamber 26 / Yoru 24 / Viper 1 /
+27/51, No-Op WR 45/95, full buy 50/110, half buy 0/21, agents Chamber 26 / Yoru 24 / Viper 1 /
 Sage 1; something 35/146 (19 won, 18 kept), d4v41 17/146 (9 won, 8 kept). Invariants hold on
 all 16 default teams (`opDecided + noOpDecided = eligible`, `kept <= op`, per player
 `sum(agents) = op`). Still to work on:

@@ -1,10 +1,12 @@
 'use client';
 
 import { Fragment, useState } from 'react';
+import { Info } from 'lucide-react';
 import { OperatorUseSide, OperatorUseStat, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { useUrlSet } from '@/hooks/useUrlSet';
 import { TeamChipsPanel } from '../TeamChipsPanel';
+import { Tooltip } from '../Tooltip';
 
 interface Props {
   stats: Record<string, Record<string, OperatorUseStat>>;
@@ -35,6 +37,52 @@ const COLS: { key: ColKey; label: string; frac: (s: OperatorUseSide) => [number,
   { key: 'full',   label: 'Full buy',     frac: s => [s.fullOp, s.fullEligible] },
   { key: 'half',   label: 'Half buy',     frac: s => [s.halfOp, s.halfEligible] },
 ];
+
+// What every column of this table means, same pattern as the Neon + Phoenix legend
+const LEGEND = (
+  <dl className="w-[360px] flex flex-col gap-2 text-[11px] leading-snug text-gray-300">
+    <div>
+      <dt className="font-bold text-gray-100">Rounds counted</dt>
+      <dd className="text-gray-400">Every round except 1, 2, 13 and 14 (pistols and the round after).</dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Op pick rate</dt>
+      <dd className="text-gray-400">
+        Rounds where at least one player had an Operator, bought that round or kept from the
+        previous one, over rounds counted.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Op WR / No-Op WR</dt>
+      <dd className="text-gray-400">Round win rate in the rounds with an Op, and in the rounds without one.</dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Kept</dt>
+      <dd className="text-gray-400">
+        Op rounds where nobody bought the Op (spend under 4700): it was kept from the previous
+        round or picked up.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Full buy / Half buy</dt>
+      <dd className="text-gray-400">
+        Op pick rate only in the rounds where the team&apos;s loadout was 20000 or more (full) or
+        15000 to 19999 (half). Lower buys are left out of both.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Agents</dt>
+      <dd className="text-gray-400">Agent of the player holding the Op, with its number of rounds.</dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Both / ATK / DEF and Detail info</dt>
+      <dd className="text-gray-400">
+        The side buttons switch every column; Detail info adds the counts under each %. Click a
+        team to see the same columns per player, counted over the rounds that player held the Op.
+      </dd>
+    </div>
+  </dl>
+);
 
 function emptySide(): OperatorUseSide {
   return { eligible: 0, op: 0, kept: 0, opDecided: 0, opWins: 0, noOpDecided: 0, noOpWins: 0, fullEligible: 0, fullOp: 0, halfEligible: 0, halfOp: 0, agents: {} };
@@ -288,9 +336,12 @@ export function OperatorUseSection({ stats, players, maps, teamLogos = {}, teamR
         >
           Reset filters
         </button>
-        <span className="text-[11px] text-gray-500">
-          Rounds 1, 2, 13 and 14 are excluded. Op round = at least one player held an Operator (bought or kept). Kept = Op rounds where no Op was bought.
-        </span>
+        <Tooltip content={LEGEND} className="items-center">
+          <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-gray-200 hover:text-white transition-colors cursor-help">
+            <Info className="w-3.5 h-3.5 shrink-0" />
+            Legend
+          </span>
+        </Tooltip>
       </div>
 
       {baseTeams.length === 0 ? (
