@@ -22,7 +22,8 @@ export async function fetchAllPages<T>(
   const all: T[] = [];
   let from = 0;
   while (true) {
-    const { data } = await buildQuery(from, from + pageSize - 1);
+    const { data, error } = await buildQuery(from, from + pageSize - 1);
+    if (error) console.error('fetchAllPages error:', error);
     if (!data || data.length === 0) break;
     all.push(...data);
     if (data.length < pageSize) break;
