@@ -2,15 +2,14 @@
 
 import { Fragment, useState } from 'react';
 import { Info } from 'lucide-react';
-import { OperatorUseSide, OperatorUseStat, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { OperatorUseData, OperatorUseSide, OperatorUseStat, OperatorUseWeapon, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { useUrlSet } from '@/hooks/useUrlSet';
 import { TeamChipsPanel } from '../TeamChipsPanel';
 import { Tooltip } from '../Tooltip';
 
 interface Props {
-  stats: Record<string, Record<string, OperatorUseStat>>;
-  players: Record<string, Record<string, Record<string, OperatorUseStat>>>;
+  byWeapon: OperatorUseData['byWeapon'] | null;
   maps: string[];
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
@@ -27,73 +26,132 @@ const SIDES: { key: Side; label: string }[] = [
   { key: 'def', label: 'DEF' },
 ];
 
-type ColKey = 'pick' | 'opWr' | 'noOpWr' | 'kept' | 'save' | 'full' | 'half';
+// Weapon chips: either can be on alone, both on = rounds with an Operator or an Outlaw
+const WEAPON_CHIPS = [
+  { key: 'op', label: 'Operator' },
+  { key: 'outlaw', label: 'Outlaw' },
+] as const;
+type WeaponChips = Record<(typeof WEAPON_CHIPS)[number]['key'], boolean>;
+const WEAPON_LABEL: Record<OperatorUseWeapon, string> = { op: 'Op', outlaw: 'Outlaw', both: 'Op+Outlaw' };
+
+type ColKey = 'pick' | 'opWr' | 'noOpWr' | 'kept' | 'save' | 'full' | 'half' | 'kills' | 'opDuel' | 'duel';
 // Each column is a numerator / denominator over one side (or both merged)
-const COLS: { key: ColKey; label: string; frac: (s: OperatorUseSide) => [number, number] }[] = [
-  { key: 'pick',   label: 'Op pick rate', frac: s => [s.op, s.eligible] },
-  { key: 'opWr',   label: 'Op WR',        frac: s => [s.opWins, s.opDecided] },
-  { key: 'noOpWr', label: 'No-Op WR',     frac: s => [s.noOpWins, s.noOpDecided] },
-  { key: 'kept',   label: 'Kept',         frac: s => [s.kept, s.op] },
-  { key: 'save',   label: 'Save Op',      frac: s => [s.saved, s.kept] },
-  { key: 'full',   label: 'Full buy',     frac: s => [s.fullOp, s.fullEligible] },
-  { key: 'half',   label: 'Half buy',     frac: s => [s.halfOp, s.halfEligible] },
+// Labels take the weapon name (Op / Outlaw / Op+Outlaw). A column is either a % (frac, numerator /
+// denominator) or a plain count. detail replaces the x/y shown under the % with Detail info
+type Col = { key: ColKey; label: (w: string) => string } &
+  ({ frac: (s: OperatorUseSide) => [number, number]; detail?: (s: OperatorUseSide) => string; count?: never }
+    | { count: (s: OperatorUseSide) => number; frac?: never; detail?: never });
+const COLS: Col[] = [
+  { key: 'pick',   label: w => `${w} pick rate`, frac: s => [s.op, s.eligible] },
+  { key: 'opWr',   label: w => `${w} WR`,        frac: s => [s.opWins, s.opDecided] },
+  { key: 'noOpWr', label: w => `No-${w} WR`,     frac: s => [s.noOpWins, s.noOpDecided] },
+  { key: 'kept',   label: () => 'Kept',          frac: s => [s.kept, s.op] },
+  { key: 'save',   label: w => `Save ${w}`,      frac: s => [s.saved, s.kept] },
+  { key: 'full',   label: () => 'Full buy',      frac: s => [s.fullOp, s.fullEligible] },
+  { key: 'half',   label: () => 'Half buy',      frac: s => [s.halfOp, s.halfEligible] },
+  { key: 'kills',  label: w => `${w} kills`,     count: s => s.opKills },
+  { key: 'opDuel', label: w => `${w} first duel`, frac: s => [s.opFk, s.opFk + s.opFd],
+    detail: s => `${s.opFk} FK - ${s.opFd} FD` },
+  { key: 'duel',   label: () => 'First duel',      frac: s => [s.fk, s.fk + s.fd],
+    detail: s => `${s.fk} FK - ${s.fd} FD` },
 ];
 
-// What every column of this table means, same pattern as the Neon + Phoenix legend
-const LEGEND = (
-  <dl className="w-[360px] flex flex-col gap-2 text-[11px] leading-snug text-gray-300">
-    <div>
-      <dt className="font-bold text-gray-100">Rounds counted</dt>
-      <dd className="text-gray-400">Every round except 1, 2, 13 and 14 (pistols and the round after).</dd>
-    </div>
-    <div>
-      <dt className="font-bold text-gray-100">Op pick rate</dt>
-      <dd className="text-gray-400">
-        Rounds where at least one player had an Operator, bought that round or kept from the
-        previous one, over rounds counted.
-      </dd>
-    </div>
-    <div>
-      <dt className="font-bold text-gray-100">Op WR / No-Op WR</dt>
-      <dd className="text-gray-400">Round win rate in the rounds with an Op, and in the rounds without one.</dd>
-    </div>
-    <div>
-      <dt className="font-bold text-gray-100">Kept</dt>
-      <dd className="text-gray-400">
-        Op rounds where nobody bought the Op (spend under 4700): it was kept from the previous
-        round or picked up.
-      </dd>
-    </div>
-    <div>
-      <dt className="font-bold text-gray-100">Save Op</dt>
-      <dd className="text-gray-400">
-        Kept rounds where the team lost the previous round: the Op was saved instead of dying with
-        it. Over Kept rounds, so the rest of Kept came after a won round.
-      </dd>
-    </div>
-    <div>
-      <dt className="font-bold text-gray-100">Full buy / Half buy</dt>
-      <dd className="text-gray-400">
-        Op pick rate only in the rounds where the team&apos;s loadout was 20000 or more (full) or
-        15000 to 19999 (half). Lower buys are left out of both.
-      </dd>
-    </div>
-    <div>
-      <dt className="font-bold text-gray-100">Agents</dt>
-      <dd className="text-gray-400">Agent of the player holding the Op, with its number of rounds.</dd>
-    </div>
-    <div>
-      <dt className="font-bold text-gray-100">Both / ATK / DEF and Detail info</dt>
-      <dd className="text-gray-400">
-        The side buttons switch every column; Detail info adds the counts under each %. Click a
-        team to see the same columns per player, counted over the rounds that player held the Op.
-      </dd>
-    </div>
-  </dl>
-);
+// Sort value: the % for a ratio column (null without denominator), the number for a count
+function colValue(col: Col, s: OperatorUseSide): number | null {
+  return col.frac ? pct(col.frac(s)) : col.count(s);
+}
+
+// What every column of this table means, same pattern as the Neon + Phoenix legend.
+// w is the weapon name the chips picked (Op / Outlaw / Op+Outlaw)
+function legend(w: string, weapon: OperatorUseWeapon) {
+  return (
+    <dl className="w-[360px] flex flex-col gap-2 text-[11px] leading-snug text-gray-300">
+      <div>
+        <dt className="font-bold text-gray-100">Operator / Outlaw</dt>
+        <dd className="text-gray-400">
+          Which weapon the table counts. Turn on both to count rounds with an Operator or an Outlaw;
+          at least one stays on. The column names follow the choice ({w}).
+        </dd>
+      </div>
+      <div>
+        <dt className="font-bold text-gray-100">Rounds counted</dt>
+        <dd className="text-gray-400">
+          {weapon === 'op'
+            ? 'Every round except 1, 2, 13 and 14 (pistols and the round after).'
+            : 'Every round except the pistols (1 and 13): the Outlaw gets bought in 2 and 14, so those count, also for the Op.'}
+        </dd>
+      </div>
+      <div>
+        <dt className="font-bold text-gray-100">{w} pick rate</dt>
+        <dd className="text-gray-400">
+          Rounds where at least one player had the weapon, bought that round or kept from the
+          previous one, over rounds counted.
+        </dd>
+      </div>
+      <div>
+        <dt className="font-bold text-gray-100">{w} WR / No-{w} WR</dt>
+        <dd className="text-gray-400">Round win rate in the rounds with the weapon, and in the rounds without it.</dd>
+      </div>
+      <div>
+        <dt className="font-bold text-gray-100">Kept</dt>
+        <dd className="text-gray-400">
+          Rounds where the holder already had that same weapon the previous round and survived it,
+          or died but the team won and picked it back up. A weapon dropped by a teammate or taken
+          from the enemy doesn&apos;t count, nor does switching between Operator and Outlaw.
+        </dd>
+      </div>
+      <div>
+        <dt className="font-bold text-gray-100">Save {w}</dt>
+        <dd className="text-gray-400">
+          Kept rounds where the team lost the previous round: the holder survived and saved the
+          weapon. Over Kept rounds, so the rest of Kept came after a won round (survived or picked
+          back up).
+        </dd>
+      </div>
+      <div>
+        <dt className="font-bold text-gray-100">Full buy / Half buy</dt>
+        <dd className="text-gray-400">
+          {w} pick rate only in the rounds where the team&apos;s loadout was 20000 or more (full) or
+          15000 to 19999 (half). Lower buys are left out of both.
+        </dd>
+      </div>
+      <div>
+        <dt className="font-bold text-gray-100">{w} kills</dt>
+        <dd className="text-gray-400">Count, not %: kills made with the weapon. Team kills are left out.</dd>
+      </div>
+      <div>
+        <dt className="font-bold text-gray-100">{w} first duel</dt>
+        <dd className="text-gray-400">
+          {w} FK / ({w} FK + {w} FD): first kills of the round made with the weapon, over those plus
+          first deaths of a player holding it that round (from the buy data, since the kill only
+          records the killer&apos;s weapon). Detail info shows both counts.
+        </dd>
+      </div>
+      <div>
+        <dt className="font-bold text-gray-100">First duel</dt>
+        <dd className="text-gray-400">
+          FK / (FK + FD) with any weapon, in every round counted (with or without the weapon).
+          Detail info shows both counts.
+        </dd>
+      </div>
+      <div>
+        <dt className="font-bold text-gray-100">Agents</dt>
+        <dd className="text-gray-400">Agent of the player holding the weapon, with its number of rounds.</dd>
+      </div>
+      <div>
+        <dt className="font-bold text-gray-100">Both / ATK / DEF and Detail info</dt>
+        <dd className="text-gray-400">
+          The side buttons switch every column; Detail info adds the counts under each %. Click a
+          team to see the same columns per player, counted over the rounds that player held the
+          weapon. A round is Kept for the team when any of its holders kept it.
+        </dd>
+      </div>
+    </dl>
+  );
+}
 
 function emptySide(): OperatorUseSide {
-  return { eligible: 0, op: 0, kept: 0, saved: 0, opDecided: 0, opWins: 0, noOpDecided: 0, noOpWins: 0, fullEligible: 0, fullOp: 0, halfEligible: 0, halfOp: 0, agents: {} };
+  return { eligible: 0, op: 0, kept: 0, saved: 0, opDecided: 0, opWins: 0, noOpDecided: 0, noOpWins: 0, fullEligible: 0, fullOp: 0, halfEligible: 0, halfOp: 0, opKills: 0, opFk: 0, fk: 0, opFd: 0, fd: 0, agents: {} };
 }
 
 function addSide(into: OperatorUseSide, from: OperatorUseSide) {
@@ -102,6 +160,8 @@ function addSide(into: OperatorUseSide, from: OperatorUseSide) {
   into.noOpDecided += from.noOpDecided; into.noOpWins += from.noOpWins;
   into.fullEligible += from.fullEligible; into.fullOp += from.fullOp;
   into.halfEligible += from.halfEligible; into.halfOp += from.halfOp;
+  into.opKills += from.opKills; into.opFk += from.opFk; into.fk += from.fk;
+  into.opFd += from.opFd; into.fd += from.fd;
   for (const [a, n] of Object.entries(from.agents)) into.agents[a] = (into.agents[a] ?? 0) + n;
 }
 
@@ -129,13 +189,18 @@ function heatmapBg(pct: number | null): string {
   return `hsl(${hue}, ${sat}%, ${light}%)`;
 }
 
-export function OperatorUseSection({ stats, players, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, agentImages = {}, hasTour = false, defaultHiddenMaps = [] }: Props) {
+export function OperatorUseSection({ byWeapon, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, agentImages = {}, hasTour = false, defaultHiddenMaps = [] }: Props) {
   const { navigate } = useNavigation();
   const [side, setSide] = useState<Side>('all');
   const [showDetail, setShowDetail] = useState(false);
   const [sortCol, setSortCol] = useState<ColKey>('pick');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [weaponChips, setWeaponChips] = useState<WeaponChips>({ op: true, outlaw: false });
+  const weapon: OperatorUseWeapon = weaponChips.op && weaponChips.outlaw ? 'both' : weaponChips.outlaw ? 'outlaw' : 'op';
+  const w = WEAPON_LABEL[weapon];
+  const stats = byWeapon?.[weapon].stats ?? {};
+  const players = byWeapon?.[weapon].players ?? {};
 
   const allTeams = Object.keys(stats).sort();
   const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
@@ -153,6 +218,14 @@ export function OperatorUseSection({ stats, players, maps, teamLogos = {}, teamR
     });
   }
 
+  // Turning off the only chip that is on does nothing
+  function toggleWeapon(key: keyof WeaponChips) {
+    setWeaponChips(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      return next.op || next.outlaw ? next : prev;
+    });
+  }
+
   function toggleExpanded(team: string) {
     setExpanded(prev => {
       const next = new Set(prev);
@@ -165,6 +238,7 @@ export function OperatorUseSection({ stats, players, maps, teamLogos = {}, teamR
     setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
     setHiddenMaps(new Set(maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase()))));
     setSide('all');
+    setWeaponChips({ op: true, outlaw: false });
     setSortCol('pick');
     setSortDir('desc');
     navigate('?section=operator-use');
@@ -190,10 +264,10 @@ export function OperatorUseSection({ stats, players, maps, teamLogos = {}, teamR
     return tot;
   }
 
-  const sortFrac = COLS.find(c => c.key === sortCol)!.frac;
+  const sortColDef = COLS.find(c => c.key === sortCol)!;
   function byPct(a: OperatorUseStat, b: OperatorUseStat): number {
-    const valA = pct(sortFrac(sideStat(a, side)));
-    const valB = pct(sortFrac(sideStat(b, side)));
+    const valA = colValue(sortColDef, sideStat(a, side));
+    const valB = colValue(sortColDef, sideStat(b, side));
     if (valA === null && valB === null) return 0;
     if (valA === null) return 1;
     if (valB === null) return -1;
@@ -220,7 +294,7 @@ export function OperatorUseSection({ stats, players, maps, teamLogos = {}, teamR
       .sort((a, b) => byPct(a[1], b[1]));
   }
 
-  function pctCell(key: string, c: [number, number]) {
+  function pctCell(key: string, c: [number, number], detail?: string) {
     const val = pct(c);
     return (
       <td
@@ -232,7 +306,7 @@ export function OperatorUseSection({ stats, players, maps, teamLogos = {}, teamR
           <>
             <div className="text-sm font-bold text-gray-100">{val}%</div>
             {showDetail && (
-              <div className="text-[13px] text-gray-200/80 whitespace-nowrap">{c[0]}/{c[1]}</div>
+              <div className="text-[13px] text-gray-200/80 whitespace-nowrap">{detail ?? `${c[0]}/${c[1]}`}</div>
             )}
           </>
         ) : (
@@ -240,6 +314,18 @@ export function OperatorUseSection({ stats, players, maps, teamLogos = {}, teamR
         )}
       </td>
     );
+  }
+
+  function countCell(key: string, n: number) {
+    return (
+      <td key={key} className="py-3 px-3 text-center text-sm font-bold text-gray-200">
+        {n}
+      </td>
+    );
+  }
+
+  function cell(col: Col, s: OperatorUseSide) {
+    return col.frac ? pctCell(col.key, col.frac(s), col.detail?.(s)) : countCell(col.key, col.count(s));
   }
 
   // Op holders by agent, most used first
@@ -314,6 +400,21 @@ export function OperatorUseSection({ stats, players, maps, teamLogos = {}, teamR
       {/* Controls */}
       <div className="flex justify-start items-center gap-3 px-1">
         <div className="flex gap-1.5">
+          {WEAPON_CHIPS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => toggleWeapon(key)}
+              className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+                weaponChips[key]
+                  ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                  : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1.5">
           {SIDES.map(({ key, label }) => (
             <button
               key={key}
@@ -344,7 +445,7 @@ export function OperatorUseSection({ stats, players, maps, teamLogos = {}, teamR
         >
           Reset filters
         </button>
-        <Tooltip content={LEGEND} className="items-center">
+        <Tooltip content={legend(w, weapon)} className="items-center">
           <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-gray-200 hover:text-white transition-colors cursor-help">
             <Info className="w-3.5 h-3.5 shrink-0" />
             Legend
@@ -377,7 +478,7 @@ export function OperatorUseSection({ stats, players, maps, teamLogos = {}, teamR
                     style={{ minWidth: 88 }}
                   >
                     <div className="flex flex-col items-center justify-end gap-1">
-                      <span className={isActive ? 'text-blue-400' : 'text-gray-400'}>{label}</span>
+                      <span className={isActive ? 'text-blue-400' : 'text-gray-400'}>{label(w)}</span>
                       <span className={`text-[9px] ${isActive ? 'text-blue-400' : 'text-gray-600'}`}>
                         {isActive ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}
                       </span>
@@ -410,7 +511,7 @@ export function OperatorUseSection({ stats, players, maps, teamLogos = {}, teamR
                         {team}
                       </div>
                     </td>
-                    {COLS.map(({ key, frac }) => pctCell(key, frac(teamSide)))}
+                    {COLS.map(col => cell(col, teamSide))}
                     {agentsCell(teamSide.agents)}
                   </tr>
                   {isOpen && teamPlayers(team).map(([player, tot]) => {
@@ -421,7 +522,7 @@ export function OperatorUseSection({ stats, players, maps, teamLogos = {}, teamR
                       <td className="sticky left-8 z-10 bg-[#15181d] pl-12 pr-5 py-2 text-[11px] text-gray-400 border-r border-gray-800 whitespace-nowrap">
                         {player}
                       </td>
-                      {COLS.map(({ key, frac }) => pctCell(key, frac(ps)))}
+                      {COLS.map(col => cell(col, ps))}
                       {agentsCell(ps.agents)}
                     </tr>
                     );

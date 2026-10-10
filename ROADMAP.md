@@ -246,17 +246,19 @@ maps are summed, Both / ATK / DEF chips pick the side, Detail info adds the `x/y
 
 - **Op pick rate**: eligible rounds where ≥1 player held an Operator. `round_buy`'s weapon is the
   weapon *held*, not bought: 280 of 549 Operator entries had spend < 4700 (kept or picked up),
-  so the metric counts holding, and **Kept** (Op rounds where no Op was bought) breaks it down.
+  so the metric counts holding, and **Kept** breaks it down. Kept (reworked oct 2026, see below):
+  the holder had that Op the previous round (`round_buy` of round − 1) and either survived it
+  (no kill with them as victim in `round_events`) or died but the team won and picked it up. A
+  round is Kept for the team when any holder kept it.
 - **Save Op**: Kept rounds whose previous round the team lost (`team_economy.win_A` of round − 1;
-  rounds 2 and 14 count as the previous round), over Kept. PRX: 6/25 (something 4/18, d4v41 2/8),
-  matching an independent count.
+  rounds 2 and 14 count as the previous round), over Kept — so the holder survived.
 - **Op WR / No-Op WR**: round win rate (`team_economy.win_A`) with and without an Op.
 - **Full buy / Half buy**: Op rate by team loadout, reusing `classifyEconomy` (full ≥ 20000,
   half = semiBuy 15000–19999, lower buys left out).
 - **Agents**: Op holders by agent (icons from `getAgentImages`).
 
 Clicking a team expands its players with the same columns, counted over the rounds where *that
-player* held the Op (kept by the player's own spend; WR and loadout are the team's). Double Op was
+player* held the Op (kept by the same rule; WR and loadout are the team's). Double Op was
 considered and dropped: 5 rounds in all of Champions 2026.
 
 Verified against an independent count from Supabase on PRX: 51/146 Op rounds, 25 kept, Op WR
@@ -265,6 +267,56 @@ Sage 1; something 35/146 (19 won, 18 kept), d4v41 17/146 (9 won, 8 kept). Invari
 all 16 default teams (`opDecided + noOpDecided = eligible`, `kept <= op`, per player
 `sum(agents) = op`). Still to work on:
 
+- **Kept rework** (oct 2026): Kept used to be "spend < 4700", applied per player but as "every
+  holder kept" per team, so T1 showed 38/80 kept while Meteor alone had 39/78 (FUT-T1 Ascent
+  r12: Meteor spent 4400 with an Op after dying in r11, BuZz spent 9100). Crossing with
+  `round_events` showed spend can't tell kept from dropped or picked up: of 322 player-rounds with
+  spend < 4700, 190 had the Op and survived, 62 died but the team won (picked up — counted as
+  kept for team and player, user's call), and 70 were drops from a teammate (20), Ops taken from
+  the enemy (43) or holders who died in a lost round (7). Player ids join as
+  `<team>_<player>` = `round_events.victim_id` (12970/12970 slots match). Cache key bumped to
+  `operator-use-stats-v3`. Verified in the built app against an independent count: T1 32/80 kept,
+  6 saved (Meteor 32/78); PRX 28/65, 5 saved (something 17/42, d4v41 11/24); `kept <= op`,
+  `saved <= kept` and player kept ≤ team kept hold on all 16 teams. Kept now depends on
+  `round_events` being loaded for the same tournaments as `round_buy`: without kill rows every
+  holder counts as having survived.
+- **Operator / Outlaw chips** (oct 2026): two independent chips, at least one stays on. Operator
+  alone = the table as before, Outlaw alone = same columns for the Outlaw, both = rounds with
+  either weapon. The server computes the three variants (`OperatorUseData.byWeapon`: `op`,
+  `outlaw`, `both`) because the combined one can't be summed from the others (no-weapon rounds,
+  round-level kept and WR change); column labels and the legend follow the choice. Kept needs the
+  same weapon the previous round (Op → Outlaw is not kept). Marshal is left out (34 holder
+  entries in Champions 2026 against 627 Operator and 162 Outlaw). Outlaw and Op+Outlaw leave out
+  only rounds 1 and 13: the Outlaw shows up in round 2 (13 of 124 team-rounds) and 14 (17 of 124),
+  the Op never does, so Operator alone keeps leaving out 1, 2, 13 and 14 and the eligible
+  denominator differs between modes. Cache key `operator-use-stats-v5`.
+  Verified in the built app against an independent count on Champions 2026 (eligible / Op rounds /
+  kept / saved / won): T1 Op 206 / 80 / 32 / 6 / 39 (unchanged), Outlaw 230 / 9 / 0 / 0 / 8, both
+  230 / 89 / 32 / 6 / 47; PRX Op 197 / 65 / 28 / 5 / 35, Outlaw 219 / 23 / 5 / 0 / 9, both
+  219 / 88 / 33 / 5 / 44, per-player counts matching too.
+  On all 16 teams, `both.op` ≥ each single weapon's op. The chips weren't clicked by hand.
+- **Kills and first kills** (oct 2026): three count columns (not %, no heatmap, still
+  sortable): `<w> kills`, `<w> FK` and `FK` (first kills with any weapon over every eligible
+  round). From `round_events` (`player_id` = `<team>_<player>`, team kills left out), following
+  the weapon chips and each mode's eligible rounds; a kill counts by its own weapon even when
+  `round_buy` shows the player without it. The Chamber ult is "Tour de Force" in the data and is
+  not counted as an Op. Cache key `operator-use-stats-v6`. Verified in the built app against a
+  count straight from `round_events` on Champions 2026: T1 Op 59 kills / 18 FK / 105 FK total,
+  Outlaw 10 / 4 / 112, both 69 / 22 / 112; PRX Op 35 / 7 / 100, Outlaw 12 / 4 / 112, both
+  47 / 11 / 112; all teams' FK 1048 (Op) and 1168 (Outlaw / both); per-player counts match, and
+  each team equals the sum of its players.
+- **First deaths** (oct 2026): `<w> FD` and `FD`, also plain counts. The kill only records the
+  killer's weapon, so a first death counts for the weapon when `round_buy` shows the victim
+  holding it that round (a player who bought an Op for a teammate and died first with a rifle
+  would count). Cache key `operator-use-stats-v7`. Verified in the built app against first-blood
+  kills from `round_events` joined to the victim's `round_buy` weapon on Champions 2026: T1 Op
+  11 FD / 101 FD total, Outlaw 0 / 117, both 11 / 117; PRX Op 11 / 97, Outlaw 2 / 107, both
+  13 / 107; all teams' FD = all teams' FK (1048 Op, 1168 Outlaw / both); per-player counts match.
+- **First duel columns** (oct 2026): to cut the column count, `<w> FK`, `FK`, `<w> FD` and `FD`
+  were replaced by two %: `<w> first duel` = opFk / (opFk + opFd) and `First duel` =
+  fk / (fk + fd); with Detail info each shows its counts as `X FK - Y FD` on one line instead of x/y. Client-only:
+  the payload and cache key (`v7`) didn't change. Expected on T1 Op: 18/29 = 62% and
+  105/206 = 51%.
 - **7.1 More data in `round_buy`**: only Champions 2026 is loaded (24 series). The section picks
   up other tournaments on its own once their rows are uploaded.
 - **7.2 Check the chips in the browser**: team, map, side and Detail info chips, sortable
@@ -279,6 +331,67 @@ all 16 default teams (`opDecided + noOpDecided = eligible`, `kept <= op`, per pl
 - **7.4 Next iterations, to decide**: Op round WR, Op by agent and buy context are done.
   Still open: per-map columns (the per-map counters already exist), Op vs Op rounds, and double Op
   once more tournaments are loaded.
+
+## Phase 8 — Stats Rank improvements (in progress, by stages)
+
+The user wants to improve Stats Rank in gradual stages (oct 2026). Review of the table found:
+Atk Loss by Time was a raw count, no legend, best/worst-only colors, column-group chips not in the
+URL, no map / side filters, a dead header branch for `'Bonus Conversion (PAB)'` (the column is now
+`'Bonus Conversion (W-W-W)'`), and nothing from `round_events` / `round_summary` yet.
+
+- **8.1 Legend + Save Rate** (done, oct 2026): Legend tooltip with every column. Atk Loss by Time
+  replaced by **Save Rate** = saves / lost rounds, where a save is a lost round ended by time,
+  spike or defuse (`round_info.winCon` `tim` / `boom` / `defus`) with the loser still having
+  someone alive (fewer than 5 distinct victims of that team in `round_events`; distinct because a
+  revived player can die twice). Denominator only counts maps with kill rows, so tournaments
+  without `round_events` show —. Neutral color (`neutral` on `MetricDef`). `timeoutLosses` stays
+  in `TeamRankStats` because Compare Stats still uses it. Cache key `tournament-rankings-v2`.
+  Verified in the built app against an independent count from `round_info` + `round_events` on
+  Champions 2026: all 16 teams match (T1 18/132 = 14%, PRX 20/120 = 17%); saves by ending: time
+  42, spike 118, defuse 11. Americas Stage 2: no team has data, so —.
+- **8.2 Trade Rate** (done, oct 2026): trades / the team's deaths, end of Overall, higher is
+  better, Detail info `x/y`. From `round_summary`: `kills_team_x` already leaves team kills out
+  and `trades_team_x` counts the team's kills flagged `is_trade` (both match `round_events` on all
+  1297 Champions 2026 rounds), and a team's deaths are the rival's kills. — without data. Cache key
+  `tournament-rankings-v3`. Verified in the built app against a count straight from `round_events`
+  kills: all 16 teams match (T1 171/886 = 19%, PRX 163/839 = 19%), Save Rate unchanged, Americas
+  Stage 2 shows —.
+- **8.4 True FK Rate** (done, oct 2026): true FK / FK, end of Overall after Trade Rate, higher is
+  better, Detail info `x/y`, — without data. True FK = first blood (`is_first_blood`) with
+  `is_traded` false. `is_traded` turned out to use exactly a 5 s window: recomputing it from
+  `t_sec` (killer killed by the victim's team within N s) matches 100% of the 8908 Champions 2026
+  kills at 5 s (95.2% at 3 s, 97.8% at 4 s, 98.2% at 6 s). `t_sec` is whole seconds, so "within
+  5 s" can be up to almost 6 real seconds. Built on the `round_events` kill rows Save Rate already
+  fetches. Cache key `tournament-rankings-v4`. Verified in the built app against that manual 5 s
+  count: all 16 teams match, 1006 / 1292 in total (T1 97/121 = 80%, PRX 91/126 = 72%); Save Rate
+  and Trade Rate unchanged; Americas Stage 2 shows —.
+- **8.5 True FD Rate + Save Rate last** (done, oct 2026): true FD / FD right after True FK Rate,
+  lower is better, Detail info `x/y`, — without data; Save Rate moved to the end of Overall (legend
+  follows the same order). FD = first blood whose `victim_team` is the team; true FD = that first
+  blood with `is_traded` false, i.e. the team didn't kill the killer within 5 s of the first death
+  (same flag as True FK, seen from the other side, so league totals match: 1006 / 1292).
+  Not used: "the kill on the first-blood killer has `is_trade` true". `is_trade` marks a kill on
+  someone who killed *any* teammate in the previous 5 s (100% match at 5 s, 1851 kills; `is_traded`
+  has 2127 because one trade can avenge several deaths), so when the first-blood killer kills again
+  later and dies right after, that kill counts as a trade of the first death even 6 to 20+ s later
+  (122 such rounds; e.g. 100T-FUT Lotus r21: s0pp > Cryocells at 6 s, s0pp > bang at 26 s,
+  Timotino > s0pp at 29 s). That method would give 884 true FD instead of 1006. Cache key
+  `tournament-rankings-v5`. Verified in the built app against a manual 5 s window from the first
+  death: all 16 teams match (T1 101/132 = 77%, PRX 96/115 = 83%); True FK, Trade and Save Rate
+  unchanged; Americas Stage 2 shows —.
+- **8.3 Plants by site / plant time** (parked, oct 2026 — the user doesn't want it yet): plant
+  counts were cross-checked on Champions 2026 and match exactly in all three sources, per team:
+  `player_performance.PL` (what Plant Rate ATK / Post Plant WR / Retake Eff use today),
+  `round_events` `type = plant` (`team` = planter's team) and `round_summary.plant_t` not null on
+  the attacking team — 887 plants, diff 0 on all 16 teams (e.g. T1 98/136 ATK rounds = 72.1%,
+  NRG 57/70 = 81.4%). Defuses match too (246 in all three and in `round_info.winCon = 'defus'`).
+  So moving the current plant columns to the new tables changes nothing; the reason to use them
+  is the extra data: `round_summary.plant_site` / `round_events.site` (A / B / C) and `plant_t`
+  (second of the round), e.g. plant rate per site or average plant time. Caveat: the new tables
+  only cover Champions 2026, `player_performance` covers every tournament.
+- **Still open, to decide with the user**: gradient colors, column-group chips in the URL,
+  map / side filters, removing the dead `'Bonus Conversion (PAB)'` branch, more metrics from
+  `round_events` / `round_summary` (first blood, plant site / time — see 8.3).
 
 ---
 

@@ -160,7 +160,7 @@ export default async function Page({
 
   const operatorUseP = (isOperatorUse && hasTour)
     ? getOperatorUseStats({ tour, reg: regArr, bo, last, dateFrom, dateTo })
-    : Promise.resolve({ stats: {}, players: {}, maps: [] });
+    : Promise.resolve({ byWeapon: null, maps: [] as string[] });
 
   // Series Outcomes is Bo3-only by definition, so it ignores the bo filter
   const seriesOutcomesP = (isSeriesOutcomes && hasTour)
@@ -320,7 +320,7 @@ export default async function Page({
       case 'neon-dependency':
         return <NeonDependencySection stats={neonDep.stats} maps={neonDep.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} defaultHiddenMaps={defaultHiddenMaps} />;
       case 'operator-use':
-        return <OperatorUseSection stats={operatorUse.stats} players={operatorUse.players} maps={operatorUse.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} agentImages={agentImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} />;
+        return <OperatorUseSection byWeapon={operatorUse.byWeapon} maps={operatorUse.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} agentImages={agentImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} />;
       case 'post-pistol-force':
         return <PostPistolForceSection stats={postPistolForce} teamLogos={teamLogos} teamRegions={teamRegions} />;
       case 'veto':

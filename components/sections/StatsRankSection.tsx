@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { Info } from 'lucide-react';
 import { TeamRankStats, TeamEconomyCompare, EconomyCategoryStats, EconomyMatchup, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { useUrlSet } from '@/hooks/useUrlSet';
 import { TeamChipsPanel } from '../TeamChipsPanel';
+import { Tooltip } from '../Tooltip';
 
 interface Props {
   rankings: Record<string, TeamRankStats>;
@@ -55,6 +57,8 @@ type MetricDef = {
   ratioDetail?: boolean;
   lowerIsBetter?: boolean;
   countOnly?: boolean;
+  /** Neither higher nor lower is better: no green / red */
+  neutral?: boolean;
 };
 type SeparatorDef = { separator: true; label: string };
 type RowDef = MetricDef | SeparatorDef;
@@ -68,7 +72,10 @@ const METRICS: RowDef[] = [
   { label: 'Def Side Winrate',       getValue: s => pct(s.defWins, s.defTotal),                  getWL: s => ({ wins: s.defWins, total: s.defTotal }) },
   { label: 'Plant Rate DEF',         getValue: s => pct(s.retakePl, s.defTotal), lowerIsBetter: true, getWL: s => ({ wins: s.retakePl, total: s.defTotal }) },
   { label: 'Retake Eff',             getValue: s => pct(s.retakeDe, s.retakePl),                 getWL: s => ({ wins: s.retakeDe, total: s.retakePl }) },
-  { label: 'Atk Loss by Time',       getValue: s => s.timeoutLosses, lowerIsBetter: true, countOnly: true },
+  { label: 'Trade Rate',             getValue: s => pct(s.trades, s.tradeDeaths), getWL: s => ({ wins: s.trades, total: s.tradeDeaths }), ratioDetail: true },
+  { label: 'True FK Rate',           getValue: s => pct(s.trueFk, s.fk), getWL: s => ({ wins: s.trueFk, total: s.fk }), ratioDetail: true },
+  { label: 'True FD Rate',           getValue: s => pct(s.trueFd, s.fd), lowerIsBetter: true, getWL: s => ({ wins: s.trueFd, total: s.fd }), ratioDetail: true },
+  { label: 'Save Rate',              getValue: s => pct(s.saves, s.savesLost), neutral: true, getWL: s => ({ wins: s.saves, total: s.savesLost }), ratioDetail: true },
   { separator: true, label: 'First 3 rounds performance' },
   { label: 'Pistol Winrate',         getValue: s => pct(s.pistolWins, s.pistolTotal),            getWL: s => ({ wins: s.pistolWins, total: s.pistolTotal }) },
   { label: 'Post Pistol Into Win',   getValue: s => pct(s.antiEcoWins, s.antiEcoTotal),          getWL: s => ({ wins: s.antiEcoWins, total: s.antiEcoTotal }) },
@@ -79,8 +86,104 @@ const METRICS: RowDef[] = [
   { label: 'Losing to enemy bonus (L-L-L)',  getValue: s => pct(s.first3Lost, s.first3Total), lowerIsBetter: true, getWL: s => ({ wins: s.first3Lost, total: s.first3Total }), ratioDetail: true },
 ];
 
-function getCellColor(value: number | null, allValues: (number | null)[], lowerIsBetter: boolean): string {
+// What every column means, same pattern as the Operator Use legend
+const LEGEND = (
+  <dl className="w-[380px] flex flex-col gap-2 text-[11px] leading-snug text-gray-300">
+    <div>
+      <dt className="font-bold text-gray-100">Map / Round Winrate</dt>
+      <dd className="text-gray-400">Maps won over maps played, and rounds won over rounds played.</dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Atk / Def Side Winrate</dt>
+      <dd className="text-gray-400">Rounds won on each side over rounds played on it.</dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Plant Rate ATK / Post Plant WR</dt>
+      <dd className="text-gray-400">
+        Spike plants over attack rounds, and planted rounds the rival didn&apos;t defuse over plants.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Plant Rate DEF / Retake Eff</dt>
+      <dd className="text-gray-400">
+        Rival plants over defense rounds (lower is better), and defuses over rival plants.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Trade Rate</dt>
+      <dd className="text-gray-400">
+        Trades over the team&apos;s deaths: how often a teammate killed back the enemy who just got
+        a kill. Team kills are left out. Needs kill data, only loaded for some tournaments (—
+        without it).
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">True FK Rate</dt>
+      <dd className="text-gray-400">
+        First kills of the round the rival didn&apos;t trade (the killer survived the next 5
+        seconds), over all the team&apos;s first kills. Needs kill data (— without it).
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">True FD Rate</dt>
+      <dd className="text-gray-400">
+        First deaths of the round the team didn&apos;t trade (nobody killed the killer within 5
+        seconds), over all the team&apos;s first deaths. Lower is better. Needs kill data (—
+        without it).
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Save Rate</dt>
+      <dd className="text-gray-400">
+        Lost rounds where the team kept someone alive and let the round go instead of fighting:
+        lost by time or by defuse while attacking, or the spike went off while defending. Over
+        lost rounds. Needs kill data, only loaded for some tournaments (— without it). Not colored:
+        saving isn&apos;t good or bad by itself.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Pistol Winrate</dt>
+      <dd className="text-gray-400">Rounds 1 and 13.</dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Post Pistol Into Win / Post Pistol Loss Into Win (L-W)</dt>
+      <dd className="text-gray-400">
+        Round 2 (or 14) won after winning the pistol (anti-eco), and after losing it.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Bonus Conversion (W-W-W) / Atk / Def</dt>
+      <dd className="text-gray-400">
+        After winning the pistol and round 2, round 3 (or 15) won too. Atk and Def split by the
+        side of that third round.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Losing to enemy bonus (L-L-L)</dt>
+      <dd className="text-gray-400">
+        After losing the pistol and round 2, round 3 (or 15) lost too. Lower is better.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Economy groups</dt>
+      <dd className="text-gray-400">
+        Round win rate by the team&apos;s loadout (Eco under 5k, Semi-Eco 5-15k, Semi-Buy 15-20k,
+        Full Buy 20k+), overall and against each rival loadout. Pistols are left out.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Colors and Detail info</dt>
+      <dd className="text-gray-400">
+        Green is the best value of the column and red the worst. Detail info adds the counts
+        under each % (W-L, or x/y when the count is an event and not a win).
+      </dd>
+    </div>
+  </dl>
+);
+
+function getCellColor(value: number | null, allValues: (number | null)[], lowerIsBetter: boolean, neutral = false): string {
   if (value === null) return 'text-gray-600';
+  if (neutral) return 'text-gray-300';
   const defined = allValues.filter((v): v is number => v !== null);
   if (defined.length === 0) return 'text-gray-300';
   const best = lowerIsBetter ? Math.min(...defined) : Math.max(...defined);
@@ -240,6 +343,12 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
       >
         Reset filters
       </button>
+      <Tooltip content={LEGEND} className="items-center">
+        <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-gray-200 hover:text-white transition-colors cursor-help">
+          <Info className="w-3.5 h-3.5 shrink-0" />
+          Legend
+        </span>
+      </Tooltip>
     </div>
 
     {baseTeams.length === 0 ? (
@@ -377,7 +486,7 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
               {metricDefs.map((m, mi) => {
                 if (hiddenGroups.has(metricGroupId(mi))) return null;
                 const val = m.getValue(rankings[team]);
-                const color = getCellColor(val, metricAllValues[mi], m.lowerIsBetter ?? false);
+                const color = getCellColor(val, metricAllValues[mi], m.lowerIsBetter ?? false, m.neutral);
                 const isFirstOfGroup = afterSeparatorLabels.has(m.label) &&
                   metricDefs[mi - 1] && !afterSeparatorLabels.has(metricDefs[mi - 1].label) && showOverall;
                 const isActive = sortCol === mi;

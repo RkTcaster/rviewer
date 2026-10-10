@@ -103,6 +103,14 @@ export type TeamRankStats = {
   pabAtkWins: number; pabAtkTotal: number;
   pabDefWins: number; pabDefTotal: number;
   timeoutLosses: number;
+  saves: number;       // lost rounds (time, spike or defuse) where the loser still had someone alive
+  savesLost: number;   // lost rounds on maps with round_events data (saves' denominator)
+  trades: number;      // the team's kills that traded a teammate's death (round_summary)
+  tradeDeaths: number; // the team's deaths = rival kills, team kills left out (trades' denominator)
+  fk: number;          // first kills of the round (round_events is_first_blood)
+  trueFk: number;      // first kills the rival didn't trade within 5 s (is_traded false)
+  fd: number;          // first deaths of the round (victim of the first blood)
+  trueFd: number;      // first deaths the team didn't trade within 5 s
   retakeDe: number;
   retakePl: number;
   postPlantPl: number;
@@ -239,23 +247,32 @@ export type TeamPostPistolForce = {
 };
 
 // Operator Use, per team and map, from round_buy + team_economy. eligible = rounds played minus
-// 1, 2, 13 and 14 (pistols and their follow-ups); op = eligible rounds where at least one player
+// 1, 2, 13 and 14 (pistols and their follow-ups; only 1 and 13 with the Outlaw); op = eligible rounds where at least one player
 // held an Operator (bought that round or kept from the previous one).
 export type OperatorUseSide = {
   eligible: number; op: number;
-  kept: number;                            // Op rounds where the Op was not bought (spend < 4700)
-  saved: number;                           // kept rounds whose previous round the team lost
+  kept: number;                            // Op rounds where a holder had it the previous round and survived, or died and the team won
+  saved: number;                           // kept rounds whose previous round the team lost (the holder survived)
   opDecided: number; opWins: number;       // Op rounds with a known winner / won
   noOpDecided: number; noOpWins: number;   // same, for rounds without an Op
   fullEligible: number; fullOp: number;    // team loadout fullBuy (>= 20000)
   halfEligible: number; halfOp: number;    // team loadout semiBuy (15000-19999)
+  opKills: number; opFk: number;           // kills / first kills made with the weapon (round_events, no team kills)
+  fk: number;                              // first kills with any weapon, over every eligible round
+  opFd: number;                            // first deaths of a player holding the weapon (per round_buy)
+  fd: number;                              // first deaths with any weapon, over every eligible round
   agents: Record<string, number>;          // Op holders by agent
 };
 export type OperatorUseStat = { atk: OperatorUseSide; def: OperatorUseSide };
-export type OperatorUseData = {
+// Which weapon counts as "op": Operator only, Outlaw only, or either of the two
+export type OperatorUseWeapon = 'op' | 'outlaw' | 'both';
+export type OperatorUseWeaponData = {
   stats: Record<string, Record<string, OperatorUseStat>>;
-  // team -> player -> map; for a player, op = eligible rounds where that player held the Operator
+  // team -> player -> map; for a player, op = eligible rounds where that player held the weapon
   players: Record<string, Record<string, Record<string, OperatorUseStat>>>;
+};
+export type OperatorUseData = {
+  byWeapon: Record<OperatorUseWeapon, OperatorUseWeaponData>;
   maps: string[];
 };
 

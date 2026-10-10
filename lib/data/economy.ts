@@ -1,7 +1,7 @@
 // lib/data/economy.ts — economía por ronda (distribución, compare, torneo)
 import { supabase } from '../supabase';
 import { versioned, fetchAllPages } from './helpers';
-import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare, TeamPostPistolForce, OperatorUseData, OperatorUseStat, OperatorUseSide } from '../types';
+import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare, TeamPostPistolForce, OperatorUseData, OperatorUseStat, OperatorUseSide, OperatorUseWeapon } from '../types';
 
 export async function getEconomyDistribution(filters: {
   reg?: string[]; tour?: string; team?: string;
@@ -284,25 +284,50 @@ async function getPostPistolForce_impl(filters: {
 }
 
 // Operator Use: series picked from draft with the same filters as Maps Rank, then round_buy.
-// A round counts for a team when it is not 1, 2, 13 or 14 (pistols and their follow-ups);
-// it is an Op round when any of the team's five players held an Operator. round_buy's weapon is the
-// weapon held, so an Op with spend < OP_PRICE was kept (or picked up), not bought that round.
-// Saved = kept after a round the team lost (the previous round can be 2 or 14, which are not counted).
+// A round counts for a team when it is not 1, 2, 13 or 14 (pistols and their follow-ups); with the
+// Outlaw (alone or with the Op) only 1 and 13 are left out, since it gets bought in 2 and 14;
+// it is an Op round when any of the team's five players held an Operator. A player kept the Op when
+// they also held it the previous round and either survived it (round_events kills) or died but the
+// team won it and picked the Op up. Spend can't tell this apart: an Op dropped by a teammate or
+// picked up from the enemy also shows spend under the Op's price. A round is kept for the team when
+// any holder kept it. Saved = kept after a round the team lost, which means the holder survived it
+// (the previous round can be 2 or 14, which are not counted).
 // Round winner and team loadout come from team_economy, joined on map_id + round with the same team_a.
 // Per player, the same counters only over the rounds that player played.
-const OP_SKIP_ROUNDS = new Set([1, 2, 13, 14]);
-const OP_PRICE = 4700;
+// Everything is computed three times: Operator only, Outlaw only, and either of the two. The
+// combined one can't be summed from the others (no-weapon rounds, round-level kept and WR change).
+// Kept always needs the same weapon the previous round: an Op last round and an Outlaw now is not kept.
+// Kills and first kills come from round_events (team kills left out) and count whatever weapon the
+// kill was made with, even if round_buy shows the player without it (picked up mid-round).
+// First deaths can't use the kill's weapon (that's the killer's), so a first death counts for the
+// weapon when round_buy shows the victim holding it that round.
+const OP_SKIP_ROUNDS: Record<OperatorUseWeapon, Set<number>> = {
+  op: new Set([1, 2, 13, 14]),
+  outlaw: new Set([1, 13]),
+  both: new Set([1, 13]),
+};
 const OP_PLAYER_COLS = (['a', 'b'] as const).flatMap(s => [1, 2, 3, 4, 5].flatMap(i =>
-  ['', '_weapon', '_agent', '_spend'].map(c => `player_${i}_team_${s}${c}`)));
+  ['', '_weapon', '_agent'].map(c => `player_${i}_team_${s}${c}`)));
+const OP_WEAPON_SETS: Record<OperatorUseWeapon, string[]> = {
+  op: ['Operator'],
+  outlaw: ['Outlaw'],
+  both: ['Operator', 'Outlaw'],
+};
 type RoundBuyRow = { map_id: string; round: number; team_a: string; team_b: string; side_team_a: string } & Record<string, string | number | null>;
+type OpKillRow = { map_id: string; round: number; player_id: string | null; victim_id: string | null; weapon: string | null; is_first_blood: boolean | null; is_team_kill: boolean | null };
 type OpEcoRow = { map_id: string; round: number; team_a: string; win_A: number; team_a_economy: number | null; team_b_economy: number | null };
 
 function emptyOpSide(): OperatorUseSide {
-  return { eligible: 0, op: 0, kept: 0, saved: 0, opDecided: 0, opWins: 0, noOpDecided: 0, noOpWins: 0, fullEligible: 0, fullOp: 0, halfEligible: 0, halfOp: 0, agents: {} };
+  return { eligible: 0, op: 0, kept: 0, saved: 0, opDecided: 0, opWins: 0, noOpDecided: 0, noOpWins: 0, fullEligible: 0, fullOp: 0, halfEligible: 0, halfOp: 0, opKills: 0, opFk: 0, fk: 0, opFd: 0, fd: 0, agents: {} };
 }
 
 // v2: entries cached while round_buy had no RLS read policy hold empty results
-export const getOperatorUseStats = versioned('operator-use-stats-v2', getOperatorUseStats_impl);
+// v3: kept comes from round_events instead of spend
+// v4: results split by weapon (byWeapon)
+// v5: Outlaw and Op+Outlaw count rounds 2 and 14
+// v6: kills and first kills
+// v7: first deaths
+export const getOperatorUseStats = versioned('operator-use-stats-v7', getOperatorUseStats_impl);
 async function getOperatorUseStats_impl(
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<OperatorUseData> {
@@ -315,11 +340,13 @@ async function getOperatorUseStats_impl(
   if (filters.last && filters.last !== 'all') idQuery = idQuery.order('date', { ascending: false }).limit(parseInt(filters.last));
 
   const { data: idList } = await idQuery;
-  if (!idList || idList.length === 0) return { stats: {}, players: {}, maps: [] };
+  const byWeapon = {} as OperatorUseData['byWeapon'];
+  for (const w of Object.keys(OP_WEAPON_SETS) as OperatorUseWeapon[]) byWeapon[w] = { stats: {}, players: {} };
+  if (!idList || idList.length === 0) return { byWeapon, maps: [] };
 
   const seriesIds = [...new Set(idList.map(x => x.series_id))];
   // Ordered by the PK so the pages never overlap or skip rows
-  const [rows, ecoRows] = await Promise.all([
+  const [rows, ecoRows, killRows] = await Promise.all([
     fetchAllPages<RoundBuyRow>((from, to) =>
       supabase.from('round_buy')
         .select(`map_id, round, team_a, team_b, side_team_a, ${OP_PLAYER_COLS.join(', ')}`)
@@ -334,13 +361,47 @@ async function getOperatorUseStats_impl(
         .order('team_map_round_id')
         .range(from, to)
     ),
+    fetchAllPages<OpKillRow>((from, to) =>
+      supabase.from('round_events')
+        .select('map_id, round, player_id, victim_id, weapon, is_first_blood, is_team_kill')
+        .in('series_id', seriesIds)
+        .eq('type', 'kill')
+        .order('team_map_round_id')
+        .order('ev_index')
+        .range(from, to)
+    ),
   ]);
   const eco: Record<string, OpEcoRow> = {};
   for (const e of ecoRows) eco[`${e.map_id}|${Number(e.round)}`] = e;
+  // round_events ids are "<team>_<player>"
+  const died = new Set(killRows.map(k => `${k.map_id}|${Number(k.round)}|${k.victim_id}`));
+  // Kills by killer and round, team kills left out
+  const killsBy: Record<string, { weapon: string; fk: boolean }[]> = {};
+  // First death of each round, by victim
+  const firstDeath = new Set(killRows.filter(k => k.is_first_blood && !k.is_team_kill)
+    .map(k => `${k.map_id}|${Number(k.round)}|${k.victim_id}`));
+  for (const k of killRows) {
+    if (k.is_team_kill || !k.player_id) continue;
+    (killsBy[`${k.map_id}|${Number(k.round)}|${k.player_id}`] ??= []).push({ weapon: k.weapon ?? '', fk: !!k.is_first_blood });
+  }
+  const buyByRound: Record<string, RoundBuyRow> = {};
+  for (const r of rows) buyByRound[`${r.map_id}|${Number(r.round)}`] = r;
+  // Player -> weapon for a team's Operator / Outlaw holders in a round, null when that round has no round_buy row
+  const sniperHolders = (r: RoundBuyRow | undefined, team: string) => {
+    if (!r) return null;
+    const s = r.team_a?.trim() === team ? 'a' : r.team_b?.trim() === team ? 'b' : null;
+    if (!s) return null;
+    return new Map([1, 2, 3, 4, 5]
+      .filter(i => OP_WEAPON_SETS.both.includes(String(r[`player_${i}_team_${s}_weapon`])))
+      .map(i => [String(r[`player_${i}_team_${s}`] ?? '').trim(), String(r[`player_${i}_team_${s}_weapon`])]));
+  };
 
   // won / loadout are null when the round has no matching team_economy row
-  const add = (st: OperatorUseSide, hasOp: boolean, kept: boolean, saved: boolean, won: boolean | null, loadout: number | null, agents: string[]) => {
+  type Kills = { opKills: number; opFk: number; fk: number; opFd: number; fd: number };
+  const add = (st: OperatorUseSide, hasOp: boolean, kept: boolean, saved: boolean, won: boolean | null, loadout: number | null, agents: string[], kills: Kills) => {
     st.eligible++;
+    st.opKills += kills.opKills; st.opFk += kills.opFk; st.fk += kills.fk;
+    st.opFd += kills.opFd; st.fd += kills.fd;
     if (hasOp) { st.op++; if (kept) { st.kept++; if (saved) st.saved++; } }
     if (won !== null) {
       if (hasOp) { st.opDecided++; if (won) st.opWins++; }
@@ -356,11 +417,9 @@ async function getOperatorUseStats_impl(
   const side = (byMap: Record<string, OperatorUseStat>, map: string, atk: boolean) =>
     (byMap[map] ??= { atk: emptyOpSide(), def: emptyOpSide() })[atk ? 'atk' : 'def'];
 
-  const stats: Record<string, Record<string, OperatorUseStat>> = {};
-  const players: Record<string, Record<string, Record<string, OperatorUseStat>>> = {};
   const maps = new Set<string>();
   for (const r of rows) {
-    if (OP_SKIP_ROUNDS.has(Number(r.round))) continue;
+    if (Object.values(OP_SKIP_ROUNDS).every(skip => skip.has(Number(r.round)))) continue;
     // map_id is "<series_id>-<Map>"
     const map = r.map_id?.slice(r.map_id.indexOf('-') + 1);
     if (!map) continue;
@@ -375,28 +434,58 @@ async function getOperatorUseStats_impl(
       const atk = (r.side_team_a === 'atk') === (s === 'a');
       const won = ecoOk ? (Number(e.win_A) === 1) === (s === 'a') : null;
       const lostPrev = prevOk && (Number(prev.win_A) === 1) !== (s === 'a');
+      const wonPrev = prevOk && !lostPrev;
+      const prevHolders = sniperHolders(buyByRound[`${r.map_id}|${Number(r.round) - 1}`], team);
       const loadoutRaw = ecoOk ? (s === 'a' ? e.team_a_economy : e.team_b_economy) : null;
       const loadout = loadoutRaw == null ? null : Number(loadoutRaw);
 
-      const holders = [1, 2, 3, 4, 5]
-        .filter(i => r[`player_${i}_team_${s}_weapon`] === 'Operator')
-        .map(i => ({
-          player: String(r[`player_${i}_team_${s}`] ?? '').trim(),
-          agent: String(r[`player_${i}_team_${s}_agent`] ?? '').trim(),
-          kept: Number(r[`player_${i}_team_${s}_spend`] ?? 0) < OP_PRICE,
-        }));
-      const hasOp = holders.length > 0;
-      // Team-level kept: nobody bought an Op that round
-      add(side(stats[team] ??= {}, map, atk), hasOp, hasOp && holders.every(h => h.kept), lostPrev, won, loadout, holders.map(h => h.agent).filter(Boolean));
+      const allHolders = [1, 2, 3, 4, 5]
+        .filter(i => OP_WEAPON_SETS.both.includes(String(r[`player_${i}_team_${s}_weapon`])))
+        .map(i => {
+          const player = String(r[`player_${i}_team_${s}`] ?? '').trim();
+          const weapon = String(r[`player_${i}_team_${s}_weapon`]);
+          const diedPrev = died.has(`${r.map_id}|${Number(r.round) - 1}|${team}_${player}`);
+          return {
+            player,
+            weapon,
+            agent: String(r[`player_${i}_team_${s}_agent`] ?? '').trim(),
+            kept: prevHolders?.get(player) === weapon && (!diedPrev || wonPrev),
+          };
+        });
 
-      for (const i of [1, 2, 3, 4, 5]) {
-        const player = String(r[`player_${i}_team_${s}`] ?? '').trim();
-        if (!player) continue;
-        const h = holders.find(x => x.player === player);
-        add(side((players[team] ??= {})[player] ??= {}, map, atk), !!h, !!h?.kept, lostPrev, won, loadout, h?.agent ? [h.agent] : []);
+      for (const [w, set] of Object.entries(OP_WEAPON_SETS) as [OperatorUseWeapon, string[]][]) {
+        if (OP_SKIP_ROUNDS[w].has(Number(r.round))) continue;
+        const { stats, players } = byWeapon[w];
+        const holders = allHolders.filter(h => set.includes(h.weapon));
+        const hasOp = holders.length > 0;
+        const playerKills = (player: string): Kills => {
+          const ks = killsBy[`${r.map_id}|${Number(r.round)}|${team}_${player}`] ?? [];
+          const fd = firstDeath.has(`${r.map_id}|${Number(r.round)}|${team}_${player}`) ? 1 : 0;
+          return {
+            opKills: ks.filter(k => set.includes(k.weapon)).length,
+            opFk: ks.filter(k => k.fk && set.includes(k.weapon)).length,
+            fk: ks.filter(k => k.fk).length,
+            opFd: fd && holders.some(h => h.player === player) ? 1 : 0,
+            fd,
+          };
+        };
+        const roster = [1, 2, 3, 4, 5].map(i => String(r[`player_${i}_team_${s}`] ?? '').trim()).filter(Boolean);
+        const teamKills: Kills = { opKills: 0, opFk: 0, fk: 0, opFd: 0, fd: 0 };
+        for (const p of roster) {
+          const k = playerKills(p);
+          teamKills.opKills += k.opKills; teamKills.opFk += k.opFk; teamKills.fk += k.fk;
+          teamKills.opFd += k.opFd; teamKills.fd += k.fd;
+        }
+        // Team-level kept: at least one holder kept their weapon
+        add(side(stats[team] ??= {}, map, atk), hasOp, holders.some(h => h.kept), lostPrev, won, loadout, holders.map(h => h.agent).filter(Boolean), teamKills);
+
+        for (const player of roster) {
+          const h = holders.find(x => x.player === player);
+          add(side((players[team] ??= {})[player] ??= {}, map, atk), !!h, !!h?.kept, lostPrev, won, loadout, h?.agent ? [h.agent] : [], playerKills(player));
+        }
       }
     }
   }
 
-  return { stats, players, maps: [...maps].sort() };
+  return { byWeapon, maps: [...maps].sort() };
 }

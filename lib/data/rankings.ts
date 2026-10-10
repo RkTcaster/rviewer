@@ -4,7 +4,11 @@ import { versioned, fetchAllPages } from './helpers';
 import { FormMapPoint, MapsMastersData, MapWL, TeamRankStats } from '../types';
 import { DraftRow, PlayerPerformanceRow, RoundInfoRow } from './rows';
 
-export const getTournamentRankings = versioned('tournament-rankings', getTournamentRankings_impl);
+// v2: saves / savesLost from round_events
+// v3: trades / tradeDeaths from round_summary
+// v4: fk / trueFk from round_events
+// v5: fd / trueFd from round_events
+export const getTournamentRankings = versioned('tournament-rankings-v5', getTournamentRankings_impl);
 async function getTournamentRankings_impl(
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<Record<string, TeamRankStats>> {
@@ -24,6 +28,29 @@ async function getTournamentRankings_impl(
     supabase.from('round_info').select('*').in('series_id', seriesIds).range(from, to)
   );
   if (!rounds || rounds.length === 0) return {};
+
+  // Deaths per round and team from round_events, to know who survived a lost round. Distinct
+  // victims, since a revived player can die twice. Only maps with kill rows have data.
+  const killRows = await fetchAllPages<{
+    map_id: string; round: number; team: string | null; victim_id: string | null; victim_team: string | null;
+    is_first_blood: boolean | null; is_traded: boolean | null;
+  }>((from, to) =>
+    supabase.from('round_events')
+      .select('map_id, round, team, victim_id, victim_team, is_first_blood, is_traded')
+      .in('series_id', seriesIds)
+      .eq('type', 'kill')
+      .order('team_map_round_id')
+      .order('ev_index')
+      .range(from, to)
+  );
+  const mapsWithEvents = new Set(killRows.map(k => k.map_id));
+  const deadBy: Record<string, Set<string>> = {};
+  for (const k of killRows) {
+    if (!k.victim_id) continue;
+    (deadBy[`${k.map_id}|${Number(k.round)}|${k.victim_team?.trim()}`] ??= new Set()).add(k.victim_id);
+  }
+  // Round endings where the loser can still have players alive
+  const SAVE_WIN_CONS = new Set(['tim', 'boom', 'defus']);
 
   const teamStats: Record<string, TeamRankStats> = {};
   const mapLastRound: Record<string, RoundInfoRow> = {};
@@ -48,6 +75,10 @@ async function getTournamentRankings_impl(
       pabAtkWins: 0, pabAtkTotal: 0,
       pabDefWins: 0, pabDefTotal: 0,
       timeoutLosses: 0,
+      saves: 0, savesLost: 0,
+      trades: 0, tradeDeaths: 0,
+      fk: 0, trueFk: 0,
+      fd: 0, trueFd: 0,
       retakeDe: 0,
       retakePl: 0,
       postPlantPl: 0,
@@ -84,6 +115,14 @@ async function getTournamentRankings_impl(
     if (r.winCon?.trim().toLowerCase() === 'tim') {
       if (rawSide === 'atk') teamStats[tA].timeoutLosses++;
       if (sideB === 'atk')   teamStats[tB].timeoutLosses++;
+    }
+
+    // Saves: the loser kept players alive and let the round go (time, spike or defuse)
+    if (mapsWithEvents.has(id)) {
+      const loser = wonA ? tB : tA;
+      teamStats[loser].savesLost++;
+      const dead = deadBy[`${id}|${roundNum}|${loser}`]?.size ?? 0;
+      if (SAVE_WIN_CONS.has(r.winCon?.trim().toLowerCase() ?? '') && dead < 5) teamStats[loser].saves++;
     }
 
     // Pistols
@@ -173,6 +212,43 @@ async function getTournamentRankings_impl(
       if (r13 && r14)   { teamStats[teamB].first3Total++; if (r15)  teamStats[teamB].first3Lost++; }
     }
   });
+
+  // True first kills / deaths: first bloods the victim's team didn't trade. is_traded uses a 5 s
+  // window (matches a manual check on every Champions 2026 kill). First bloods are never team kills.
+  for (const k of killRows) {
+    if (!k.is_first_blood) continue;
+    const team = k.team?.trim();
+    const victimTeam = k.victim_team?.trim();
+    if (team) {
+      init(team);
+      teamStats[team].fk++;
+      if (!k.is_traded) teamStats[team].trueFk++;
+    }
+    if (victimTeam) {
+      init(victimTeam);
+      teamStats[victimTeam].fd++;
+      if (!k.is_traded) teamStats[victimTeam].trueFd++;
+    }
+  }
+
+  // Trades: round_summary kills already leave team kills out, and one team's kills are the other's deaths
+  const summaryRows = await fetchAllPages<{ team_a: string; team_b: string; kills_team_a: number; kills_team_b: number; trades_team_a: number; trades_team_b: number }>((from, to) =>
+    supabase.from('round_summary')
+      .select('team_a, team_b, kills_team_a, kills_team_b, trades_team_a, trades_team_b')
+      .in('series_id', seriesIds)
+      .order('team_map_round_id')
+      .range(from, to)
+  );
+  for (const r of summaryRows) {
+    const tA = r.team_a?.trim();
+    const tB = r.team_b?.trim();
+    if (!tA || !tB) continue;
+    init(tA); init(tB);
+    teamStats[tA].trades += Number(r.trades_team_a) || 0;
+    teamStats[tA].tradeDeaths += Number(r.kills_team_b) || 0;
+    teamStats[tB].trades += Number(r.trades_team_b) || 0;
+    teamStats[tB].tradeDeaths += Number(r.kills_team_a) || 0;
+  }
 
   // Retake efficiency from player_performance
   const perfRows = await fetchAllPages<PlayerPerformanceRow>((from, to) =>

@@ -148,9 +148,16 @@ Supabase is read-only from the app. Tables it queries:
 
 `draft` (one row per series: full veto, bo, tournament, region, date) · `round_info` (one row per
 round: map, side, win condition, score) · `player_stats` and `player_performance` (per-player,
-per-map stats with an ATK/DEF split) · `team_economy` (credits per round) · `tournament_played`
+per-map stats with an ATK/DEF split) · `team_economy` (credits per round) · `round_buy` (one row
+per round: agent, weapon, shield, spend and bank for each of the ten players; read by Operator
+Use, typed as `RoundBuyRow` in `lib/data/rows.ts`) · `tournament_played`
 (which team played which tournament — the source for the team and tournament dropdowns) ·
 `regions`, `teams`, `maps_id`, `maps_name_ids`, `agent_info`, `simulations`, `skirmish`.
+
+Also loaded but not queried by any section yet: `round_summary` (one row per round: first blood,
+plant, defuse, kills and trades per team) and `round_events` (one row per kill / plant / defuse
+inside a round, with first-blood, post-plant and trade flags). Their columns are typed in
+`lib/data/rows.ts` (`RoundSummaryRow`, `RoundEventRow`). Only Champions 2026 is loaded so far.
 
 A few DB columns drive UI defaults instead of being hardcoded: `maps_name_ids.in_rotation` (maps
 hidden by default in the map filters) and the image paths (`teams.team_path`,
