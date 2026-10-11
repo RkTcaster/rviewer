@@ -102,7 +102,6 @@ export type TeamRankStats = {
   pabWins: number; pabTotal: number;
   pabAtkWins: number; pabAtkTotal: number;
   pabDefWins: number; pabDefTotal: number;
-  timeoutLosses: number;
   saves: number;       // lost rounds (time, spike or defuse) where the loser still had someone alive
   savesLost: number;   // lost rounds on maps with round_events data (saves' denominator)
   trades: number;      // the team's kills that traded a teammate's death (round_summary)
@@ -111,6 +110,8 @@ export type TeamRankStats = {
   trueFk: number;      // first kills the rival didn't trade within 5 s (is_traded false)
   fd: number;          // first deaths of the round (victim of the first blood)
   trueFd: number;      // first deaths the team didn't trade within 5 s
+  trueFkWins: number;  // rounds with a true FK the team won (true FK into round win)
+  trueFdWins: number;  // rounds with a true FD the team still won (true FD into round win)
   retakeDe: number;
   retakePl: number;
   postPlantPl: number;

@@ -4,6 +4,12 @@ Shown by the "News" button in the sidebar. Only the topmost entry is displayed.
 Format: a `## date` heading (YYYY-MM-DD) followed by one `- ` bullet per change.
 Adding a new date brings back the unread dot.
 
+## 2026-10-11
+- Stats Rank: new FK-FD chip in Table info, a column group with True FK Rate, True FK Into Win, True FD Rate and True FD Into Win (True FK / FD Rate move here from Overall).
+- True FK Into Win: rounds won after a True FK, over the team's True FKs. True FD Into Win: rounds won anyway after a True FD, over the team's True FDs. Champions 2026 only for now (— elsewhere).
+- Compare Stats: new FK-FD block with the same four metrics and their rank.
+- Compare Stats: Atk Loss by Time is replaced by Save Rate (same as Stats Rank), now the last Overall row. Not colored green / red. Champions 2026 only for now (— elsewhere).
+
 ## 2026-10-10
 - Stats Rank: Atk Loss by Time is replaced by Save Rate (now the last Overall column): lost rounds where the team kept someone alive and let the round go (lost by time or by defuse while attacking, or the spike went off while defending), over lost rounds. It needs kill data, so for now it only shows for Champions 2026 (— elsewhere), and it isn't colored green / red.
 - Stats Rank: new Trade Rate column (end of Overall): trades over the team's deaths, i.e. how often a teammate killed back the enemy who just got a kill. Champions 2026 only for now (— elsewhere).

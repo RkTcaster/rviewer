@@ -379,6 +379,22 @@ URL, no map / side filters, a dead header branch for `'Bonus Conversion (PAB)'` 
   `tournament-rankings-v5`. Verified in the built app against a manual 5 s window from the first
   death: all 16 teams match (T1 101/132 = 77%, PRX 96/115 = 83%); True FK, Trade and Save Rate
   unchanged; Americas Stage 2 shows —.
+- **8.6 True FK / FD Into Win + FK-FD chip** (done, oct 2026): True FK Into Win = rounds with a
+  true FK the team won / true FK; True FD Into Win = rounds with a true FD the team still won /
+  true FD. Higher is better for both, Detail info W-L. Winner from `round_info.rndA`, joined to
+  the first blood by `map_id` + `round`; one first blood per round, so counting kills = counting
+  rounds. New FK-FD column group (chip in Table info) with True FK Rate, True FK Into Win, True FD
+  Rate, True FD Into Win; the two rates left Overall. Same four rows in Compare Stats (FK-FD block
+  between Overall and First 3, rates shown as `x/y`). Cache key `tournament-rankings-v6`.
+  Verified in the built app against an independent count (first kill by `t_sec` / `ev_index`,
+  trade by a manual 5 s window, winner from `round_info`): all 16 teams match (T1 69/97 = 71% and
+  23/101 = 23%, PRX 72/91 = 79% and 23/96 = 24%); 824 / 1088 true FK into win league-wide,
+  264 / 1088 true FD into win.
+- **8.7 Save Rate in Compare Stats** (done, oct 2026): Atk Loss by Time row replaced by Save
+  Rate (same `saves / savesLost` as Stats Rank), last row of Overall, `x/y` detail, neutral color
+  (`neutral` on the Compare `RowData`), rank still shown. `timeoutLosses` and the Compare
+  `countOnly` path had no other users, so both were removed. Verified in the built app: T1 18/132
+  = 14%, PRX 20/120 = 17% (same as 8.1).
 - **8.3 Plants by site / plant time** (parked, oct 2026 — the user doesn't want it yet): plant
   counts were cross-checked on Champions 2026 and match exactly in all three sources, per team:
   `player_performance.PL` (what Plant Rate ATK / Post Plant WR / Retake Eff use today),

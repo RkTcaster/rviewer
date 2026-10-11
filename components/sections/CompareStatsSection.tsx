@@ -20,7 +20,7 @@ interface Props {
   teamLogos?: Record<string, string>;
 }
 
-type MetricKey = 'map' | 'round' | 'atk' | 'def' | 'pistol' | 'antiEco' | 'recovery' | 'pab' | 'pabAtk' | 'pabDef' | 'first3Lost' | 'timeout' | 'retake' | 'postPlant' | 'plantAtk' | 'plantDef';
+type MetricKey = 'map' | 'round' | 'atk' | 'def' | 'pistol' | 'antiEco' | 'recovery' | 'pab' | 'pabAtk' | 'pabDef' | 'first3Lost' | 'save' | 'retake' | 'postPlant' | 'plantAtk' | 'plantDef' | 'trueFk' | 'trueFkWin' | 'trueFd' | 'trueFdWin';
 
 interface RowData {
   label: React.ReactNode;
@@ -33,8 +33,10 @@ interface RowData {
   totalB: number;
   /** true = lower % is better (inverts color and ranking direction) */
   lowerIsBetter?: boolean;
-  /** true = show raw count instead of W-L% */
-  countOnly?: boolean;
+  /** true = neither higher nor lower is better: no green / red */
+  neutral?: boolean;
+  /** true = show "x/y" instead of W-L (the count is an event, not a win) */
+  ratioDetail?: boolean;
 }
 
 interface SeparatorRow {
@@ -67,11 +69,15 @@ function getRank(
       case 'pabAtk':   return pct(s.pabAtkWins, s.pabAtkTotal);
       case 'pabDef':   return pct(s.pabDefWins, s.pabDefTotal);
       case 'first3Lost': return pct(s.first3Lost, s.first3Total);
-      case 'timeout':  return s.timeoutLosses;
+      case 'save':     return pct(s.saves, s.savesLost);
       case 'retake':     return pct(s.retakeDe, s.retakePl);
       case 'postPlant':  return s.postPlantPl > 0 ? pct(s.postPlantPl - s.postPlantDe, s.postPlantPl) : null;
       case 'plantAtk':   return pct(s.postPlantPl, s.attTotal);
       case 'plantDef':   return pct(s.retakePl, s.defTotal);
+      case 'trueFk':     return pct(s.trueFk, s.fk);
+      case 'trueFkWin':  return pct(s.trueFkWins, s.trueFk);
+      case 'trueFd':     return pct(s.trueFd, s.fd);
+      case 'trueFdWin':  return pct(s.trueFdWins, s.trueFd);
     }
   };
 
@@ -113,15 +119,17 @@ function StatRow({ row, teamAName, teamBName, rankings }: {
   // Color: for normal metrics higher = green; for lowerIsBetter higher = red
   let colorA = 'text-gray-300';
   let colorB = 'text-gray-300';
-  if (row.valA !== null && row.valB !== null) {
+  if (row.valA !== null && row.valB !== null && !row.neutral) {
     const aLeads = row.lowerIsBetter ? row.valA < row.valB : row.valA > row.valB;
     const bLeads = row.lowerIsBetter ? row.valB < row.valA : row.valB > row.valA;
     if (aLeads) { colorA = 'text-green-400'; colorB = 'text-red-400'; }
     else if (bLeads) { colorA = 'text-red-400'; colorB = 'text-green-400'; }
   }
 
-  const wlA = row.totalA > 0 ? `${row.winsA}W – ${row.totalA - row.winsA}L` : '—';
-  const wlB = row.totalB > 0 ? `${row.winsB}W – ${row.totalB - row.winsB}L` : '—';
+  const wl = (wins: number, total: number) =>
+    total > 0 ? (row.ratioDetail ? `${wins}/${total}` : `${wins}W – ${total - wins}L`) : '—';
+  const wlA = wl(row.winsA, row.totalA);
+  const wlB = wl(row.winsB, row.totalB);
 
   return (
     <tr className="hover:bg-[#252a33] transition-colors border-b border-gray-800">
@@ -129,14 +137,14 @@ function StatRow({ row, teamAName, teamBName, rankings }: {
       <td className="px-4 py-4 text-center bg-[#1a1d23] w-20">
         <RankBadge rankInfo={rankA} />
       </td>
-      {/* Team A: W-L or count */}
+      {/* Team A: W-L */}
       <td className="px-4 py-4 text-right bg-[#1a1d23] text-[12px] text-gray-500 whitespace-nowrap">
-        {!row.countOnly && wlA}
+        {wlA}
       </td>
-      {/* Team A: % or count */}
+      {/* Team A: % */}
       <td className="px-5 py-4 text-right bg-[#1a1d23]">
         <span className={`text-2xl font-black ${row.valA !== null ? colorA : 'text-gray-600'}`}>
-          {row.valA !== null ? (row.countOnly ? row.valA : `${row.valA}%`) : '-'}
+          {row.valA !== null ? `${row.valA}%` : '-'}
         </span>
       </td>
 
@@ -145,15 +153,15 @@ function StatRow({ row, teamAName, teamBName, rankings }: {
         <span className="text-[12px] font-bold uppercase tracking-widest text-gray-400">{row.label}</span>
       </td>
 
-      {/* Team B: % or count */}
+      {/* Team B: % */}
       <td className="px-5 py-4 text-left bg-[#1a1d23]">
         <span className={`text-2xl font-black ${row.valB !== null ? colorB : 'text-gray-600'}`}>
-          {row.valB !== null ? (row.countOnly ? row.valB : `${row.valB}%`) : '-'}
+          {row.valB !== null ? `${row.valB}%` : '-'}
         </span>
       </td>
-      {/* Team B: W-L or count */}
+      {/* Team B: W-L */}
       <td className="px-4 py-4 text-left bg-[#1a1d23] text-[12px] text-gray-500 whitespace-nowrap">
-        {!row.countOnly && wlB}
+        {wlB}
       </td>
       {/* Team B: Ranking */}
       <td className="px-4 py-4 text-center bg-[#1a1d23] w-20">
@@ -168,12 +176,12 @@ export function CompareStatsSection({
   antiEcoA, antiEcoB, recoveryA, recoveryB,
   pabA, pabB, teamAName, teamBName, rankings, teamLogos = {},
 }: Props) {
-  const timeoutA = rankings[teamAName]?.timeoutLosses ?? 0;
-  const timeoutB = rankings[teamBName]?.timeoutLosses ?? 0;
   const retakeA = rankings[teamAName] ?? { retakeDe: 0, retakePl: 0 };
   const retakeB = rankings[teamBName] ?? { retakeDe: 0, retakePl: 0 };
   const ppA = rankings[teamAName] ?? { postPlantPl: 0, postPlantDe: 0 };
   const ppB = rankings[teamBName] ?? { postPlantPl: 0, postPlantDe: 0 };
+  const rankA = rankings[teamAName] as TeamRankStats | undefined;
+  const rankB = rankings[teamBName] as TeamRankStats | undefined;
   if (!teamBName) {
     return (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
@@ -264,6 +272,35 @@ export function CompareStatsSection({
       valA: pct(retakeA.retakeDe, retakeA.retakePl), winsA: retakeA.retakeDe, totalA: retakeA.retakePl,
       valB: pct(retakeB.retakeDe, retakeB.retakePl), winsB: retakeB.retakeDe, totalB: retakeB.retakePl,
     },
+    {
+      label: 'Save Rate', key: 'save',
+      valA: pct(rankA?.saves ?? 0, rankA?.savesLost ?? 0), winsA: rankA?.saves ?? 0, totalA: rankA?.savesLost ?? 0,
+      valB: pct(rankB?.saves ?? 0, rankB?.savesLost ?? 0), winsB: rankB?.saves ?? 0, totalB: rankB?.savesLost ?? 0,
+      neutral: true, ratioDetail: true,
+    },
+    { separator: true, label: 'FK-FD' },
+    {
+      label: 'True FK Rate', key: 'trueFk',
+      valA: pct(rankA?.trueFk ?? 0, rankA?.fk ?? 0), winsA: rankA?.trueFk ?? 0, totalA: rankA?.fk ?? 0,
+      valB: pct(rankB?.trueFk ?? 0, rankB?.fk ?? 0), winsB: rankB?.trueFk ?? 0, totalB: rankB?.fk ?? 0,
+      ratioDetail: true,
+    },
+    {
+      label: 'True FK Into Win', key: 'trueFkWin',
+      valA: pct(rankA?.trueFkWins ?? 0, rankA?.trueFk ?? 0), winsA: rankA?.trueFkWins ?? 0, totalA: rankA?.trueFk ?? 0,
+      valB: pct(rankB?.trueFkWins ?? 0, rankB?.trueFk ?? 0), winsB: rankB?.trueFkWins ?? 0, totalB: rankB?.trueFk ?? 0,
+    },
+    {
+      label: 'True FD Rate', key: 'trueFd',
+      valA: pct(rankA?.trueFd ?? 0, rankA?.fd ?? 0), winsA: rankA?.trueFd ?? 0, totalA: rankA?.fd ?? 0,
+      valB: pct(rankB?.trueFd ?? 0, rankB?.fd ?? 0), winsB: rankB?.trueFd ?? 0, totalB: rankB?.fd ?? 0,
+      lowerIsBetter: true, ratioDetail: true,
+    },
+    {
+      label: 'True FD Into Win', key: 'trueFdWin',
+      valA: pct(rankA?.trueFdWins ?? 0, rankA?.trueFd ?? 0), winsA: rankA?.trueFdWins ?? 0, totalA: rankA?.trueFd ?? 0,
+      valB: pct(rankB?.trueFdWins ?? 0, rankB?.trueFd ?? 0), winsB: rankB?.trueFdWins ?? 0, totalB: rankB?.trueFd ?? 0,
+    },
     { separator: true, label: 'First 3 rounds per half performance' },
     {
       label: 'Pistol Winrate', key: 'pistol',
@@ -302,12 +339,6 @@ export function CompareStatsSection({
       valB: pct(rankings[teamBName]?.first3Lost ?? 0, rankings[teamBName]?.first3Total ?? 0),
       winsB: rankings[teamBName]?.first3Lost ?? 0, totalB: rankings[teamBName]?.first3Total ?? 0,
       lowerIsBetter: true,
-    },
-    {
-      label: 'Atk Loss by Time', key: 'timeout',
-      valA: timeoutA, winsA: timeoutA, totalA: timeoutA,
-      valB: timeoutB, winsB: timeoutB, totalB: timeoutB,
-      lowerIsBetter: true, countOnly: true,
     },
   ];
 

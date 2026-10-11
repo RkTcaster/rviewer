@@ -8,7 +8,8 @@ import { DraftRow, PlayerPerformanceRow, RoundInfoRow } from './rows';
 // v3: trades / tradeDeaths from round_summary
 // v4: fk / trueFk from round_events
 // v5: fd / trueFd from round_events
-export const getTournamentRankings = versioned('tournament-rankings-v5', getTournamentRankings_impl);
+// v6: trueFkWins / trueFdWins (rounds won after a true FK / FD)
+export const getTournamentRankings = versioned('tournament-rankings-v6', getTournamentRankings_impl);
 async function getTournamentRankings_impl(
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<Record<string, TeamRankStats>> {
@@ -54,6 +55,7 @@ async function getTournamentRankings_impl(
 
   const teamStats: Record<string, TeamRankStats> = {};
   const mapLastRound: Record<string, RoundInfoRow> = {};
+  const roundWinner: Record<string, string> = {};
 
   // Per-map key rounds for antiEco/recovery/PAB calculation
   type MapKeyRounds = {
@@ -74,11 +76,11 @@ async function getTournamentRankings_impl(
       pabWins: 0, pabTotal: 0,
       pabAtkWins: 0, pabAtkTotal: 0,
       pabDefWins: 0, pabDefTotal: 0,
-      timeoutLosses: 0,
       saves: 0, savesLost: 0,
       trades: 0, tradeDeaths: 0,
       fk: 0, trueFk: 0,
       fd: 0, trueFd: 0,
+      trueFkWins: 0, trueFdWins: 0,
       retakeDe: 0,
       retakePl: 0,
       postPlantPl: 0,
@@ -99,6 +101,7 @@ async function getTournamentRankings_impl(
 
     const roundNum = Number(r.round);
     const wonA = Number(r.rndA) === 1;
+    roundWinner[`${id}|${roundNum}`] = wonA ? tA : tB;
     const rawSide = r.side?.trim().toLowerCase();
     const sideB = rawSide === 'atk' ? 'def' : 'atk';
 
@@ -110,12 +113,6 @@ async function getTournamentRankings_impl(
     else if (rawSide === 'def') { teamStats[tA].defTotal++; if (wonA) teamStats[tA].defWins++; }
     if (sideB === 'atk') { teamStats[tB].attTotal++; if (!wonA) teamStats[tB].attWins++; }
     else if (sideB === 'def') { teamStats[tB].defTotal++; if (!wonA) teamStats[tB].defWins++; }
-
-    // Timeout losses: winCon = 'tim' → attacking side lost
-    if (r.winCon?.trim().toLowerCase() === 'tim') {
-      if (rawSide === 'atk') teamStats[tA].timeoutLosses++;
-      if (sideB === 'atk')   teamStats[tB].timeoutLosses++;
-    }
 
     // Saves: the loser kept players alive and let the round go (time, spike or defuse)
     if (mapsWithEvents.has(id)) {
@@ -215,19 +212,27 @@ async function getTournamentRankings_impl(
 
   // True first kills / deaths: first bloods the victim's team didn't trade. is_traded uses a 5 s
   // window (matches a manual check on every Champions 2026 kill). First bloods are never team kills.
+  // One first blood per round, so the wins count rounds won after a true FK / FD.
   for (const k of killRows) {
     if (!k.is_first_blood) continue;
     const team = k.team?.trim();
     const victimTeam = k.victim_team?.trim();
+    const winner = roundWinner[`${k.map_id}|${Number(k.round)}`];
     if (team) {
       init(team);
       teamStats[team].fk++;
-      if (!k.is_traded) teamStats[team].trueFk++;
+      if (!k.is_traded) {
+        teamStats[team].trueFk++;
+        if (winner === team) teamStats[team].trueFkWins++;
+      }
     }
     if (victimTeam) {
       init(victimTeam);
       teamStats[victimTeam].fd++;
-      if (!k.is_traded) teamStats[victimTeam].trueFd++;
+      if (!k.is_traded) {
+        teamStats[victimTeam].trueFd++;
+        if (winner === victimTeam) teamStats[victimTeam].trueFdWins++;
+      }
     }
   }
 

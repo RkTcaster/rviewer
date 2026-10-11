@@ -29,9 +29,10 @@ const ECO_VS: { key: keyof EconomyCategoryStats; label: string }[] = [
   { key: 'vsSemiBuy', label: 'vs Semi-Buy' },
   { key: 'vsFullBuy', label: 'vs Full-Buy' },
 ];
-// Toggleable column groups (chips). 'overall' + 'first3' come from METRICS; the rest are economy categories.
+// Toggleable column groups (chips). 'overall', 'fkfd' and 'first3' come from METRICS; the rest are economy categories.
 const COLUMN_GROUPS: { id: string; label: string }[] = [
   { id: 'overall', label: 'Overall' },
+  { id: 'fkfd',    label: 'FK-FD' },
   { id: 'first3',  label: 'First 3 rounds performance' },
   ...ECO_CATEGORIES.map(c => ({ id: c.key as string, label: c.label })),
 ];
@@ -60,7 +61,7 @@ type MetricDef = {
   /** Neither higher nor lower is better: no green / red */
   neutral?: boolean;
 };
-type SeparatorDef = { separator: true; label: string };
+type SeparatorDef = { separator: true; id: string; label: string };
 type RowDef = MetricDef | SeparatorDef;
 
 const METRICS: RowDef[] = [
@@ -73,10 +74,13 @@ const METRICS: RowDef[] = [
   { label: 'Plant Rate DEF',         getValue: s => pct(s.retakePl, s.defTotal), lowerIsBetter: true, getWL: s => ({ wins: s.retakePl, total: s.defTotal }) },
   { label: 'Retake Eff',             getValue: s => pct(s.retakeDe, s.retakePl),                 getWL: s => ({ wins: s.retakeDe, total: s.retakePl }) },
   { label: 'Trade Rate',             getValue: s => pct(s.trades, s.tradeDeaths), getWL: s => ({ wins: s.trades, total: s.tradeDeaths }), ratioDetail: true },
-  { label: 'True FK Rate',           getValue: s => pct(s.trueFk, s.fk), getWL: s => ({ wins: s.trueFk, total: s.fk }), ratioDetail: true },
-  { label: 'True FD Rate',           getValue: s => pct(s.trueFd, s.fd), lowerIsBetter: true, getWL: s => ({ wins: s.trueFd, total: s.fd }), ratioDetail: true },
   { label: 'Save Rate',              getValue: s => pct(s.saves, s.savesLost), neutral: true, getWL: s => ({ wins: s.saves, total: s.savesLost }), ratioDetail: true },
-  { separator: true, label: 'First 3 rounds performance' },
+  { separator: true, id: 'fkfd', label: 'FK-FD' },
+  { label: 'True FK Rate',           getValue: s => pct(s.trueFk, s.fk), getWL: s => ({ wins: s.trueFk, total: s.fk }), ratioDetail: true },
+  { label: 'True FK Into Win',       getValue: s => pct(s.trueFkWins, s.trueFk), getWL: s => ({ wins: s.trueFkWins, total: s.trueFk }) },
+  { label: 'True FD Rate',           getValue: s => pct(s.trueFd, s.fd), lowerIsBetter: true, getWL: s => ({ wins: s.trueFd, total: s.fd }), ratioDetail: true },
+  { label: 'True FD Into Win',       getValue: s => pct(s.trueFdWins, s.trueFd), getWL: s => ({ wins: s.trueFdWins, total: s.trueFd }) },
+  { separator: true, id: 'first3', label: 'First 3 rounds performance' },
   { label: 'Pistol Winrate',         getValue: s => pct(s.pistolWins, s.pistolTotal),            getWL: s => ({ wins: s.pistolWins, total: s.pistolTotal }) },
   { label: 'Post Pistol Into Win',   getValue: s => pct(s.antiEcoWins, s.antiEcoTotal),          getWL: s => ({ wins: s.antiEcoWins, total: s.antiEcoTotal }) },
   { label: 'Bonus Conversion (W-W-W)', getValue: s => pct(s.pabWins, s.pabTotal),                  getWL: s => ({ wins: s.pabWins, total: s.pabTotal }) },
@@ -85,6 +89,20 @@ const METRICS: RowDef[] = [
   { label: 'Post Pistol Loss Into Win (L-W)', getValue: s => pct(s.recoveryWins, s.recoveryTotal), getWL: s => ({ wins: s.recoveryWins, total: s.recoveryTotal }) },
   { label: 'Losing to enemy bonus (L-L-L)',  getValue: s => pct(s.first3Lost, s.first3Total), lowerIsBetter: true, getWL: s => ({ wins: s.first3Lost, total: s.first3Total }), ratioDetail: true },
 ];
+
+// Group of each metric ('overall' until the first separator, then the separator above it) and the
+// group header row: label + how many columns it spans.
+const metricDefs = METRICS.filter((r): r is MetricDef => !('separator' in r));
+const METRIC_GROUP_HEADERS: { id: string; label: string; count: number }[] = [{ id: 'overall', label: 'Overall', count: 0 }];
+const metricGroups: string[] = [];
+for (const r of METRICS) {
+  if ('separator' in r) METRIC_GROUP_HEADERS.push({ id: r.id, label: r.label, count: 0 });
+  else {
+    const g = METRIC_GROUP_HEADERS[METRIC_GROUP_HEADERS.length - 1];
+    metricGroups.push(g.id);
+    g.count++;
+  }
+}
 
 // What every column means, same pattern as the Operator Use legend
 const LEGEND = (
@@ -118,10 +136,25 @@ const LEGEND = (
       </dd>
     </div>
     <div>
+      <dt className="font-bold text-gray-100">Save Rate</dt>
+      <dd className="text-gray-400">
+        Lost rounds where the team kept someone alive and let the round go instead of fighting:
+        lost by time or by defuse while attacking, or the spike went off while defending. Over
+        lost rounds. Needs kill data, only loaded for some tournaments (— without it). Not colored:
+        saving isn&apos;t good or bad by itself.
+      </dd>
+    </div>
+    <div>
       <dt className="font-bold text-gray-100">True FK Rate</dt>
       <dd className="text-gray-400">
         First kills of the round the rival didn&apos;t trade (the killer survived the next 5
         seconds), over all the team&apos;s first kills. Needs kill data (— without it).
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">True FK Into Win</dt>
+      <dd className="text-gray-400">
+        Rounds won after a True FK, over the team&apos;s True FKs. Needs kill data (— without it).
       </dd>
     </div>
     <div>
@@ -133,12 +166,10 @@ const LEGEND = (
       </dd>
     </div>
     <div>
-      <dt className="font-bold text-gray-100">Save Rate</dt>
+      <dt className="font-bold text-gray-100">True FD Into Win</dt>
       <dd className="text-gray-400">
-        Lost rounds where the team kept someone alive and let the round go instead of fighting:
-        lost by time or by defuse while attacking, or the spike went off while defending. Over
-        lost rounds. Needs kill data, only loaded for some tournaments (— without it). Not colored:
-        saving isn&apos;t good or bad by itself.
+        Rounds won anyway after a True FD, over the team&apos;s True FDs. Needs kill data (—
+        without it).
       </dd>
     </div>
     <div>
@@ -238,21 +269,10 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
     );
   }
 
-  const separatorIdx = METRICS.findIndex(r => 'separator' in r);
-  const metricDefs = METRICS.filter((r): r is MetricDef => !('separator' in r));
-  const afterSeparatorLabels = new Set(
-    METRICS.slice(separatorIdx + 1)
-      .filter((r): r is MetricDef => !('separator' in r))
-      .map(r => r.label)
-  );
-  const separatorLabel = (METRICS[separatorIdx] as SeparatorDef).label;
-  const firstGroupCount = separatorIdx;
-  const secondGroupCount = metricDefs.length - firstGroupCount;
-
-  // Group visibility helpers (chips). Metric group is 'overall' before the separator, 'first3' after.
-  const metricGroupId = (mi: number) => (mi < firstGroupCount ? 'overall' : 'first3');
-  const showOverall = !hiddenGroups.has('overall');
-  const showFirst3 = !hiddenGroups.has('first3');
+  // Group visibility helpers (chips). A metric column gets the group border when it starts a group
+  // and some metric column is visible before it.
+  const firstVisibleMi = metricDefs.findIndex((_, mi) => !hiddenGroups.has(metricGroups[mi]));
+  const isGroupStart = (mi: number) => mi !== firstVisibleMi && (mi === 0 || metricGroups[mi] !== metricGroups[mi - 1]);
   const visibleEcoCats = ECO_CATEGORIES.filter(c => !hiddenGroups.has(c.key));
 
   // Pre-compute per-metric values for all teams (for coloring, always uses base alphabetical order)
@@ -375,22 +395,15 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
             >
               Team
             </th>
-            {showOverall && (
+            {METRIC_GROUP_HEADERS.filter(g => !hiddenGroups.has(g.id)).map((g, gi) => (
               <th
-                colSpan={firstGroupCount}
-                className="px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-widest text-gray-500 border-b border-gray-700"
+                key={g.id}
+                colSpan={g.count}
+                className={`px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-widest text-gray-500 border-b ${gi > 0 ? 'border-l-2' : ''} border-gray-700`}
               >
-                Overall
+                {g.label}
               </th>
-            )}
-            {showFirst3 && (
-              <th
-                colSpan={secondGroupCount}
-                className="px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-widest text-gray-500 border-b border-l-2 border-gray-700"
-              >
-                {separatorLabel}
-              </th>
-            )}
+            ))}
             {visibleEcoCats.map(c => (
               <th
                 key={c.key}
@@ -404,9 +417,8 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
           {/* Metric label row — rotated vertical text, clickable */}
           <tr>
             {metricDefs.map((m, mi) => {
-              if (hiddenGroups.has(metricGroupId(mi))) return null;
-              const isFirstOfGroup = afterSeparatorLabels.has(m.label) &&
-                metricDefs[mi - 1] && !afterSeparatorLabels.has(metricDefs[mi - 1].label) && showOverall;
+              if (hiddenGroups.has(metricGroups[mi])) return null;
+              const isFirstOfGroup = isGroupStart(mi);
               const isActive = sortCol === mi;
               return (
                 <th
@@ -484,11 +496,10 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
                 </div>
               </td>
               {metricDefs.map((m, mi) => {
-                if (hiddenGroups.has(metricGroupId(mi))) return null;
+                if (hiddenGroups.has(metricGroups[mi])) return null;
                 const val = m.getValue(rankings[team]);
                 const color = getCellColor(val, metricAllValues[mi], m.lowerIsBetter ?? false, m.neutral);
-                const isFirstOfGroup = afterSeparatorLabels.has(m.label) &&
-                  metricDefs[mi - 1] && !afterSeparatorLabels.has(metricDefs[mi - 1].label) && showOverall;
+                const isFirstOfGroup = isGroupStart(mi);
                 const isActive = sortCol === mi;
                 return (
                   <td
