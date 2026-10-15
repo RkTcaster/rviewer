@@ -1,7 +1,7 @@
 // lib/data/economy.ts — economía por ronda (distribución, compare, torneo)
 import { supabase } from '../supabase';
 import { versioned, fetchAllPages } from './helpers';
-import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare, TeamPostPistolForce, OperatorUseData, OperatorUseStat, OperatorUseSide, OperatorUseWeapon } from '../types';
+import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare, TeamPostPistolForce, OperatorUseData, OperatorUseStat, OperatorUseSide, OperatorUseWeapon, WeaponPickBank, WeaponPickData, WeaponPickStat } from '../types';
 
 export async function getEconomyDistribution(filters: {
   reg?: string[]; tour?: string; team?: string;
@@ -488,4 +488,115 @@ async function getOperatorUseStats_impl(
   }
 
   return { byWeapon, maps: [...maps].sort() };
+}
+
+// Weapon Pick: per team, map and side, how many rounds each loadout was fielded and its WR.
+// A loadout is what the 5 players hold at the start of the round per round_buy (bought, kept or
+// dropped, round_buy can't tell them apart), weapons grouped by category plus armor. Every round counts.
+const WP_CATEGORY: Record<string, string> = {
+  Vandal: 'Rifle', Phantom: 'Rifle', Bulldog: 'Bulldog', Guardian: 'Guardian',
+  Operator: 'Op', Outlaw: 'Outlaw', Marshal: 'Marshal',
+  Odin: 'Odin', Ares: 'Ares',
+  Spectre: 'SMG', Stinger: 'SMG',
+  Bucky: 'Shotgun', Judge: 'Shotgun',
+  Sheriff: 'Sheriff', Bandit: 'Bandit', Classic: 'Classic',
+  Shorty: 'Pistol', Frenzy: 'Pistol', Ghost: 'Pistol',
+};
+const WP_WEAPON_ORDER = ['Rifle', 'Bulldog', 'Guardian', 'Op', 'Outlaw', 'Marshal', 'Odin', 'Ares', 'SMG', 'Shotgun', 'Sheriff', 'Bandit', 'Classic', 'Pistol', 'Other'];
+const WP_ARMOR_ORDER = ['Heavy', 'Regen', 'Light', 'None'];
+const WP_PLAYER_COLS = (['a', 'b'] as const).flatMap(s => [1, 2, 3, 4, 5].flatMap(i =>
+  ['_weapon', '_shield'].map(c => `player_${i}_team_${s}${c}`)));
+
+// "4 Rifle + Op · 4 Heavy + Light": count omitted when it's 1
+function wpPart(items: string[], order: string[]): string {
+  const counts: Record<string, number> = {};
+  for (const x of items) counts[x] = (counts[x] ?? 0) + 1;
+  return order.filter(k => counts[k]).map(k => counts[k] > 1 ? `${counts[k]} ${k}` : k).join(' + ');
+}
+
+// v2: Bulldog, Guardian, Sheriff, Bandit and Classic as their own categories
+type WpEcoRow = OpEcoRow & { team_a_bank: number | null; team_b_bank: number | null };
+
+function wpBankBin(bank: number): WeaponPickBank {
+  if (bank < 2000)  return 'b0';
+  if (bank < 6000)  return 'b2';
+  if (bank < 10000) return 'b6';
+  return 'b10';
+}
+
+// v3: Odin and Ares on their own (Heavy only means armor)
+// v4: loadout value and bank (keys gain cost and bank bins)
+export const getWeaponPickStats = versioned('weapon-pick-stats-v4', getWeaponPickStats_impl);
+async function getWeaponPickStats_impl(
+  filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
+): Promise<WeaponPickData> {
+  let idQuery = supabase.from('draft').select('series_id');
+  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
+  if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
+  if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
+  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
+  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
+  if (filters.last && filters.last !== 'all') idQuery = idQuery.order('date', { ascending: false }).limit(parseInt(filters.last));
+
+  const { data: idList } = await idQuery;
+  if (!idList || idList.length === 0) return { stats: {}, maps: [] };
+
+  const seriesIds = [...new Set(idList.map(x => x.series_id))];
+  // Ordered by the PK so the pages never overlap or skip rows
+  const [rows, ecoRows] = await Promise.all([
+    fetchAllPages<RoundBuyRow>((from, to) =>
+      supabase.from('round_buy')
+        .select(`map_id, round, team_a, team_b, side_team_a, ${WP_PLAYER_COLS.join(', ')}`)
+        .in('series_id', seriesIds)
+        .order('team_map_round_id')
+        .range(from, to) as unknown as PromiseLike<{ data: RoundBuyRow[] | null; error: unknown }>
+    ),
+    fetchAllPages<WpEcoRow>((from, to) =>
+      supabase.from('team_economy')
+        .select('map_id, round, team_a, win_A, team_a_economy, team_b_economy, team_a_bank, team_b_bank')
+        .in('series_id', seriesIds)
+        .order('team_map_round_id')
+        .range(from, to)
+    ),
+  ]);
+  const eco: Record<string, WpEcoRow> = {};
+  for (const e of ecoRows) eco[`${e.map_id}|${Number(e.round)}`] = e;
+
+  const stats: WeaponPickData['stats'] = {};
+  const maps = new Set<string>();
+  for (const r of rows) {
+    // map_id is "<series_id>-<Map>"
+    const map = r.map_id?.slice(r.map_id.indexOf('-') + 1);
+    if (!map) continue;
+    maps.add(map);
+    const e = eco[`${r.map_id}|${Number(r.round)}`];
+    const ecoOk = !!e && e.team_a?.trim() === r.team_a?.trim();
+    for (const s of ['a', 'b'] as const) {
+      const team = (s === 'a' ? r.team_a : r.team_b)?.trim();
+      if (!team) continue;
+      const atk = (r.side_team_a === 'atk') === (s === 'a');
+      const weapons = [1, 2, 3, 4, 5].map(i => WP_CATEGORY[String(r[`player_${i}_team_${s}_weapon`])] ?? 'Other');
+      const armor = [1, 2, 3, 4, 5].map(i => {
+        const sh = String(r[`player_${i}_team_${s}_shield`] ?? '');
+        return WP_ARMOR_ORDER.includes(sh) ? sh : 'None';
+      });
+      const loadout = `${wpPart(weapons, WP_WEAPON_ORDER)} · ${wpPart(armor, WP_ARMOR_ORDER)}`;
+      const costRaw = ecoOk ? (s === 'a' ? e.team_a_economy : e.team_b_economy) : null;
+      const bankRaw = ecoOk ? (s === 'a' ? e.team_a_bank : e.team_b_bank) : null;
+      const valued = costRaw != null && bankRaw != null;
+      const cost = valued ? Number(costRaw) : 0;
+      const bank = valued ? Number(bankRaw) : 0;
+      const key = `${loadout}|${valued ? classifyEconomy(cost) : 'na'}|${valued ? wpBankBin(bank) : 'na'}`;
+      const byMap = (stats[team] ??= {})[map] ??= { atk: {}, def: {} } as WeaponPickStat;
+      const lo = (byMap[atk ? 'atk' : 'def'][key] ??= { rounds: 0, decided: 0, wins: 0, valued: 0, costSum: 0, bankSum: 0 });
+      lo.rounds++;
+      if (ecoOk) {
+        lo.decided++;
+        if ((Number(e.win_A) === 1) === (s === 'a')) lo.wins++;
+      }
+      if (valued) { lo.valued++; lo.costSum += cost; lo.bankSum += bank; }
+    }
+  }
+
+  return { stats, maps: [...maps].sort() };
 }

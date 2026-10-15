@@ -5,6 +5,11 @@ Format: a `## date` heading (YYYY-MM-DD) followed by one `- ` bullet per change.
 Adding a new date brings back the unread dot.
 
 ## 2026-10-15
+- New Weapon Pick section (Testing): each team's most used loadouts, i.e. what the 5 players hold at the start of the round, weapons by category plus armor (e.g. "4 Rifle + Op · 4 Heavy + Light"), with rounds, % of the team's rounds and WR. Same team and map filters as Operator Use, plus ATK / DEF. Champions 2026 only for now.
+- Weapon Pick: more detail in loadouts. Rifle is now only Vandal / Phantom; Bulldog and Guardian show on their own. Sheriff, Bandit and Classic show on their own, and Pistol is the rest (Shorty, Frenzy, Ghost). Odin and Ares show on their own, so Heavy only means heavy armor. The legend lists every group.
+- Weapon Pick: new Armor chips under Maps: All, Heavy (all 5 with Heavy), Light (all 5 with Light), Mixed (anything else) and None (all 5 without armor). With a filter on, % is over the rounds that pass it.
+- Weapon Pick: new Cost chips (the team's loadout value that round, same ranges as Economy: Eco <5k, Semi-eco 5–15k, Semi-buy 15–20k, Full buy 20k+) and Bank chips (the team's money left after buying: <2k, 2–6k, 6–10k, 10k+). Each loadout row adds its average Cost and Bank.
+- Weapon Pick: Armor chips now show the armor icons (Mixed shows Heavy, Regen and Light together).
 - Agent Picks: new NMWR by chips (Maps / Rounds). Rounds computes NMWR as rounds won over rounds played on non-mirror picks; the NMWR column, sort, tooltip and NMWR Detail (header, per-map chart and each match's score) follow the choice.
 
 ## 2026-10-11

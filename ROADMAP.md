@@ -411,6 +411,54 @@ URL, no map / side filters, a dead header branch for `'Bonus Conversion (PAB)'` 
 
 ---
 
+## Phase 9 — Weapon Pick (in progress, by stages)
+
+New Testing section (`components/sections/WeaponPickSection.tsx`, `getWeaponPickStats` in
+`lib/data/economy.ts`) on how each team buys as a whole, from `round_buy` (only Champions 2026 as
+of oct 2026). No per-player view: the user wants the team's buy together.
+
+- **9.1 Filters + team loadouts** (done, oct 2026): same filters as Operator Use (region, quick,
+  tournament, team chips, map chips, ATK / DEF side, Reset). A loadout is what the 5 players hold
+  at the start of the round (`_weapon` + `_shield`; bought, kept or dropped — `round_buy` can't
+  tell them apart), weapons by category (Rifle, Op, Outlaw, Marshal, Heavy, SMG, Shotgun, Pistol)
+  plus armor, e.g. `4 Rifle + Op · 4 Heavy + Light`. Per team: top 5 by rounds with % of the
+  team's rounds and WR (`team_economy.win_A`), "Show all". Every round counts, pistols included.
+  Cache key `weapon-pick-stats-v1`. Verified in the built app against a hand count of G2 on
+  754741-Lotus: 24 rounds, 20 distinct loadouts, 13 wins, top 5 Rifle · 5 Heavy 3 rounds 1 win.
+- **9.1b Finer categories** (done, oct 2026): Rifle = Vandal / Phantom; Bulldog, Guardian,
+  Sheriff, Bandit and Classic are their own categories; Pistol = Shorty / Frenzy / Ghost. Legend
+  lists every group. Cache key `weapon-pick-stats-v2`. Verified in the built app on G2
+  754741-Lotus: 21 distinct loadouts (round 2 = 2 Bulldog + Guardian + Marshal + SMG, round 21 =
+  3 Rifle + 2 Bandit), matching a hand count.
+- **9.1c Odin / Ares** (done, oct 2026): the Heavy weapon group is split into Odin and Ares (Ares
+  is rare: 3 player-rounds in Champions 2026), so "Heavy" only means armor. Legend explains the
+  armor part. Cache key `weapon-pick-stats-v3`.
+- **9.1d Armor chips** (done, oct 2026): single-select chips under Maps, same size as the map
+  chips (the 50×40 box shows a text placeholder until the armor icons are added): All, Heavy
+  (armor part `5 Heavy`), Light (`5 Light`), Mixed (anything else, e.g. `5 Regen`), None (`5 None`).
+  Client-side only, from the loadout key; % is over the rounds that pass the filter. Expected on
+  G2 754741-Lotus (hand count): Heavy 4 rounds (r6, 12, 17, 20), None 2 (r13, 14), Mixed 18.
+  Not clicked in a browser yet (Chrome extension unavailable).
+- **9.1e Armor icons** (done, oct 2026): `public/weapons/{heavy,light,regen}.png` (white on
+  transparent) in the Armor chip boxes: Heavy and Light their own icon, Mixed the three small side
+  by side, All and None keep text. Checked in the built app: the HTML points to the files and all
+  three serve 200.
+- **9.2 Cost + bank** (done, oct 2026): cost = the team's loadout value
+  (`team_economy.team_x_economy`, kept items included — chosen over summed `_spend`, which only
+  counts what was paid that round, abilities and drops included); bank = `team_economy.team_x_bank`
+  (team total; matches summed `_bank` within a few dozen). Cost chips use the `classifyEconomy`
+  bins, Bank chips <2k / 2–6k / 6–10k / 10k+ (Champions 2026 team rounds: 795 / 595 / 639 / 987).
+  Both single-select, same chip format as Armor (shared `chipGroup`); rounds without a
+  `team_economy` row only show with both on All. Rows gain average Cost and Bank. Server keys are
+  `${loadout}|${cost}|${bank}`. Cache key `weapon-pick-stats-v4`. Verified in the built app on G2
+  754741-Lotus against `team_economy` by hand: 5 Rifle · 5 Heavy 23.8k / 12.6k (r6, 12, 17),
+  round 2 loadout 16.7k / 2.4k; cost bins by hand Eco 3, Semi-eco 3, Semi-buy 5, Full buy 13
+  (chip clicks not tested in a browser).
+- **Open**: with armor in the key, loadouts fragment a lot (20 in 24 rounds for G2 on one map);
+  decide with the user whether to group armor coarser or drop it from the key.
+
+---
+
 ## General closing criteria per item
 
 A feature is considered done when: it compiles (`npx tsc --noEmit` + `next build`), the section
