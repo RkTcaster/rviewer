@@ -4,6 +4,9 @@ Shown by the "News" button in the sidebar. Only the topmost entry is displayed.
 Format: a `## date` heading (YYYY-MM-DD) followed by one `- ` bullet per change.
 Adding a new date brings back the unread dot.
 
+## 2026-10-15
+- Agent Picks: new NMWR by chips (Maps / Rounds). Rounds computes NMWR as rounds won over rounds played on non-mirror picks; the NMWR column, sort, tooltip and NMWR Detail (header, per-map chart and each match's score) follow the choice.
+
 ## 2026-10-11
 - Stats Rank: new FK-FD chip in Table info, a column group with True FK Rate, True FK Into Win, True FD Rate and True FD Into Win (True FK / FD Rate move here from Overall).
 - True FK Into Win: rounds won after a True FK, over the team's True FKs. True FD Into Win: rounds won anyway after a True FD, over the team's True FDs. Champions 2026 only for now (— elsewhere).

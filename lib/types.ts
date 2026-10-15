@@ -182,6 +182,8 @@ export type AgentMatchDetail = {
   team: string;         // equipo que jugó el agente
   opponent: string;
   won: boolean;
+  roundsWon: number;    // rondas del mapa ganadas por team
+  roundsPlayed: number; // rondas totales del mapa (0 si falta round_info)
   date: string;
   url?: string;         // source_url (vlr)
   composition: string[];   // agentes del equipo en ese mapa (ordenados)

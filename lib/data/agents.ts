@@ -259,7 +259,7 @@ async function getAgentPickStats_impl(
 // de unstable_cache. Los agentes no-mirror se derivan de composition menos oppComposition.
 type NonMirrorInstance = Omit<AgentMatchDetail, 'agent'>;
 
-const getNonMirrorInstances = versioned('agent-nonmirror-instances', getNonMirrorInstances_impl);
+const getNonMirrorInstances = versioned('agent-nonmirror-instances-v2', getNonMirrorInstances_impl);
 
 export async function getAgentNonMirrorMatches(
   filters: { reg?: string[]; tour?: string; bo?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
@@ -326,6 +326,8 @@ async function getNonMirrorInstances_impl(
   // Winner per map_id from round_info (same pattern as getAgentPickStats)
   const allSeriesIds = [...new Set(agentRows.map(r => r.series_id).filter(Boolean))];
   const winnerByMapId: Record<string, string | undefined> = {};
+  // Rondas por map_id: total y ganadas por equipo (nombre en minúscula), para el NMWR por rondas
+  const roundsByMapId: Record<string, { total: number; won: Record<string, number> }> = {};
   if (allSeriesIds.length > 0) {
     const roundRows = await fetchAllPages<RoundWinnerRow>((from, to) =>
       supabase.from('round_info')
@@ -337,6 +339,10 @@ async function getNonMirrorInstances_impl(
     for (const r of roundRows) {
       const prev = finalRoundByMapId[r.map_id];
       if (!prev || Number(r.round) > Number(prev.round)) finalRoundByMapId[r.map_id] = r;
+      const rw = (roundsByMapId[r.map_id] ??= { total: 0, won: {} });
+      rw.total++;
+      const roundWinner = (Number(r.rndA) === 1 ? r.teamA : r.teamB)?.trim().toLowerCase();
+      if (roundWinner) rw.won[roundWinner] = (rw.won[roundWinner] ?? 0) + 1;
     }
     for (const [map_id, r] of Object.entries(finalRoundByMapId)) {
       winnerByMapId[map_id] = Number(r.rndA) === 1 ? r.teamA?.trim() : r.teamB?.trim();
@@ -359,7 +365,10 @@ async function getNonMirrorInstances_impl(
       const composition = [...teams[team]].sort((a, b) => a.localeCompare(b));
       const oppComposition = [...oppAgents].sort((a, b) => a.localeCompare(b));
       const won = !!winner && winner.toLowerCase() === team.toLowerCase();
-      result.push({ map, team, opponent, won, date, url, composition, oppComposition });
+      const rounds = roundsByMapId[map_id];
+      const roundsWon = rounds?.won[team.trim().toLowerCase()] ?? 0;
+      const roundsPlayed = rounds?.total ?? 0;
+      result.push({ map, team, opponent, won, roundsWon, roundsPlayed, date, url, composition, oppComposition });
     }
   }
   return result;

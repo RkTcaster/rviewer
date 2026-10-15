@@ -111,6 +111,8 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<'pickRate' | 'nmwr'>('pickRate');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
+  const [nmwrBy, setNmwrBy] = useState<'maps' | 'rounds'>('maps');
+  const byRounds = nmwrBy === 'rounds';
   const [rightMode, setRightMode] = useState<'comps' | 'detail'>('comps');
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
 
@@ -220,19 +222,20 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
   const compFilterActive = selectedAgents.size > 0 || roleTotal > 0;
 
   // NMWR condicionado al filtro de comps, recalculado desde los partidos no-espejo.
-  // null = sin filtro → se usan los agregados que ya vienen del server.
+  // En modo rondas played/wins cuentan rondas en vez de mapas.
+  // null = sin filtro y por mapas → se usan los agregados que ya vienen del server.
   const nmByComp = useMemo(() => {
-    if (!compFilterActive) return null;
+    if (!compFilterActive && !byRounds) return null;
     const by: Record<string, { nonMirrorPlayed: number; nonMirrorWins: number }> = {};
     for (const m of agentMatches) {
       if (!inScope(m.map)) continue;
       if (!compHasAgents(m.composition) || !compMatchesRoles(m.composition)) continue;
       const e = (by[m.agent] ??= { nonMirrorPlayed: 0, nonMirrorWins: 0 });
-      e.nonMirrorPlayed++;
-      if (m.won) e.nonMirrorWins++;
+      e.nonMirrorPlayed += byRounds ? m.roundsPlayed : 1;
+      e.nonMirrorWins += byRounds ? m.roundsWon : (m.won ? 1 : 0);
     }
     return by;
-  }, [agentMatches, selectedMaps, selectedAgents, roleCounts]);
+  }, [agentMatches, selectedMaps, selectedAgents, roleCounts, byRounds]);
 
   const filtered = useMemo(() => {
     const nmwr = (wins?: number, played?: number) =>
@@ -403,9 +406,13 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
     const by: Record<string, { wins: number; losses: number }> = {};
     for (const m of matchList) {
       if (!by[m.map]) by[m.map] = { wins: 0, losses: 0 };
-      if (m.won) by[m.map].wins++; else by[m.map].losses++;
+      if (byRounds) {
+        by[m.map].wins += m.roundsWon;
+        by[m.map].losses += m.roundsPlayed - m.roundsWon;
+      } else if (m.won) by[m.map].wins++; else by[m.map].losses++;
     }
     return Object.entries(by)
+      .filter(([, { wins, losses }]) => wins + losses > 0)
       .map(([map, { wins, losses }]) => ({
         map,
         wins,                // positivo
@@ -414,7 +421,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
         nmwr: Math.round((wins / (wins + losses)) * 100),
       }))
       .sort((a, b) => a.map.localeCompare(b.map));
-  }, [matchList]);
+  }, [matchList, byRounds]);
 
   const chartHeight = Math.max(300, filtered.length * 36);
   const maxPickRate = Math.max(10, ...filtered.map(d => d.pickRate));
@@ -567,8 +574,29 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
               })}
             </div>
           </div>
+          <div className="flex flex-col gap-1 self-end pb-2">
+            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">NMWR by</label>
+            <div className="flex gap-2">
+              {([['maps', 'Maps'], ['rounds', 'Rounds']] as const).map(([key, label]) => {
+                const active = nmwrBy === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setNmwrBy(key)}
+                    className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+                      active
+                        ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                        : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <p className="text-[11px] text-gray-500 self-end pb-2 ml-auto text-right">
-            NMWR = win rate excluding mirror picks
+            NMWR = {byRounds ? 'round' : 'map'} win rate excluding mirror picks
             {compFilterActive && <span className="text-blue-400/80"> · conditioned on the team composition filter</span>}
           </p>
         </div>
@@ -717,7 +745,13 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
                     );
                   })()}
                   <span className="text-gray-500 text-xs">
-                    {matchList.length} non-mirror · {matchList.filter(m => m.won).length}W-{matchList.filter(m => !m.won).length}L
+                    {matchList.length} non-mirror · {byRounds
+                      ? (() => {
+                          const rw = matchList.reduce((a, m) => a + m.roundsWon, 0);
+                          const rp = matchList.reduce((a, m) => a + m.roundsPlayed, 0);
+                          return `${rw}-${rp - rw} rounds`;
+                        })()
+                      : `${matchList.filter(m => m.won).length}W-${matchList.filter(m => !m.won).length}L`}
                   </span>
                 </div>
                 {mapWL.length > 0 && (
@@ -772,6 +806,11 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
                       <div key={i} className="flex items-center gap-2 py-1 border-b border-gray-800/60 last:border-0">
                         <span className={`text-[11px] font-bold w-5 shrink-0 ${m.won ? 'text-green-400' : 'text-red-400'}`}>{m.won ? 'W' : 'L'}</span>
                         <span className="text-[11px] font-bold text-blue-400 w-[70px] shrink-0 truncate" title={m.map}>{m.map}</span>
+                        {byRounds && (
+                          <span className="text-[11px] text-gray-400 w-[38px] shrink-0 text-center">
+                            {m.roundsPlayed > 0 ? `${m.roundsWon}-${m.roundsPlayed - m.roundsWon}` : '—'}
+                          </span>
+                        )}
                         <div className="w-[135px] shrink-0 flex justify-end">
                           <CompositionIcons composition={m.composition.join(', ')} agentImages={agentImages} />
                         </div>
