@@ -439,6 +439,9 @@ export type SeriesOutcomeStats = {
   sweeps: number;                      // won 2-0
   down01: number; down01Wins: number;  // lost map 1 → of those, series won
   even11: number; even11Wins: number;  // won map 1 and lost map 2 → of those, series won
+  ownPick: number; ownPickWins: number;     // own pick played / won (map 1 as A, map 2 as B)
+  rivalPick: number; rivalPickWins: number; // rival's pick played / won
+  decider: number; deciderWins: number;     // map 3 played / won
   maps: number; otMaps: number; otWins: number;
 };
 

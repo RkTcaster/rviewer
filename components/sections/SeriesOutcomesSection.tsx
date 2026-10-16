@@ -23,7 +23,7 @@ const REGION_ROWS: { id: string; label: string; color: string }[] = [
   { id: 'reg_3', label: 'Pacific', color: '#01D2D7' },
 ];
 
-type SortCol = 'series' | 'wr' | 'wrA' | 'wrB' | 'sweeps' | 'afterLoss' | 'comeback' | 'closer' | 'otMaps' | 'otWr';
+type SortCol = 'series' | 'wr' | 'wrA' | 'wrB' | 'ownPick' | 'rivalPick' | 'decider' | 'sweeps' | 'afterLoss' | 'comeback' | 'closer' | 'otMaps' | 'otWr';
 
 // sub: the header's second line. Always rendered (invisible when absent) so every
 // header keeps the same height and the columns never resize.
@@ -33,6 +33,9 @@ const COLUMNS: { key: SortCol; label: string; sub?: string; subTone?: string; wi
   { key: 'wr',        label: 'Series WR', width: 'w-[115px]' },
   { key: 'wrA',       label: 'WR as A',   width: 'w-[115px]' },
   { key: 'wrB',       label: 'WR as B',   width: 'w-[115px]' },
+  { key: 'ownPick',   label: 'Own pick',  sub: 'map WR',    width: 'w-[115px]' },
+  { key: 'rivalPick', label: 'Rival pick', sub: 'map WR',   width: 'w-[115px]' },
+  { key: 'decider',   label: 'Decider',   sub: 'map WR',    width: 'w-[115px]' },
   { key: 'sweeps',    label: '2-0',       width: 'w-[85px]' },
   { key: 'afterLoss', label: 'After losing', sub: 'a map',     width: 'w-[130px]' },
   { key: 'comeback',  label: '2-1',         sub: 'from 0-1',   width: 'w-[115px]' },
@@ -49,6 +52,7 @@ function sumStats(list: (SeriesOutcomeStats | undefined)[]): SeriesOutcomeStats 
   const out: SeriesOutcomeStats = {
     series: 0, wins: 0, asA: 0, asAWins: 0, asB: 0, asBWins: 0,
     sweeps: 0, down01: 0, down01Wins: 0, even11: 0, even11Wins: 0,
+    ownPick: 0, ownPickWins: 0, rivalPick: 0, rivalPickWins: 0, decider: 0, deciderWins: 0,
     maps: 0, otMaps: 0, otWins: 0,
   };
   for (const s of list) {
@@ -59,6 +63,9 @@ function sumStats(list: (SeriesOutcomeStats | undefined)[]): SeriesOutcomeStats 
     out.sweeps += s.sweeps;
     out.down01 += s.down01; out.down01Wins += s.down01Wins;
     out.even11 += s.even11; out.even11Wins += s.even11Wins;
+    out.ownPick += s.ownPick; out.ownPickWins += s.ownPickWins;
+    out.rivalPick += s.rivalPick; out.rivalPickWins += s.rivalPickWins;
+    out.decider += s.decider; out.deciderWins += s.deciderWins;
     out.maps += s.maps; out.otMaps += s.otMaps; out.otWins += s.otWins;
   }
   return out;
@@ -70,6 +77,9 @@ function colValue(s: SeriesOutcomeStats, col: SortCol): number | null {
     case 'wr':       return pct(s.wins, s.series);
     case 'wrA':      return pct(s.asAWins, s.asA);
     case 'wrB':      return pct(s.asBWins, s.asB);
+    case 'ownPick':  return pct(s.ownPickWins, s.ownPick);
+    case 'rivalPick': return pct(s.rivalPickWins, s.rivalPick);
+    case 'decider':  return pct(s.deciderWins, s.decider);
     case 'sweeps':   return s.sweeps;
     // Dropping a map lands the team in down01 or even11, never in sweeps, so the two
     // together are exactly the series where it lost at least one map.
@@ -102,6 +112,9 @@ function StatCells({ s }: { s: SeriesOutcomeStats }) {
       <td className="py-2.5 px-2 text-center text-sm">{wrCell(s.wins, s.series)}</td>
       <td className="py-2.5 px-2 text-center text-sm">{wrCell(s.asAWins, s.asA)}</td>
       <td className="py-2.5 px-2 text-center text-sm">{wrCell(s.asBWins, s.asB)}</td>
+      <td className="py-2.5 px-2 text-center text-sm">{wrCell(s.ownPickWins, s.ownPick)}</td>
+      <td className="py-2.5 px-2 text-center text-sm">{wrCell(s.rivalPickWins, s.rivalPick)}</td>
+      <td className="py-2.5 px-2 text-center text-sm">{wrCell(s.deciderWins, s.decider)}</td>
       <td className="py-2.5 px-2 text-center text-sm font-bold text-amber-300" title={`${s.sweeps} of ${s.series} series`}>
         {s.sweeps}
         {sweepPct !== null && <span className="font-normal text-gray-500 text-[11px]"> {sweepPct}%</span>}
@@ -133,6 +146,13 @@ const LEGEND = (
       <dd className="text-gray-400">
         Team A is the side that <b>opens the veto</b> and picks first; team B is the other one. Veto
         order, not seeding.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Own pick / Rival pick / Decider</dt>
+      <dd className="text-gray-400">
+        Map WR by who picked the map. In a Bo3 <b>map 1</b> is team A's pick, <b>map 2</b> team B's and
+        <b> map 3</b> the decider, so own pick is map 1 as A and map 2 as B. Decider only counts 2-1 series.
       </dd>
     </div>
     <div>
@@ -254,7 +274,7 @@ export function SeriesOutcomesSection({ data, teamLogos = {}, teamRegions = {} }
       />
 
       <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-x-auto">
-        <table className="w-full min-w-[1230px] table-fixed border-collapse">
+        <table className="w-full min-w-[1575px] table-fixed border-collapse">
           <thead className="bg-[#0f1115]">
             <tr>
               <th className="w-8 text-center py-2 border-b border-gray-800 text-[10px] font-bold uppercase tracking-widest text-gray-500">#</th>

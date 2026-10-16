@@ -4,6 +4,9 @@ Shown by the "News" button in the sidebar. Only the topmost entry is displayed.
 Format: a `## date` heading (YYYY-MM-DD) followed by one `- ` bullet per change.
 Adding a new date brings back the unread dot.
 
+## 2026-10-16
+- Series Outcomes: three new columns after WR as B: Own pick (map WR on the map the team picked: map 1 as team A, map 2 as team B), Rival pick (map WR on the rival's pick) and Decider (map WR on map 3, so only 2-1 series). Bo3 only, like the other series columns.
+
 ## 2026-10-15
 - New Weapon Pick section (Testing): each team's most used loadouts, i.e. what the 5 players hold at the start of the round, weapons by category plus armor (e.g. "4 Rifle + Op · 4 Heavy + Light"), with rounds, % of the team's rounds and WR. Same team and map filters as Operator Use, plus ATK / DEF. Champions 2026 only for now.
 - Weapon Pick: more detail in loadouts. Rifle is now only Vandal / Phantom; Bulldog and Guardian show on their own. Sheriff, Bandit and Classic show on their own, and Pistol is the rest (Shorty, Frenzy, Ghost). Odin and Ares show on their own, so Heavy only means heavy armor. The legend lists every group.

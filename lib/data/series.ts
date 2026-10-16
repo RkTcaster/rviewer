@@ -23,7 +23,7 @@ export const emptySeriesOutcomes = (): SeriesOutcomesData => ({
   teams: {},
 });
 
-export const getSeriesOutcomes = versioned('series-outcomes-v2', getSeriesOutcomes_impl);
+export const getSeriesOutcomes = versioned('series-outcomes-v3', getSeriesOutcomes_impl);
 
 async function getSeriesOutcomes_impl(filters: {
   tour?: string;
@@ -92,6 +92,7 @@ async function getSeriesOutcomes_impl(filters: {
   const init = (t: string) => (teams[t] ??= {
     series: 0, wins: 0, asA: 0, asAWins: 0, asB: 0, asBWins: 0,
     sweeps: 0, down01: 0, down01Wins: 0, even11: 0, even11Wins: 0,
+    ownPick: 0, ownPickWins: 0, rivalPick: 0, rivalPickWins: 0, decider: 0, deciderWins: 0,
     maps: 0, otMaps: 0, otWins: 0,
   });
 
@@ -136,6 +137,13 @@ async function getSeriesOutcomes_impl(filters: {
       if (won) s.wins++;
       if (t === vetoTeamA) { s.asA++; if (won) s.asAWins++; }
       else                 { s.asB++; if (won) s.asBWins++; }
+
+      // In a Bo3 map 1 is team A's pick, map 2 team B's and map 3 the decider
+      // (checked against draft.team_1_select_2 / team_2_select_2 / decider).
+      const [own, rival] = t === vetoTeamA ? [maps[0], maps[1]] : [maps[1], maps[0]];
+      s.ownPick++;   if (own.winner === t) s.ownPickWins++;
+      s.rivalPick++; if (rival.winner === t) s.rivalPickWins++;
+      if (maps[2]) { s.decider++; if (maps[2].winner === t) s.deciderWins++; }
 
       // Exact partition: series === sweeps + down01 + even11
       if (maps[0].winner !== t) {
