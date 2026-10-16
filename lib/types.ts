@@ -282,12 +282,15 @@ export type OperatorUseData = {
 // Weapon Pick, from round_buy + team_economy. A loadout is what the 5 players hold at the start of
 // the round (bought, kept or dropped), weapons grouped by category plus armor, e.g. "4 Rifle + Op · 4 Heavy + Light".
 // valued = rounds with a team_economy row; costSum / bankSum are the team's loadout value and bank
-// left after buying, summed over those rounds.
-export type WeaponPickLoadout = { rounds: number; decided: number; wins: number; valued: number; costSum: number; bankSum: number };
+// left after buying, summed over those rounds. enemyCostSum is the rival's loadout value, summed
+// over the enemyValued rounds.
+export type WeaponPickLoadout = { rounds: number; decided: number; wins: number; valued: number; costSum: number; bankSum: number; enemyValued: number; enemyCostSum: number };
 // Loadout value bins (same as Economy) and team bank bins; 'na' = no team_economy row
 export type WeaponPickCost = 'eco' | 'semiEco' | 'semiBuy' | 'fullBuy' | 'na';
 export type WeaponPickBank = 'b0' | 'b2' | 'b6' | 'b10' | 'na';
-// Keyed by `${loadout}|${cost}|${bank}`
+// Round groups: r1 = rounds 1 and 13, r3 = rounds 3 and 15, other = the rest
+export type WeaponPickRound = 'r1' | 'r3' | 'other';
+// Keyed by `${loadout}|${cost}|${bank}|${round}`
 export type WeaponPickStat = { atk: Record<string, WeaponPickLoadout>; def: Record<string, WeaponPickLoadout> };
 export type WeaponPickData = {
   stats: Record<string, Record<string, WeaponPickStat>>; // team -> map -> side -> loadout key

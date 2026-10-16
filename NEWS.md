@@ -10,6 +10,9 @@ Adding a new date brings back the unread dot.
 - Weapon Pick: new Armor chips under Maps: All, Heavy (all 5 with Heavy), Light (all 5 with Light), Mixed (anything else) and None (all 5 without armor). With a filter on, % is over the rounds that pass it.
 - Weapon Pick: new Cost chips (the team's loadout value that round, same ranges as Economy: Eco <5k, Semi-eco 5–15k, Semi-buy 15–20k, Full buy 20k+) and Bank chips (the team's money left after buying: <2k, 2–6k, 6–10k, 10k+). Each loadout row adds its average Cost and Bank.
 - Weapon Pick: Armor chips now show the armor icons (Mixed shows Heavy, Regen and Light together).
+- Weapon Pick: new Round chips: All, R1 + R13 (pistol rounds) and R3 + R15. With one on, only those rounds count.
+- Weapon Pick: new Merge armors toggle next to Both / ATK / DEF. Heavy, Regen and Light count as Armor, so loadouts only split by armor vs no armor (e.g. "4 Rifle + Op · 4 Armor + None").
+- Weapon Pick: new Enemy loadout column, the rival's average loadout value in the rounds the team fielded that loadout.
 - Agent Picks: new NMWR by chips (Maps / Rounds). Rounds computes NMWR as rounds won over rounds played on non-mirror picks; the NMWR column, sort, tooltip and NMWR Detail (header, per-map chart and each match's score) follow the choice.
 
 ## 2026-10-11

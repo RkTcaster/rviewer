@@ -1,7 +1,7 @@
 // lib/data/economy.ts — economía por ronda (distribución, compare, torneo)
 import { supabase } from '../supabase';
 import { versioned, fetchAllPages } from './helpers';
-import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare, TeamPostPistolForce, OperatorUseData, OperatorUseStat, OperatorUseSide, OperatorUseWeapon, WeaponPickBank, WeaponPickData, WeaponPickStat } from '../types';
+import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare, TeamPostPistolForce, OperatorUseData, OperatorUseStat, OperatorUseSide, OperatorUseWeapon, WeaponPickBank, WeaponPickData, WeaponPickRound, WeaponPickStat } from '../types';
 
 export async function getEconomyDistribution(filters: {
   reg?: string[]; tour?: string; team?: string;
@@ -524,9 +524,17 @@ function wpBankBin(bank: number): WeaponPickBank {
   return 'b10';
 }
 
+function wpRoundBin(round: number): WeaponPickRound {
+  if (round === 1 || round === 13) return 'r1';
+  if (round === 3 || round === 15) return 'r3';
+  return 'other';
+}
+
 // v3: Odin and Ares on their own (Heavy only means armor)
 // v4: loadout value and bank (keys gain cost and bank bins)
-export const getWeaponPickStats = versioned('weapon-pick-stats-v4', getWeaponPickStats_impl);
+// v5: keys gain the round group
+// v6: rival's loadout value (enemyValued / enemyCostSum)
+export const getWeaponPickStats = versioned('weapon-pick-stats-v6', getWeaponPickStats_impl);
 async function getWeaponPickStats_impl(
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<WeaponPickData> {
@@ -586,15 +594,17 @@ async function getWeaponPickStats_impl(
       const valued = costRaw != null && bankRaw != null;
       const cost = valued ? Number(costRaw) : 0;
       const bank = valued ? Number(bankRaw) : 0;
-      const key = `${loadout}|${valued ? classifyEconomy(cost) : 'na'}|${valued ? wpBankBin(bank) : 'na'}`;
+      const key = `${loadout}|${valued ? classifyEconomy(cost) : 'na'}|${valued ? wpBankBin(bank) : 'na'}|${wpRoundBin(Number(r.round))}`;
       const byMap = (stats[team] ??= {})[map] ??= { atk: {}, def: {} } as WeaponPickStat;
-      const lo = (byMap[atk ? 'atk' : 'def'][key] ??= { rounds: 0, decided: 0, wins: 0, valued: 0, costSum: 0, bankSum: 0 });
+      const enemyRaw = ecoOk ? (s === 'a' ? e.team_b_economy : e.team_a_economy) : null;
+      const lo = (byMap[atk ? 'atk' : 'def'][key] ??= { rounds: 0, decided: 0, wins: 0, valued: 0, costSum: 0, bankSum: 0, enemyValued: 0, enemyCostSum: 0 });
       lo.rounds++;
       if (ecoOk) {
         lo.decided++;
         if ((Number(e.win_A) === 1) === (s === 'a')) lo.wins++;
       }
       if (valued) { lo.valued++; lo.costSum += cost; lo.bankSum += bank; }
+      if (enemyRaw != null) { lo.enemyValued++; lo.enemyCostSum += Number(enemyRaw); }
     }
   }
 

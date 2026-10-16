@@ -454,6 +454,21 @@ of oct 2026). No per-player view: the user wants the team's buy together.
   754741-Lotus against `team_economy` by hand: 5 Rifle · 5 Heavy 23.8k / 12.6k (r6, 12, 17),
   round 2 loadout 16.7k / 2.4k; cost bins by hand Eco 3, Semi-eco 3, Semi-buy 5, Full buy 13
   (chip clicks not tested in a browser).
+- **9.3 Round chips** (done, oct 2026): single-select All / R1 + R13 / R3 + R15, same chip format.
+  Server keys gain a round group (`r1`, `r3`, `other`): `${loadout}|${cost}|${bank}|${round}`.
+  Cache key `weapon-pick-stats-v5`. Verified in the built app payload for G2 on Lotus (3 maps)
+  against a direct `round_buy` + `team_economy` count: r1 6 rounds 4 wins, r3 6 rounds 3 wins,
+  other 53 rounds 28 wins (chip clicks not tested in a browser).
+- **9.4 Merge armors** (done, oct 2026): toggle next to Both / ATK / DEF, client-side only. Per
+  player, Heavy / Regen / Light become "Armor" and None stays, so the armor part is e.g.
+  `4 Armor + None`. The Armor chips still filter on the original armor. Checked on the built
+  app's payload for G2 on Lotus: 49 → 32 loadouts, 65 rounds both ways, top `5 Rifle · 5 Armor`
+  18 rounds (toggle not clicked in a browser).
+- **9.5 Enemy loadout** (done, oct 2026): last column, the rival's average loadout value
+  (`team_economy` economy of the other team) over the rounds of that loadout; new fields
+  `enemyValued` / `enemyCostSum`. Cache key `weapon-pick-stats-v6`. Verified in the built app's
+  payload for G2 on Lotus against `team_economy` directly: 65 rounds avg 18667, R1 + R13 6 rounds
+  avg 3775.
 - **Open**: with armor in the key, loadouts fragment a lot (20 in 24 rounds for G2 on one map);
   decide with the user whether to group armor coarser or drop it from the key.
 

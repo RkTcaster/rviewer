@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Info } from 'lucide-react';
-import { STATS_RANK_DEFAULT_TEAMS, WeaponPickBank, WeaponPickCost, WeaponPickData, WeaponPickLoadout } from '@/lib/types';
+import { STATS_RANK_DEFAULT_TEAMS, WeaponPickBank, WeaponPickCost, WeaponPickData, WeaponPickLoadout, WeaponPickRound } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { useUrlSet } from '@/hooks/useUrlSet';
 import { TeamChipsPanel } from '../TeamChipsPanel';
@@ -42,6 +42,19 @@ function armorOf(loadout: string): Armor {
   return armor === '5 Heavy' ? 'heavy' : armor === '5 Light' ? 'light' : armor === '5 None' ? 'none' : 'mixed';
 }
 
+// Merge armors: Heavy, Regen and Light count as "Armor", e.g. "3 Heavy + Light + None" -> "4 Armor + None"
+function mergeArmor(loadout: string): string {
+  const [weapons, armor] = loadout.split(' · ');
+  let withArmor = 0, without = 0;
+  for (const part of armor.split(' + ')) {
+    const [n, type] = part.includes(' ') ? [Number(part.split(' ')[0]), part.split(' ')[1]] : [1, part];
+    if (type === 'None') without += n; else withArmor += n;
+  }
+  const fmt = (n: number, k: string) => n > 1 ? `${n} ${k}` : k;
+  const merged = [withArmor && fmt(withArmor, 'Armor'), without && fmt(without, 'None')].filter(Boolean).join(' + ');
+  return `${weapons} · ${merged}`;
+}
+
 // Team loadout value (same bins as Economy) and team bank left after buying
 type Cost = 'all' | Exclude<WeaponPickCost, 'na'>;
 const COSTS: { key: Cost; label: string; short: string }[] = [
@@ -59,6 +72,12 @@ const BANKS: { key: Bank; label: string; short: string }[] = [
   { key: 'b6', label: '6–10k', short: '6–10k' },
   { key: 'b10', label: '10k+', short: '10k+' },
 ];
+type RoundGroup = 'all' | Exclude<WeaponPickRound, 'other'>;
+const ROUNDS: { key: RoundGroup; label: string; short: string }[] = [
+  { key: 'all', label: 'All', short: 'ALL' },
+  { key: 'r1', label: 'R1 + R13', short: '1·13' },
+  { key: 'r3', label: 'R3 + R15', short: '3·15' },
+];
 
 // "12.3k"
 function money(sum: number, n: number): string {
@@ -73,7 +92,9 @@ const LEGEND = (
     <p>After the ·, armor: <b>Heavy</b>, <b>Regen</b>, <b>Light</b> shields or <b>None</b>.</p>
     <p>Armor filter: <b>Heavy</b> all 5 with Heavy · <b>Light</b> all 5 with Light · <b>None</b> all 5 without armor · <b>Mixed</b> anything else. With a filter on, % is over the rounds that pass it.</p>
     <p><b>Cost</b>: the team&apos;s loadout value that round (what the 5 hold, kept items included), same ranges as Economy. <b>Bank</b>: the team&apos;s money left after buying. Rounds without economy data only show with both on All.</p>
-    <p><b>Rounds</b>: rounds the team fielded that loadout. <b>%</b>: of the team&apos;s rounds on the visible maps and side. <b>WR</b>: rounds won with it. <b>Cost</b> / <b>Bank</b>: averages over its rounds.</p>
+    <p><b>Merge armors</b>: Heavy, Regen and Light count as <b>Armor</b>, so loadouts only split by how many players have armor or <b>None</b>.</p>
+    <p><b>Round</b>: only the rounds picked, <b>R1 + R13</b> (pistols) or <b>R3 + R15</b>.</p>
+    <p><b>Rounds</b>: rounds the team fielded that loadout. <b>%</b>: of the team&apos;s rounds on the visible maps and side. <b>WR</b>: rounds won with it. <b>Cost</b> / <b>Bank</b>: averages over its rounds. <b>Enemy loadout</b>: the rival&apos;s average loadout value in those rounds.</p>
   </div>
 );
 
@@ -91,6 +112,8 @@ export function WeaponPickSection({ stats, maps, teamLogos = {}, teamRegions = {
   const [armor, setArmor] = useState<Armor>('all');
   const [cost, setCost] = useState<Cost>('all');
   const [bank, setBank] = useState<Bank>('all');
+  const [round, setRound] = useState<RoundGroup>('all');
+  const [mergeArmors, setMergeArmors] = useState(false);
 
   const allTeams = Object.keys(stats ?? {}).sort();
   const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
@@ -123,6 +146,8 @@ export function WeaponPickSection({ stats, maps, teamLogos = {}, teamRegions = {
     setArmor('all');
     setCost('all');
     setBank('all');
+    setRound('all');
+    setMergeArmors(false);
     setShowAll(new Set());
     navigate('?section=weapon-pick');
   }
@@ -143,14 +168,16 @@ export function WeaponPickSection({ stats, maps, teamLogos = {}, teamRegions = {
       if (!s) continue;
       for (const sd of side === 'all' ? (['atk', 'def'] as const) : [side]) {
         for (const [key, lo] of Object.entries(s[sd])) {
-          // key is `${loadout}|${cost}|${bank}`
-          const [loadout, c, b] = key.split('|');
+          // key is `${loadout}|${cost}|${bank}|${round}`
+          const [loadout, c, b, r] = key.split('|');
           if (armor !== 'all' && armorOf(loadout) !== armor) continue;
           if (cost !== 'all' && c !== cost) continue;
           if (bank !== 'all' && b !== bank) continue;
-          const t = (tot[loadout] ??= { rounds: 0, decided: 0, wins: 0, valued: 0, costSum: 0, bankSum: 0 });
+          if (round !== 'all' && r !== round) continue;
+          const t = (tot[mergeArmors ? mergeArmor(loadout) : loadout] ??= { rounds: 0, decided: 0, wins: 0, valued: 0, costSum: 0, bankSum: 0, enemyValued: 0, enemyCostSum: 0 });
           t.rounds += lo.rounds; t.decided += lo.decided; t.wins += lo.wins;
           t.valued += lo.valued; t.costSum += lo.costSum; t.bankSum += lo.bankSum;
+          t.enemyValued += lo.enemyValued; t.enemyCostSum += lo.enemyCostSum;
         }
       }
     }
@@ -249,6 +276,7 @@ export function WeaponPickSection({ stats, maps, teamLogos = {}, teamRegions = {
             {chipGroup('Armor', ARMORS, armor, setArmor)}
             {chipGroup('Cost', COSTS, cost, setCost)}
             {chipGroup('Bank', BANKS, bank, setBank)}
+            {chipGroup('Round', ROUNDS, round, setRound)}
           </div>
         </div>
       </div>
@@ -262,6 +290,9 @@ export function WeaponPickSection({ stats, maps, teamLogos = {}, teamRegions = {
             </button>
           ))}
         </div>
+        <button onClick={() => setMergeArmors(v => !v)} className={chipCls(mergeArmors)}>
+          Merge armors
+        </button>
         <button
           onClick={resetFilters}
           className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border bg-transparent border-gray-700 text-red-400 hover:border-red-500 hover:text-red-300"
@@ -305,7 +336,8 @@ export function WeaponPickSection({ stats, maps, teamLogos = {}, teamRegions = {
                         <th className="text-center pb-1 px-2 w-[56px]">%</th>
                         <th className="text-center pb-1 px-2 w-[56px]">WR</th>
                         <th className="text-right pb-1 px-2">Cost</th>
-                        <th className="text-right pb-1 pl-2">Bank</th>
+                        <th className="text-right pb-1 px-2">Bank</th>
+                        <th className="text-right pb-1 pl-2">Enemy loadout</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -327,7 +359,8 @@ export function WeaponPickSection({ stats, maps, teamLogos = {}, teamRegions = {
                               {wr === null ? '—' : `${wr}%`}
                             </td>
                             <td className="py-1 px-2 text-right text-gray-300">{money(lo.costSum, lo.valued)}</td>
-                            <td className="py-1 pl-2 text-right text-gray-300">{money(lo.bankSum, lo.valued)}</td>
+                            <td className="py-1 px-2 text-right text-gray-300">{money(lo.bankSum, lo.valued)}</td>
+                            <td className="py-1 pl-2 text-right text-gray-300">{money(lo.enemyCostSum, lo.enemyValued)}</td>
                           </tr>
                         );
                       })}
