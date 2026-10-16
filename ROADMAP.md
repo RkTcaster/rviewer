@@ -472,6 +472,34 @@ of oct 2026). No per-player view: the user wants the team's buy together.
 - **Open**: with armor in the key, loadouts fragment a lot (20 in 24 rounds for G2 on one map);
   decide with the user whether to group armor coarser or drop it from the key.
 
+## Phase 10 — Time & Site (in progress)
+
+First version shipped oct 2026 under Testing (`components/sections/TimeSiteSection.tsx`,
+`getTimeSiteStats` in `lib/data/timeSite.ts`), reading `round_summary` only (`plant_t`,
+`plant_site`, `fb_t`, `fb_team`). Same filters as Operator Use (teams, map chips, Both / ATK / DEF,
+Detail info), one row per team, no player expansion. Every round counts, pistols included.
+The server sends the raw per-round entries (team → map → side) because medians can't be summed
+per map; the client aggregates over the visible maps. Cache key `time-site-stats-v1`.
+
+- **Plant columns**: plant rate, avg / median plant time, Fast < 30 s / Mid 30–60 s / Slow > 60 s
+  (share of plants). The plant is always the attacker's: ATK and Both = the team's own plants,
+  DEF = the rival's plants against the team (mixing both in Both would mean nothing).
+- **Sites**: share of plants per site, only with a single map on (A on one map is not A on
+  another); the columns are the sites any shown team planted on that map.
+- **First blood**: avg / median time of the round's first kill, avg time split by FK (team made
+  it) / FD (team took it), and FB → plant (plant − first kill, rounds with a plant where the first
+  kill came first). These follow the side buttons over every round of that side.
+
+Verified in the dev server's rendered table against an independent count from `round_summary`
+on Champions 2026 (Both, all maps): T1 plant 120/167, avg 59.9 s, median 64 s, 17 / 41 / 62
+fast / mid / slow, FB 28.4 / 22 s, FK 28.3 s, FD 28.6 s, FB → plant 32.9 s; PRX 92/127, 49.6 /
+46 s, 14 / 47 / 31, FB 22.5 / 18 s, FK 23.9 s, FD 20.9 s, FB → plant 29.4 s. Lotus only: T1 39/48,
+sites A 11 / B 13 / C 15. Still open:
+
+- **10.1 Check ATK / DEF in the browser**: the side chips are client state and only Both was
+  checked against the rendered page (the script's ATK / DEF figures are ready to compare).
+- **10.2 Only Champions 2026 in `round_summary`**: other tournaments show up once loaded.
+
 ---
 
 ## General closing criteria per item

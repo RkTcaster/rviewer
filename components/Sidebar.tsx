@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap, ListOrdered, Sparkles, Swords, Crosshair, ShoppingCart } from 'lucide-react';
+import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap, ListOrdered, Sparkles, Swords, Crosshair, ShoppingCart, Timer } from 'lucide-react';
 import { useNavigation, useFilterParams } from './NavigationContext';
 import { NewsButton } from './NewsButton';
 import type { NewsEntry } from '@/lib/news';
@@ -39,6 +39,7 @@ const NAV_SECTIONS = [
       { id: 'series-outcomes', label: 'Series Outcomes', icon: Swords },
       { id: 'operator-use', label: 'Operator Use', icon: Crosshair },
       { id: 'weapon-pick', label: 'Weapon Pick', icon: ShoppingCart },
+      { id: 'time-site', label: 'Time & Site', icon: Timer },
       // { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Zap },
       { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
       { id: 'economy',       label: 'Economy',       icon: DollarSign },
@@ -78,7 +79,7 @@ export function Sidebar({ lastUpdateDate, news }: { lastUpdateDate?: string | nu
 
   function goToSection(section: string) {
     // Stats Rank y Maps Masters arrancan siempre con su configuración por defecto (sin filtros heredados)
-    if (section === 'stats-rank' || section === 'maps-masters' || section === 'neon-dependency' || section === 'post-pistol-force' || section === 'series-outcomes' || section === 'operator-use' || section === 'weapon-pick') {
+    if (section === 'stats-rank' || section === 'maps-masters' || section === 'neon-dependency' || section === 'post-pistol-force' || section === 'series-outcomes' || section === 'operator-use' || section === 'weapon-pick' || section === 'time-site') {
       commitParams(new URLSearchParams({ section }), { immediate: true });
       return;
     }

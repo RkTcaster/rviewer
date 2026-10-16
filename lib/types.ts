@@ -279,6 +279,15 @@ export type OperatorUseData = {
   maps: string[];
 };
 
+// Time & Site, from round_summary. One entry per round and team, raw so the client can take
+// medians over any set of maps. The plant is always the attacker's: on a team's def rounds it is
+// the rival's plant against them. fbOwn = the team made the first kill (null without a first kill).
+export type TimeSiteRound = { plantT: number | null; site: string | null; fbT: number | null; fbOwn: boolean | null };
+export type TimeSiteData = {
+  stats: Record<string, Record<string, { atk: TimeSiteRound[]; def: TimeSiteRound[] }>>; // team -> map -> side
+  maps: string[];
+};
+
 // Weapon Pick, from round_buy + team_economy. A loadout is what the 5 players hold at the start of
 // the round (bought, kept or dropped), weapons grouped by category plus armor, e.g. "4 Rifle + Op · 4 Heavy + Light".
 // valued = rounds with a team_economy row; costSum / bankSum are the team's loadout value and bank
