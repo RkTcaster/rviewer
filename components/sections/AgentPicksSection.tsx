@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, ReferenceLine } from 'recharts';
-import { AgentMatchDetail, AgentPickStat, CompositionStat, OverallMapFullStat } from '@/lib/types';
+import { AgentMatchDetail, AgentPickStat, CompMatch, CompositionStat, OverallMapFullStat } from '@/lib/types';
 import { KPICard } from '@/components/KPICard';
 
 // Una composición son 5 agentes: es el tope tanto de agentes elegidos como de la suma de roles
@@ -17,6 +17,7 @@ interface Props {
   stats: AgentPickStat[];
   compositions: CompositionStat[];
   agentMatches: AgentMatchDetail[];
+  compMatches: CompMatch[];
   mapImages: Record<string, string>;
   agentImages: Record<string, string>;
   agentRoles: Record<string, string>;
@@ -104,43 +105,10 @@ function MapWLTooltip({ active, payload }: any) {
   );
 }
 
-export function AgentPicksSection({ stats, compositions, agentMatches, mapImages, agentImages, agentRoles, mapFullStats }: Props) {
-  const [selectedMaps, setSelectedMaps] = useState<Set<string>>(new Set());
+// Filtro de composición (agentes + cupos por rol). Se usa para la comp propia y para la del rival.
+function useCompFilter(agentRoles: Record<string, string>) {
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
   const [roleCounts, setRoleCounts] = useState<Record<string, number>>({});
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [sortBy, setSortBy] = useState<'pickRate' | 'nmwr'>('pickRate');
-  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
-  const [nmwrBy, setNmwrBy] = useState<'maps' | 'rounds'>('maps');
-  const byRounds = nmwrBy === 'rounds';
-  const [rightMode, setRightMode] = useState<'comps' | 'detail'>('comps');
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
-
-  const clickSort = (key: 'pickRate' | 'nmwr') => {
-    if (sortBy === key) setSortDir(d => (d === 'desc' ? 'asc' : 'desc'));
-    else { setSortBy(key); setSortDir('desc'); }
-  };
-
-  const maps = useMemo(() => [...new Set(stats.map(s => s.map))].sort(), [stats]);
-  // Una fila por rol, roles en orden alfabético y agentes alfabéticos dentro de cada fila
-  const agentsByRole = useMemo(() => {
-    const byRole: Record<string, string[]> = {};
-    for (const agent of Object.keys(agentImages).sort()) {
-      (byRole[agentRoles[agent] ?? 'Other'] ??= []).push(agent);
-    }
-    return Object.entries(byRole).sort(([a], [b]) => a.localeCompare(b));
-  }, [agentImages, agentRoles]);
-
-  const isAll = selectedMaps.size === 0;
-  const single = selectedMaps.size === 1 ? [...selectedMaps][0] : null;
-  const inScope = (map: string) => isAll || selectedMaps.has(map);
-
-  const toggleMap = (map: string) =>
-    setSelectedMaps(prev => {
-      const next = new Set(prev);
-      if (next.has(map)) next.delete(map); else next.add(map);
-      return next;
-    });
 
   const roleTotal = Object.values(roleCounts).reduce((a, b) => a + b, 0);
   // Mismo criterio de agrupado que agentsByRole, para que el chip y su fila usen la misma clave
@@ -196,17 +164,11 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
     }
   };
 
-  // Ambos filtros condicionan el panel de composiciones y el NMWR, y se combinan en AND:
-  // un agente elegido ya ocupa un cupo de su rol.
-  const compHasAgents = (composition: string[]) => {
-    if (selectedAgents.size === 0) return true;
+  // Agentes y roles se combinan en AND: un agente elegido ya ocupa un cupo de su rol.
+  // Cada rol con contador > 0 debe aparecer exactamente esa cantidad de veces en la comp.
+  const matches = (composition: string[]) => {
     const inComp = new Set(composition);
     for (const a of selectedAgents) if (!inComp.has(a)) return false;
-    return true;
-  };
-
-  // Cada rol con contador > 0 debe aparecer exactamente esa cantidad de veces en la comp
-  const compMatchesRoles = (composition: string[]) => {
     if (roleTotal === 0) return true;
     const counts: Record<string, number> = {};
     for (const a of composition) {
@@ -219,23 +181,178 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
     return true;
   };
 
-  const compFilterActive = selectedAgents.size > 0 || roleTotal > 0;
+  return {
+    selectedAgents, roleCounts, roleTotal, roleOf, toggleAgent, clearAgents, bumpRole, matches,
+    active: selectedAgents.size > 0 || roleTotal > 0,
+  };
+}
 
-  // NMWR condicionado al filtro de comps, recalculado desde los partidos no-espejo.
+type CompFilter = ReturnType<typeof useCompFilter>;
+
+// Encabezado + una fila de chips por rol con su stepper. Con onToggle el encabezado lleva un switch
+// y, apagado, solo se muestra el encabezado.
+function CompFilterSelector({ label, filter, agentsByRole, agentImages, enabled = true, onToggle }: {
+  label: string;
+  filter: CompFilter;
+  agentsByRole: [string, string[]][];
+  agentImages: Record<string, string>;
+  enabled?: boolean;
+  onToggle?: () => void;
+}) {
+  const { selectedAgents, roleCounts, roleTotal, toggleAgent, clearAgents, bumpRole } = filter;
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <span className={`${ROLE_COL_WIDTH} shrink-0`} />
+        <div className={`${CHIPS_COL_WIDTH} shrink-0 flex items-center gap-3`}>
+          {onToggle && (
+            <button
+              role="switch"
+              aria-checked={enabled}
+              onClick={onToggle}
+              title={enabled ? 'Turn off' : 'Turn on'}
+              className={`relative w-7 h-4 rounded-full shrink-0 transition-colors ${enabled ? 'bg-blue-600' : 'bg-gray-700'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${enabled ? 'translate-x-3' : ''}`} />
+            </button>
+          )}
+          <label className={`text-[11px] font-bold uppercase tracking-wider ${enabled ? 'text-gray-400' : 'text-gray-500'}`}>
+            {label} {enabled && <span className="text-gray-600 font-normal normal-case">· max {MAX_PICKS} ({selectedAgents.size}/{MAX_PICKS})</span>}
+          </label>
+          {enabled && (
+            <button
+              onClick={clearAgents}
+              className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+                selectedAgents.size === 0
+                  ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                  : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+              }`}
+            >
+              All
+            </button>
+          )}
+        </div>
+        {enabled && (
+          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">
+            Players per role <span className="text-gray-600 font-normal normal-case">· {roleTotal}/{MAX_PICKS}</span>
+          </label>
+        )}
+      </div>
+      {enabled && agentsByRole.map(([role, agents]) => {
+        const count = roleCounts[role] ?? 0;
+        return (
+          <div key={role} className="flex items-center gap-2">
+            <span className={`${ROLE_COL_WIDTH} shrink-0 flex items-center justify-center ${count > 0 ? 'text-blue-300' : 'text-gray-500'}`}>
+              <RoleIcon role={role} size={20} className={count > 0 ? 'opacity-100' : 'opacity-50'} />
+            </span>
+            <div className={`${CHIPS_COL_WIDTH} shrink-0 flex flex-wrap gap-1.5`}>
+              {agents.map(agent => {
+                const active = selectedAgents.has(agent);
+                const capped = !active && roleTotal >= MAX_PICKS;
+                return (
+                  <button
+                    key={agent}
+                    onClick={() => toggleAgent(agent)}
+                    disabled={capped}
+                    title={agent}
+                    className={`p-1 rounded-lg border transition-colors ${
+                      active
+                        ? 'bg-blue-900/40 border-blue-700 hover:bg-blue-900/60'
+                        : capped
+                          ? 'bg-transparent border-gray-800 opacity-30 cursor-not-allowed'
+                          : 'bg-transparent border-gray-700 hover:border-gray-500'
+                    }`}
+                  >
+                    <img src={agentImages[agent]} alt={agent} className={`w-[34px] h-[34px] rounded transition-opacity ${active ? '' : 'opacity-70'}`} />
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => bumpRole(role, -1)}
+                disabled={count === 0}
+                title={`One less ${role}`}
+                className="w-6 h-6 rounded border border-gray-700 text-gray-400 text-[13px] font-bold leading-none transition-colors hover:border-gray-500 hover:text-gray-200 disabled:opacity-25 disabled:hover:border-gray-700 disabled:cursor-not-allowed"
+              >
+                −
+              </button>
+              <span className={`w-5 text-center text-xs font-bold ${count > 0 ? 'text-blue-300' : 'text-gray-600'}`}>{count}</span>
+              <button
+                onClick={() => bumpRole(role, 1)}
+                disabled={roleTotal >= MAX_PICKS}
+                title={`One more ${role}`}
+                className="w-6 h-6 rounded border border-gray-700 text-gray-400 text-[13px] font-bold leading-none transition-colors hover:border-gray-500 hover:text-gray-200 disabled:opacity-25 disabled:hover:border-gray-700 disabled:cursor-not-allowed"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+export function AgentPicksSection({ stats, compositions, agentMatches, compMatches, mapImages, agentImages, agentRoles, mapFullStats }: Props) {
+  const [selectedMaps, setSelectedMaps] = useState<Set<string>>(new Set());
+  const own = useCompFilter(agentRoles);
+  const { selectedAgents, roleCounts, roleTotal, roleOf, active: compFilterActive } = own;
+  // Comp rival: apagado por defecto; con el switch prendido pero sin selección no filtra nada
+  const enemy = useCompFilter(agentRoles);
+  const [enemyOn, setEnemyOn] = useState(false);
+  const enemyActive = enemyOn && enemy.active;
+  const enemyOk = (oppComposition: string[]) => !enemyActive || enemy.matches(oppComposition);
+  const filterActive = compFilterActive || enemyActive;
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<'pickRate' | 'nmwr'>('pickRate');
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
+  const [nmwrBy, setNmwrBy] = useState<'maps' | 'rounds'>('maps');
+  const byRounds = nmwrBy === 'rounds';
+  const [rightMode, setRightMode] = useState<'comps' | 'detail'>('comps');
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+
+  const clickSort = (key: 'pickRate' | 'nmwr') => {
+    if (sortBy === key) setSortDir(d => (d === 'desc' ? 'asc' : 'desc'));
+    else { setSortBy(key); setSortDir('desc'); }
+  };
+
+  const maps = useMemo(() => [...new Set(stats.map(s => s.map))].sort(), [stats]);
+  // Una fila por rol, roles en orden alfabético y agentes alfabéticos dentro de cada fila
+  const agentsByRole = useMemo(() => {
+    const byRole: Record<string, string[]> = {};
+    for (const agent of Object.keys(agentImages).sort()) {
+      (byRole[agentRoles[agent] ?? 'Other'] ??= []).push(agent);
+    }
+    return Object.entries(byRole).sort(([a], [b]) => a.localeCompare(b));
+  }, [agentImages, agentRoles]);
+
+  const isAll = selectedMaps.size === 0;
+  const single = selectedMaps.size === 1 ? [...selectedMaps][0] : null;
+  const inScope = (map: string) => isAll || selectedMaps.has(map);
+
+  const toggleMap = (map: string) =>
+    setSelectedMaps(prev => {
+      const next = new Set(prev);
+      if (next.has(map)) next.delete(map); else next.add(map);
+      return next;
+    });
+
+  // NMWR condicionado a los filtros de comp (propia y rival), recalculado desde los partidos no-espejo.
   // En modo rondas played/wins cuentan rondas en vez de mapas.
   // null = sin filtro y por mapas → se usan los agregados que ya vienen del server.
   const nmByComp = useMemo(() => {
-    if (!compFilterActive && !byRounds) return null;
+    if (!filterActive && !byRounds) return null;
     const by: Record<string, { nonMirrorPlayed: number; nonMirrorWins: number }> = {};
     for (const m of agentMatches) {
       if (!inScope(m.map)) continue;
-      if (!compHasAgents(m.composition) || !compMatchesRoles(m.composition)) continue;
+      if (!own.matches(m.composition) || !enemyOk(m.oppComposition)) continue;
       const e = (by[m.agent] ??= { nonMirrorPlayed: 0, nonMirrorWins: 0 });
       e.nonMirrorPlayed += byRounds ? m.roundsPlayed : 1;
       e.nonMirrorWins += byRounds ? m.roundsWon : (m.won ? 1 : 0);
     }
     return by;
-  }, [agentMatches, selectedMaps, selectedAgents, roleCounts, byRounds]);
+  }, [agentMatches, selectedMaps, selectedAgents, roleCounts, enemyActive, enemy.selectedAgents, enemy.roleCounts, byRounds]);
 
   const filtered = useMemo(() => {
     const nmwr = (wins?: number, played?: number) =>
@@ -320,22 +437,49 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
     return total;
   }, [stats, selectedMaps]);
 
+  // Con filtro rival las comps salen de las instancias equipo+mapa (las del server no saben contra qué jugaron).
+  // Mismos criterios que getOverallCompositions: WR sin espejos exactos, ATK/DEF del lado propio.
+  const compSource = useMemo(() => {
+    if (!enemyActive) return compositions;
+    type Acc = { map: string; composition: string; played: number; nmPlayed: number; nmWins: number; attWins: number; attTotal: number; defWins: number; defTotal: number; teamCounts: Record<string, number> };
+    const by: Record<string, Acc> = {};
+    for (const m of compMatches) {
+      if (!enemy.matches(m.oppComposition)) continue;
+      const composition = m.composition.join(', ');
+      const e = (by[`${m.map}__${composition}`] ??= { map: m.map, composition, played: 0, nmPlayed: 0, nmWins: 0, attWins: 0, attTotal: 0, defWins: 0, defTotal: 0, teamCounts: {} });
+      e.played++;
+      e.teamCounts[m.team] = (e.teamCounts[m.team] ?? 0) + 1;
+      e.attWins += m.attWins;
+      e.attTotal += m.attTotal;
+      e.defWins += m.defWins;
+      e.defTotal += m.defTotal;
+      if (m.oppComposition.join(', ') !== composition) {
+        e.nmPlayed++;
+        if (m.won) e.nmWins++;
+      }
+    }
+    return Object.values(by).map(({ nmPlayed, nmWins, teamCounts, ...rest }): CompositionStat => ({
+      ...rest,
+      nonMirrorPlayed: nmPlayed,
+      nonMirrorWins: nmWins,
+      winRate: nmPlayed > 0 ? Math.round(nmWins / nmPlayed * 100) : undefined,
+      teams: Object.entries(teamCounts).map(([team, played]) => ({ team, played })).sort((a, b) => b.played - a.played),
+    }));
+  }, [compositions, compMatches, enemyActive, enemy.selectedAgents, enemy.roleCounts]);
+
   // Compositions panel data
   const compositionPanel = useMemo(() => {
-    const matches = (c: CompositionStat) => {
-      const agents = c.composition.split(', ');
-      return compHasAgents(agents) && compMatchesRoles(agents);
-    };
-    const isFiltered = compFilterActive;
+    const matches = (c: CompositionStat) => own.matches(c.composition.split(', '));
+    const isFiltered = filterActive;
 
     if (single) {
-      return compositions
+      return compSource
         .filter(c => c.map === single && matches(c))
         .sort((a, b) => b.played - a.played);
     }
     // Scoped maps, top 3 each (todas las coincidencias si hay filtro de agentes o roles)
     const byMap: Record<string, CompositionStat[]> = {};
-    for (const c of compositions) {
+    for (const c of compSource) {
       if (!inScope(c.map) || !matches(c)) continue;
       if (!byMap[c.map]) byMap[c.map] = [];
       byMap[c.map].push(c);
@@ -346,12 +490,12 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
         const sorted = comps.sort((a, b) => b.played - a.played);
         return { map, comps: isFiltered ? sorted : sorted.slice(0, MAX_COMP_ROWS) };
       });
-  }, [compositions, selectedMaps, selectedAgents, roleCounts]);
+  }, [compSource, selectedMaps, selectedAgents, roleCounts, filterActive]);
 
   // Rendimiento agregado de las comps que pasan el filtro, solo con un mapa elegido.
   // ATK/DEF son rondas del lado propio del equipo que llevó la comp (≠ del ATK/DEF overall del mapa).
   const compPerf = useMemo(() => {
-    if (!single || !compFilterActive) return null;
+    if (!single || !filterActive) return null;
     const comps = compositionPanel as CompositionStat[];
     let played = 0, attWins = 0, attTotal = 0, defWins = 0, defTotal = 0;
     for (const c of comps) {
@@ -367,7 +511,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
       atk: attTotal > 0 ? Math.round(attWins / attTotal * 100) : null,
       def: defTotal > 0 ? Math.round(defWins / defTotal * 100) : null,
     };
-  }, [compositionPanel, single, compFilterActive]);
+  }, [compositionPanel, single, filterActive]);
 
   // Resumen del filtro de comps: agentes elegidos + cupos de rol sin agente + slots libres.
   // Un rol con cupo > 0 queda fijado a esa cantidad exacta, así que los libres solo pueden ser de los roles sin cupo.
@@ -398,9 +542,9 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
   const matchList = useMemo(() => {
     if (!detailAgent) return [];
     return agentMatches
-      .filter(m => m.agent === detailAgent && inScope(m.map) && compHasAgents(m.composition) && compMatchesRoles(m.composition))
+      .filter(m => m.agent === detailAgent && inScope(m.map) && own.matches(m.composition) && enemyOk(m.oppComposition))
       .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  }, [agentMatches, detailAgent, selectedMaps, selectedAgents, roleCounts]);
+  }, [agentMatches, detailAgent, selectedMaps, selectedAgents, roleCounts, enemyActive, enemy.selectedAgents, enemy.roleCounts]);
 
   const mapWL = useMemo(() => {
     const by: Record<string, { wins: number; losses: number }> = {};
@@ -468,79 +612,17 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
 
         {/* Agent filter — right half, only affects the compositions panel */}
         <div className="flex-1 min-w-0 flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className={`${ROLE_COL_WIDTH} shrink-0`} />
-            <div className={`${CHIPS_COL_WIDTH} shrink-0 flex items-center gap-3`}>
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                Agents in comps <span className="text-gray-600 font-normal normal-case">· max {MAX_PICKS} ({selectedAgents.size}/{MAX_PICKS})</span>
-              </label>
-              <button
-                onClick={clearAgents}
-                className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
-                  selectedAgents.size === 0
-                    ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
-                    : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
-                }`}
-              >
-                All
-              </button>
-            </div>
-            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">
-              Players per role <span className="text-gray-600 font-normal normal-case">· {roleTotal}/{MAX_PICKS}</span>
-            </label>
+          <CompFilterSelector label="Agents in comps" filter={own} agentsByRole={agentsByRole} agentImages={agentImages} />
+          <div className="mt-3 flex flex-col gap-1">
+            <CompFilterSelector
+              label="Agents in enemy comp"
+              filter={enemy}
+              agentsByRole={agentsByRole}
+              agentImages={agentImages}
+              enabled={enemyOn}
+              onToggle={() => setEnemyOn(on => !on)}
+            />
           </div>
-          {agentsByRole.map(([role, agents]) => {
-            const count = roleCounts[role] ?? 0;
-            return (
-              <div key={role} className="flex items-center gap-2">
-                <span className={`${ROLE_COL_WIDTH} shrink-0 flex items-center justify-center ${count > 0 ? 'text-blue-300' : 'text-gray-500'}`}>
-                  <RoleIcon role={role} size={20} className={count > 0 ? 'opacity-100' : 'opacity-50'} />
-                </span>
-                <div className={`${CHIPS_COL_WIDTH} shrink-0 flex flex-wrap gap-1.5`}>
-                  {agents.map(agent => {
-                    const active = selectedAgents.has(agent);
-                    const capped = !active && roleTotal >= MAX_PICKS;
-                    return (
-                      <button
-                        key={agent}
-                        onClick={() => toggleAgent(agent)}
-                        disabled={capped}
-                        title={agent}
-                        className={`p-1 rounded-lg border transition-colors ${
-                          active
-                            ? 'bg-blue-900/40 border-blue-700 hover:bg-blue-900/60'
-                            : capped
-                              ? 'bg-transparent border-gray-800 opacity-30 cursor-not-allowed'
-                              : 'bg-transparent border-gray-700 hover:border-gray-500'
-                        }`}
-                      >
-                        <img src={agentImages[agent]} alt={agent} className={`w-[34px] h-[34px] rounded transition-opacity ${active ? '' : 'opacity-70'}`} />
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => bumpRole(role, -1)}
-                    disabled={count === 0}
-                    title={`One less ${role}`}
-                    className="w-6 h-6 rounded border border-gray-700 text-gray-400 text-[13px] font-bold leading-none transition-colors hover:border-gray-500 hover:text-gray-200 disabled:opacity-25 disabled:hover:border-gray-700 disabled:cursor-not-allowed"
-                  >
-                    −
-                  </button>
-                  <span className={`w-5 text-center text-xs font-bold ${count > 0 ? 'text-blue-300' : 'text-gray-600'}`}>{count}</span>
-                  <button
-                    onClick={() => bumpRole(role, 1)}
-                    disabled={roleTotal >= MAX_PICKS}
-                    title={`One more ${role}`}
-                    className="w-6 h-6 rounded border border-gray-700 text-gray-400 text-[13px] font-bold leading-none transition-colors hover:border-gray-500 hover:text-gray-200 disabled:opacity-25 disabled:hover:border-gray-700 disabled:cursor-not-allowed"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
 
@@ -597,7 +679,11 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
           </div>
           <p className="text-[11px] text-gray-500 self-end pb-2 ml-auto text-right">
             NMWR = {byRounds ? 'round' : 'map'} win rate excluding mirror picks
-            {compFilterActive && <span className="text-blue-400/80"> · conditioned on the team composition filter</span>}
+            {filterActive && (
+              <span className="text-blue-400/80">
+                {' '}· conditioned on the {compFilterActive && enemyActive ? 'team & enemy composition filters' : enemyActive ? 'enemy composition filter' : 'team composition filter'}
+              </span>
+            )}
           </p>
         </div>
         <div className="flex-1 min-w-0 flex items-start gap-6 flex-wrap">
@@ -874,7 +960,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
                     </div>
                     {/* Compositions column */}
                     <div className="flex flex-col gap-1.5 justify-center flex-1 min-w-0">
-                      {(compFilterActive ? comps.slice(0, MAX_COMP_ROWS) : comps).map((c, i) => (
+                      {(filterActive ? comps.slice(0, MAX_COMP_ROWS) : comps).map((c, i) => (
                         <div key={i} className="flex items-center gap-1.5 flex-wrap">
                           <CompositionIcons composition={c.composition} agentImages={agentImages} />
                           <span className="text-gray-500 text-xs shrink-0">({c.played})</span>
@@ -895,7 +981,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
                           )}
                         </div>
                       ))}
-                      {compFilterActive && comps.length > MAX_COMP_ROWS && (
+                      {filterActive && comps.length > MAX_COMP_ROWS && (
                         <span
                           className="text-gray-500 text-sm leading-none"
                           title={`+${comps.length - MAX_COMP_ROWS} more (included in Comp performance)`}
@@ -904,7 +990,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, mapImages
                         </span>
                       )}
                       {/* Equipos que jugaron las comps que pasan el filtro (incluye las ocultas tras el "…") */}
-                      {compFilterActive && (() => {
+                      {filterActive && (() => {
                         const byTeam: Record<string, number> = {};
                         for (const c of comps) for (const t of c.teams ?? []) byTeam[t.team] = (byTeam[t.team] ?? 0) + t.played;
                         const teams = Object.entries(byTeam).sort((a, b) => b[1] - a[1]);

@@ -1,7 +1,7 @@
 // lib/data/agents.ts — picks de agentes y composiciones
 import { supabase } from '../supabase';
 import { versioned, fetchAllPages } from './helpers';
-import { AgentMatchDetail, AgentPickStat, CompositionStat, DuoMapStat, DuoStatsData, MapCompositionStat, MapsMastersData, MapWL } from '../types';
+import { AgentMatchDetail, AgentPickStat, CompMatch, CompositionStat, DuoMapStat, DuoStatsData, MapCompositionStat, MapsMastersData, MapWL } from '../types';
 import type { PostgrestFilterBuilder } from '@supabase/postgrest-js';
 import { PlayerStatsRow, RoundInfoRow } from './rows';
 
@@ -257,16 +257,17 @@ async function getAgentPickStats_impl(
 // Se cachea una fila por equipo+mapa en vez de una por agente: expandido, el mismo
 // composition/oppComposition/url se repetía por cada agente y superaba el límite de 2MB
 // de unstable_cache. Los agentes no-mirror se derivan de composition menos oppComposition.
-type NonMirrorInstance = Omit<AgentMatchDetail, 'agent'>;
+const getNonMirrorInstances = versioned('agent-nonmirror-instances-v3', getNonMirrorInstances_impl);
 
-const getNonMirrorInstances = versioned('agent-nonmirror-instances-v2', getNonMirrorInstances_impl);
+// Las instancias tal cual, para el filtro de comp rival (que necesita también las comps espejo)
+export const getAgentCompMatches = getNonMirrorInstances;
 
 export async function getAgentNonMirrorMatches(
   filters: { reg?: string[]; tour?: string; bo?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
 ): Promise<AgentMatchDetail[]> {
   const instances = await getNonMirrorInstances(filters);
   const result: AgentMatchDetail[] = [];
-  for (const inst of instances) {
+  for (const { attWins, attTotal, defWins, defTotal, ...inst } of instances) {
     for (const agent of inst.composition) {
       if (inst.oppComposition.includes(agent)) continue; // mirror → excluir
       result.push({ agent, ...inst });
@@ -277,7 +278,7 @@ export async function getAgentNonMirrorMatches(
 
 async function getNonMirrorInstances_impl(
   filters: { reg?: string[]; tour?: string; bo?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[] }
-): Promise<NonMirrorInstance[]> {
+): Promise<CompMatch[]> {
   // Pre-fetch series_ids + dates from draft (date filters + always for date lookup)
   const bo = filters.bo && filters.bo !== 'all' ? parseInt(filters.bo) : null;
   let draftQuery = supabase.from('draft').select('series_id, date');
@@ -328,10 +329,13 @@ async function getNonMirrorInstances_impl(
   const winnerByMapId: Record<string, string | undefined> = {};
   // Rondas por map_id: total y ganadas por equipo (nombre en minúscula), para el NMWR por rondas
   const roundsByMapId: Record<string, { total: number; won: Record<string, number> }> = {};
+  // Rondas por lado por map_id + equipo (minúscula), mismo criterio que getOverallCompositions
+  type SideAcc = { attWins: number; attTotal: number; defWins: number; defTotal: number };
+  const sideByMapId: Record<string, Record<string, SideAcc>> = {};
   if (allSeriesIds.length > 0) {
-    const roundRows = await fetchAllPages<RoundWinnerRow>((from, to) =>
+    const roundRows = await fetchAllPages<RoundWinnerRow & Pick<RoundInfoRow, 'side'>>((from, to) =>
       supabase.from('round_info')
-        .select('series_id, map_id, round, teamA, teamB, rndA, rndB')
+        .select('series_id, map_id, round, side, teamA, teamB, rndA, rndB')
         .in('series_id', allSeriesIds)
         .range(from, to)
     );
@@ -343,6 +347,26 @@ async function getNonMirrorInstances_impl(
       rw.total++;
       const roundWinner = (Number(r.rndA) === 1 ? r.teamA : r.teamB)?.trim().toLowerCase();
       if (roundWinner) rw.won[roundWinner] = (rw.won[roundWinner] ?? 0) + 1;
+
+      // side viene desde la perspectiva de teamA, así que para teamB se invierte
+      const rawSide = r.side?.trim().toLowerCase();
+      if (rawSide !== 'atk' && rawSide !== 'def') continue;
+      const flipped = rawSide === 'atk' ? 'def' : 'atk';
+      for (const [name, side, won] of [
+        [r.teamA, rawSide, Number(r.rndA) === 1],
+        [r.teamB, flipped, Number(r.rndB) === 1],
+      ] as const) {
+        const key = name?.trim().toLowerCase();
+        if (!key) continue;
+        const acc = ((sideByMapId[r.map_id] ??= {})[key] ??= { attWins: 0, attTotal: 0, defWins: 0, defTotal: 0 });
+        if (side === 'atk') {
+          acc.attTotal++;
+          if (won) acc.attWins++;
+        } else {
+          acc.defTotal++;
+          if (won) acc.defWins++;
+        }
+      }
     }
     for (const [map_id, r] of Object.entries(finalRoundByMapId)) {
       winnerByMapId[map_id] = Number(r.rndA) === 1 ? r.teamA?.trim() : r.teamB?.trim();
@@ -350,7 +374,7 @@ async function getNonMirrorInstances_impl(
   }
 
   // Emit one record per team in each instance
-  const result: NonMirrorInstance[] = [];
+  const result: CompMatch[] = [];
   for (const [instKey, teams] of Object.entries(instanceAgents)) {
     const teamNames = Object.keys(teams);
     const [, map_id] = instKey.split('__');
@@ -368,7 +392,8 @@ async function getNonMirrorInstances_impl(
       const rounds = roundsByMapId[map_id];
       const roundsWon = rounds?.won[team.trim().toLowerCase()] ?? 0;
       const roundsPlayed = rounds?.total ?? 0;
-      result.push({ map, team, opponent, won, roundsWon, roundsPlayed, date, url, composition, oppComposition });
+      const sides = sideByMapId[map_id]?.[team.trim().toLowerCase()] ?? { attWins: 0, attTotal: 0, defWins: 0, defTotal: 0 };
+      result.push({ map, team, opponent, won, roundsWon, roundsPlayed, date, url, composition, oppComposition, ...sides });
     }
   }
   return result;

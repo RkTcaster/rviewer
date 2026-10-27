@@ -190,6 +190,14 @@ export type AgentMatchDetail = {
   oppComposition: string[];// agentes del rival en ese mapa (ordenados)
 };
 
+// Una fila por equipo+mapa (incluye mirrors), con las rondas del lado propio del equipo
+export type CompMatch = Omit<AgentMatchDetail, 'agent'> & {
+  attWins: number;
+  attTotal: number;
+  defWins: number;
+  defTotal: number;
+};
+
 export type PlayerStat = {
   player: string;
   agent: string;

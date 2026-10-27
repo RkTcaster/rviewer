@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows, getSeriesOutcomes, emptySeriesOutcomes, getOperatorUseStats, getWeaponPickStats, getTimeSiteStats } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getAgentCompMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows, getSeriesOutcomes, emptySeriesOutcomes, getOperatorUseStats, getWeaponPickStats, getTimeSiteStats } from '@/lib/data-service';
 import { DEFAULT_TOURS, COMPARE_DEFAULT_TOURS, sectionUsesDefaultTours, Tournament, OverallMapFullStat, TeamRankStats } from '@/lib/types';
 import { getLatestNews } from '@/lib/news';
 import { Filters } from '@/components/Filters';
@@ -135,6 +135,10 @@ export default async function Page({
     ? getAgentNonMirrorMatches({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
     : Promise.resolve([]);
 
+  const agentCompMatchesP = (section === 'agent-picks')
+    ? getAgentCompMatches({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
+    : Promise.resolve([]);
+
   const mapImagesP = (section === 'agent-picks' || section === 'maps-masters' || isOperatorUse || isWeaponPick || isTimeSite || section === 'neon-dependency' || section === 'compare-maps' || section === 'maps' || isVetoPredictor)
     ? getMapImages()
     : Promise.resolve({});
@@ -259,7 +263,7 @@ export default async function Page({
 
   const [
     result, resultB, compsA, compsB, rankings, economy, mapPicksFullStatsRaw,
-    compositionsData, agentPickStats, agentCompositions, agentMatches,
+    compositionsData, agentPickStats, agentCompositions, agentMatches, agentCompMatches,
     mapImages, defaultHiddenMaps, agentImages, agentRoles, teamLogos, teamRegions, mapsMasters, neonDep, postPistolForce,
     mapFullStats, agentPickStatsLeft, agentPickStatsRight,
     playerStats, tournamentPlayerAvg, playerTimeline,
@@ -268,7 +272,7 @@ export default async function Page({
     skirmishStats, simulationScenarios, tours, tours2, vetoFlows, formTimeline, vetoModel, seriesOutcomes, operatorUse, weaponPick, timeSite,
   ] = await Promise.all([
     resultP, resultBP, compsAP, compsBP, rankingsP, economyP, mapPicksFullStatsP,
-    compositionsDataP, agentPickStatsP, agentCompositionsP, agentMatchesP,
+    compositionsDataP, agentPickStatsP, agentCompositionsP, agentMatchesP, agentCompMatchesP,
     mapImagesP, defaultHiddenMapsP, agentImagesP, agentRolesP, teamLogosP, teamRegionsP, mapsMastersP, neonDepP, postPistolForceP,
     mapFullStatsP, agentPickStatsLeftP, agentPickStatsRightP,
     playerStatsP, tournamentPlayerAvgP, playerTimelineP,
@@ -291,7 +295,7 @@ export default async function Page({
       case 'map-picks':
         return <MapPicksSection stats={mapPicksFullStats} />;
       case 'agent-picks':
-        return <AgentPicksSection stats={agentPickStats} compositions={agentCompositions} agentMatches={agentMatches} mapImages={mapImages} agentImages={agentImages} agentRoles={agentRoles} mapFullStats={mapFullStats} />;
+        return <AgentPicksSection stats={agentPickStats} compositions={agentCompositions} agentMatches={agentMatches} compMatches={agentCompMatches} mapImages={mapImages} agentImages={agentImages} agentRoles={agentRoles} mapFullStats={mapFullStats} />;
       case 'meta-shift':
         return <MetaShiftSection
           statsLeft={agentPickStatsLeft}
