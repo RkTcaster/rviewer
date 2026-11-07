@@ -32,6 +32,14 @@ export async function fetchAllPages<T>(
   return all;
 }
 
+// Torneos sin draft (qualifiers, match_format = 'reduced'): se excluyen de los filtros
+// hasta que exista el toggle full/reduced (ROADMAP Phase 11). Si la query falla, set vacío.
+export async function getReducedTourIds(): Promise<Set<string>> {
+  const { data, error } = await supabase.from('tournament').select('tour_id').eq('match_format', 'reduced');
+  if (error) console.error('getReducedTourIds error:', error);
+  return new Set((data ?? []).map((r: { tour_id: string }) => r.tour_id));
+}
+
 async function getLastUpdateDate_impl(): Promise<string | null> {
   const { data } = await supabase.from('draft').select('date').order('date', { ascending: false }).limit(1);
   return data?.[0]?.date ?? null;

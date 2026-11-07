@@ -1,7 +1,9 @@
 // lib/data/images.ts — assets e info estática (logos, imágenes, región por equipo)
 import { unstable_cache } from 'next/cache';
 import { supabase } from '../supabase';
-import { versioned } from './helpers';
+import fs from 'fs';
+import path from 'path';
+import { versioned, getReducedTourIds } from './helpers';
 
 export const getAgentImages = versioned('agent-images', getAgentImages_impl);
 async function getAgentImages_impl(): Promise<Record<string, string>> {
@@ -29,11 +31,14 @@ export const getTeamRegions = versioned('team-regions', getTeamRegions_impl);
 async function getTeamRegions_impl(): Promise<Record<string, string>> {
   // Map each team to its home region (reg_0..reg_3), ignoring reg_4 (international events).
   // If a team appears in multiple regions, the most frequent one wins.
-  const { data } = await supabase.from('tournament_played').select('teamA, reg_id');
+  const [{ data }, reduced] = await Promise.all([
+    supabase.from('tournament_played').select('teamA, reg_id, tour_id'),
+    getReducedTourIds(),
+  ]);
   if (!data) return {};
   const counts: Record<string, Record<string, number>> = {};
-  for (const r of data as { teamA: string; reg_id: string }[]) {
-    if (!r.teamA || r.reg_id === 'reg_4') continue;
+  for (const r of data as { teamA: string; reg_id: string; tour_id: string }[]) {
+    if (!r.teamA || r.reg_id === 'reg_4' || reduced.has(r.tour_id)) continue;
     (counts[r.teamA] ??= {})[r.reg_id] = (counts[r.teamA]?.[r.reg_id] ?? 0) + 1;
   }
   const result: Record<string, string> = {};
@@ -49,7 +54,9 @@ async function getTeamLogos_impl(): Promise<Record<string, string>> {
   if (!data) return {};
   return Object.fromEntries(
     data
-      .filter((r: { team_id: string; team_path: string | null }) => r.team_path)
+      // Sin archivo en public/ (equipos de qualifiers sin logo) → sin entrada, el <img> no se renderiza
+      .filter((r: { team_id: string; team_path: string | null }) =>
+        r.team_path && fs.existsSync(path.join(process.cwd(), 'public', r.team_path)))
       .map((r: { team_id: string; team_path: string }) => [r.team_id, `/${r.team_path}`])
   );
 }

@@ -3,7 +3,7 @@
 Planning of improvements and features. Context: **personal** analysis/casting tool,
 used on desktop. Data depth is the priority; mobile and public polish come last.
 
-Last updated: 2026-10-05
+Last updated: 2026-11-06
 
 ---
 
@@ -219,14 +219,8 @@ Done when `grep` finds no Spanish comments left, at which point the README's con
 
 ## Phase 5 — Default tournaments from the DB
 
-- **5.1 Evaluate a boolean `default` column in `tournament`**: assess whether a `true/false` column
-  can replace the hardcoded `DEFAULT_TOURS` (`lib/types.ts`), so the default tournaments
-  are changed from the Supabase dashboard instead of a code edit + deploy (they change every few
-  weeks: the four Stage 2 + Champions 2026 as of sep 2026). Same pattern as the DB-driven default
-  hidden maps (`defaultHiddenMaps`). To evaluate before implementing: whether the CSV upload flow
-  (`scripts/upload.mjs`, `table_tournament.csv`) would overwrite the column, the cache TTL, and
-  collapsing the section list duplicated in `app/page.tsx`, `components/Filters.tsx` and
-  `components/Sidebar.tsx` into one place.
+- **5.1 Default tournaments from the DB**: moved to Phase 11 (11.2), together with the other
+  DB-driven defaults.
 
 ## Phase 6 — Filters UX
 
@@ -500,6 +494,66 @@ sites A 11 / B 13 / C 15. Still open:
   checked against the rendered page (the script's ATK / DEF figures are ready to compare).
 - **10.2 Only Champions 2026 in `round_summary`**: other tournaments show up once loaded.
 
+## Phase 11 — Qualifier data and DB-driven defaults
+
+From 2027 vlr-scraper also loads qualifiers, which come **without draft** (no picks, bans or
+decider). Details from the scraper side: `handoff/RKTDATA_MATCH_FORMAT.md` (local, gitignored).
+A single qualifier brings ~255 tier 2-3 teams, so presenting the data needs a big restructure:
+the default view has to keep showing the league teams, with the rest behind a filter.
+
+- **11.1 `match_format` column**: `match_id` (`full` / `reduced`) and `tournament` (`full` /
+  `reduced` / `mixed`), default `full`; the format is decided per event, not per match. Done
+  (nov 2026) as a minimal guard until 11.3 / 11.4 exist:
+  - `reduced` tournaments are left out of the filters (`getTeams`, `getTours`, `getAllTours`)
+    and of `getTeamRegions`, via `getReducedTourIds` (`lib/data/helpers.ts`). `mixed` stays.
+  - `getTeamLogos` drops `team_path`s whose file is missing in `public/` (most qualifier teams
+    have no logo); `public/teams/**` is in `outputFileTracingIncludes` for the deploy.
+  - Stats need no change today: every section takes its `series_id`s from `draft`, so series
+    without draft are already out.
+- **11.2 Default tournaments from the DB** (ex 5.1): evaluate a boolean `default` column in
+  `tournament` to replace the hardcoded `DEFAULT_TOURS` (`lib/types.ts`), changed from the
+  Supabase dashboard instead of a code edit + deploy. Same pattern as the DB-driven hidden maps
+  (`defaultHiddenMaps`). To evaluate: whether the CSV upload (`scripts/upload.mjs`,
+  `table_tournament.csv`) overwrites the column, the cache TTL, and collapsing the section list
+  duplicated in `app/page.tsx`, `components/Filters.tsx` and `components/Sidebar.tsx`. A
+  DB-driven default would also decide which quick tournament chips start active (6.2).
+- **11.3 Relevant teams**: manual boolean `relevant` in `teams`, edited in Supabase. Only
+  relevant teams are shown by default (team selects, rankings, Stats Rank and other table
+  sections); an "All teams" filter, off by default, shows the rest. Before building it, check
+  that the vlr-scraper upsert (`table_teams.csv`) doesn't overwrite the column (same trap as
+  `team_path`, see `SCRAPER_TEAM_PATH.md`).
+- **11.4 Full / reduced toggle**: a global filter, "Full" (with draft) by default, to include
+  series without draft. Draft sections (picks/bans, vetoes, map pick %, Veto Predictor) always
+  use `full` only, or reduced series would lower the percentages. The rest has to take its
+  series from `match_id` filtered by `match_format` instead of `draft`: that's the big
+  restructure, every `from('draft').select('series_id')` in `lib/data/*`, plus `bo` (today read
+  from `draft`) and `getLastUpdateDate` (cache version keyed on the latest `draft` date, so a
+  qualifier-only upload doesn't bust the cache). With this, 11.1's filter guard goes away.
+- **11.5 Risks to keep in mind**: `team_id` is vlr's tricode and can collide between a small team
+  and a league team (they merge in `teams`, region color included); `player_id` follows the team
+  of the latest match, so a league player in a qualifier can move id; forfeited series are not
+  loaded (qualifier brackets will have gaps); a re-marked event only updates old `match_id` rows
+  after a `--full` upload.
+- **11.6 Overtime economy in qualifiers (to evaluate)**: vlr no longer stores rounds after 24 in
+  the economy tab for qualifiers. In the Europe Qualifier, 22 maps (96 rounds) have
+  `team_economy` cut at 24, e.g. 784601 Corrode 34 → 24 and Lotus 38 → 24. League maps are complete,
+  so Champions 2026 has 1810 / 1810. The logs data does have OT: `round_buy` (weapon, shield,
+  spend and bank per player), `round_events` and `round_summary` have every round, so there's no
+  need to scrape the 2D replay. Viability, checked on Champions 2026 (3620 team-rounds where both
+  tables exist):
+  - **Bank**: Σ player `_bank` from `round_buy` matches `team_x_bank`. 1776 / 3620 are exact and
+    all 3620 are within 200 (median −50, rounding). Reconstructable.
+  - **Loadout value**: Σ (weapon + shield price) is short by the abilities, median 3350 and range
+    1850–4600 (p10–p90), so it can't be rebuilt exactly. As a category (eco / semiEco /
+    semiBuy / fullBuy, bins in `lib/data/economy.ts:74`), weapon + shield + 3350 gets 86.2 %
+    right overall and **40 / 40 in OT rounds**, which are always full buys. Most of the misses
+    are eco → semiEco.
+  - `win_A`, `side` and `winCon` come from `round_info`, which is complete.
+  - Most likely plan: economy stats use the first 24 rounds for everyone, league included, so
+    qualifiers and league count the same way. The reconstructed OT rows get stored apart, either
+    in a separate table or flagged as estimated. To decide first: where the reconstruction lives
+    (vlr-scraper or rviewer), whether league OT also gets dropped from the stats (it changes
+    today's figures), and which sections read `team_economy`: Economy, Operator Use and Weapon Pick.
 ---
 
 ## General closing criteria per item
