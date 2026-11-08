@@ -1,6 +1,6 @@
 // lib/data/economy.ts — economía por ronda (distribución, compare, torneo)
 import { supabase } from '../supabase';
-import { versioned, fetchAllPages } from './helpers';
+import { versioned, fetchAllPages, getAllSeriesIds } from './helpers';
 import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare, TeamPostPistolForce, OperatorUseData, OperatorUseStat, OperatorUseSide, OperatorUseWeapon, WeaponPickBank, WeaponPickData, WeaponPickRound, WeaponPickStat } from '../types';
 
 export async function getEconomyDistribution(filters: {
@@ -151,18 +151,25 @@ export async function getEconomyCompare(filters: {
 export const getTournamentEconomy = versioned('tournament-economy', getTournamentEconomy_impl);
 async function getTournamentEconomy_impl(filters: {
   tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string;
+  // Stats Rank v2: series from round_info, drafts or not; reg and last are ignored
+  allSeries?: boolean;
 }): Promise<Record<string, TeamEconomyCompare>> {
-  let idQuery = supabase.from('draft').select('series_id');
-  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
-  if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
-  if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
-  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
-  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
-  if (filters.last && filters.last !== 'all') idQuery = idQuery.order('date', { ascending: false }).limit(parseInt(filters.last));
+  let seriesIds: (string | number)[];
+  if (filters.allSeries) {
+    seriesIds = await getAllSeriesIds(filters);
+  } else {
+    let idQuery = supabase.from('draft').select('series_id');
+    if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
+    if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
+    if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
+    if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
+    if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
+    if (filters.last && filters.last !== 'all') idQuery = idQuery.order('date', { ascending: false }).limit(parseInt(filters.last));
 
-  const { data: idList } = await idQuery;
-  if (!idList || idList.length === 0) return {};
-  const seriesIds = [...new Set(idList.map((x: { series_id: string }) => x.series_id))];
+    const { data: idList } = await idQuery;
+    seriesIds = [...new Set((idList ?? []).map((x: { series_id: string }) => x.series_id))];
+  }
+  if (seriesIds.length === 0) return {};
 
   const rows = await fetchAllPages<{
     team_a: string; team_b: string;

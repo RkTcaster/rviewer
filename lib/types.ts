@@ -48,6 +48,17 @@ export type Tournament = {
   reg_id?: string;
 };
 
+// A `tournament` row with the hierarchy the main filter (Stats Rank v2) groups by:
+// year → region → subregion → tournament. subregion only exists for qualifiers.
+export type TournamentNode = {
+  tour_id: string;
+  event: string;
+  reg_id: string;
+  year: number | null;
+  subregion: string | null;
+  stage: string | null;
+};
+
 // Tournaments preselected when the URL has no `tour` param: every regional Stage 2 plus Champions.
 // Read both by the server fetch (app/page.tsx) and by the Tournament filter and quick-tournament
 // chips (components/Filters.tsx), so the two must stay in sync through this constant.

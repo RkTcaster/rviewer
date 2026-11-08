@@ -40,6 +40,50 @@ export async function getReducedTourIds(): Promise<Set<string>> {
   return new Set((data ?? []).map((r: { tour_id: string }) => r.tour_id));
 }
 
+// Series of the given tournaments taken from round_info instead of draft, so series without
+// draft (qualifiers, match_format = 'reduced') count too. One row per map (round 1) gives both
+// the date (first map) and the map count. bo = draft.bo when the series has a draft, else
+// inferred from its maps: 4+ = Bo5. A 3-0 Bo5 without draft reads as Bo3 (none so far: every
+// 2027 qualifier series has at most 3 maps). Dates compare by day, both ends inclusive.
+export async function getAllSeriesIds(filters: {
+  tour?: string; bo?: string; dateFrom?: string; dateTo?: string;
+}): Promise<number[]> {
+  const tours = filters.tour?.split(',').filter(Boolean) ?? [];
+  if (tours.length === 0) return [];
+
+  const [firstRounds, drafts] = await Promise.all([
+    fetchAllPages<{ series_id: number; date: string | null }>((from, to) =>
+      supabase.from('round_info').select('series_id, date')
+        .in('tour_id', tours).eq('round', 1)
+        .order('team_map_round_id').range(from, to)
+    ),
+    fetchAllPages<{ series_id: number; bo: number | string | null }>((from, to) =>
+      supabase.from('draft').select('series_id, bo').in('tour_id', tours)
+        .order('series_id').range(from, to)
+    ),
+  ]);
+
+  const draftBo = new Map(drafts.map(d => [Number(d.series_id), Number(d.bo)]));
+  const series = new Map<number, { maps: number; date: string }>();
+  for (const r of firstRounds) {
+    const id = Number(r.series_id);
+    const day = r.date?.slice(0, 10) ?? '';
+    const s = series.get(id);
+    if (!s) series.set(id, { maps: 1, date: day });
+    else { s.maps++; if (day && (!s.date || day < s.date)) s.date = day; }
+  }
+
+  const ids: number[] = [];
+  for (const [id, s] of series) {
+    const bo = draftBo.get(id) || (s.maps >= 4 ? 5 : 3);
+    if (filters.bo && filters.bo !== 'all' && bo !== Number(filters.bo)) continue;
+    if (filters.dateFrom && s.date < filters.dateFrom) continue;
+    if (filters.dateTo && s.date > filters.dateTo) continue;
+    ids.push(id);
+  }
+  return ids;
+}
+
 async function getLastUpdateDate_impl(): Promise<string | null> {
   const { data } = await supabase.from('draft').select('date').order('date', { ascending: false }).limit(1);
   return data?.[0]?.date ?? null;

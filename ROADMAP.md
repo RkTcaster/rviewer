@@ -3,7 +3,7 @@
 Planning of improvements and features. Context: **personal** analysis/casting tool,
 used on desktop. Data depth is the priority; mobile and public polish come last.
 
-Last updated: 2026-11-06
+Last updated: 2026-11-08
 
 ---
 
@@ -192,16 +192,10 @@ Done when `grep` finds no Spanish comments left, at which point the README's con
 
 ## Phase 3 — Improvements to existing visualizations
 
-- **3.1 Color gradient in Stats Rank**: today only best/worst are painted (green/red);
-  move to a continuous percentile scale to read the middle of the pack at a glance.
-- **3.2 Inline mini-bars in table cells**: a proportional horizontal bar behind the % in
-  Stats Rank and Compare Maps.
-- **3.3 Salvage the flow Sankey** (`GraphsSection`, currently outside the sidebar): integrate it
-  as a tab inside Compare Stats, which is where it adds context.
-- **3.4 Team profile radar** in Compare Stats: a pentagon (pistol WR, ATK WR, DEF WR, retake eff,
-  post-plant WR) overlaid for the 2 teams. Data: `TeamRankStats` is already computed.
-- **3.5 WR vs economy difference curve**: probability of winning the round given the credit gap,
-  from `team_economy`. Complements Compare Economy.
+- **3.1 Color gradient in Stats Rank**: merged into Phase 8 (gradient colors, see Still open).
+- **3.2 Inline mini-bars in table cells**: dropped (nov 2026) — the user found it not clean.
+- **3.3 Salvage the flow Sankey** (`GraphsSection`): dropped (nov 2026).
+- **3.4 / 3.5**: moved to the Backlog at the end.
 - **3.6 URL-backed filter model for the Overall table sections**: done (see Done, sep 2026).
 
 ## Phase 4 — Polish (low priority, personal tool)
@@ -399,7 +393,9 @@ URL, no map / side filters, a dead header branch for `'Bonus Conversion (PAB)'` 
   is the extra data: `round_summary.plant_site` / `round_events.site` (A / B / C) and `plant_t`
   (second of the round), e.g. plant rate per site or average plant time. Caveat: the new tables
   only cover Champions 2026, `player_performance` covers every tournament.
-- **Still open, to decide with the user**: gradient colors, column-group chips in the URL,
+- **Still open, to decide with the user**: gradient colors (ex 3.1: today only best/worst are
+  painted green/red; move to a continuous percentile scale to read the middle of the pack at a
+  glance — pure color gradient, no bars), column-group chips in the URL,
   map / side filters, removing the dead `'Bonus Conversion (PAB)'` branch, more metrics from
   `round_events` / `round_summary` (first blood, plant site / time — see 8.3).
 
@@ -554,6 +550,44 @@ the default view has to keep showing the league teams, with the rest behind a fi
     in a separate table or flagged as estimated. To decide first: where the reconstruction lives
     (vlr-scraper or rviewer), whether league OT also gets dropped from the stats (it changes
     today's figures), and which sections read `team_economy`: Economy, Operator Use and Weapon Pick.
+
+## Phase 12 — New main filter, Stats Rank v2 first (in progress, nov 2026)
+
+A main filter meant to replace the per-page one on almost every page, tried first on a new
+`stats-rank-v2` section (the old Stats Rank stays untouched). Decided with the user (nov 2026):
+
+- **Hierarchy** Year → Region → Subregion → Tournament as chips in cascade
+  (`components/TournamentTreeFilter.tsx`). The only selection is the tournament list (`tour`);
+  upper chips are bulk toggles painted on / partial / off, and each row only shows what hangs
+  from an active chip above. Plus From / To, Bo3 / Bo5 and Relevant / All teams. No quick
+  tournament chips, no region chips, no Last X, no team chip panel.
+- **Default**: every tournament of the latest season (2026 starts off).
+- **Metadata**: `tournament.year / subregion / stage`, filled by hand in Supabase
+  (`handoff/STATS_RANK_V2.sql`, local). Subregion only for qualifiers. A row without `year`
+  falls back to the season in its `tour_id`.
+- **Series from `round_info`**, not `draft` (`getAllSeriesIds`, `allSeries: true` in
+  `getTournamentRankings` / `getTournamentEconomy`), so qualifiers without draft count — the first
+  step of 11.4, scoped to this page. bo = `draft.bo` or, without draft, 4+ maps = Bo5.
+- **Teams**: `teams.relevant` (11.3), seeded with the 2026 league teams plus the top 8 of each
+  2027 open qualifier; All shows every team.
+
+Verified (nov 2026): `tsc` + `next build` clean; NA open qualifier map WR matches a hand count
+(MC / MU / WC 10/10). Tricode collision seen live (11.5): Counterfeit and Faker Rex are both `FAKE`
+and played each other, so `FAKE` shows 16/19 maps. Old Stats Rank unchanged (T1 25/43 = 58%).
+Still open:
+
+- **12.1 Run the SQL** and check the cascade in the browser (only the data path was verified).
+- **12.2 Roll the filter out** to the other pages.
+- **12.3 Cache**: `versioned()` keys on the latest `draft` date; a qualifier-only upload (no
+  draft) doesn't bust it (same as 11.4).
+
+## Backlog
+
+- **3.4 Team profile radar** in Compare Stats: a pentagon (pistol WR, ATK WR, DEF WR, retake eff,
+  post-plant WR) overlaid for the 2 teams. Data: `TeamRankStats` is already computed.
+- **3.5 WR vs economy difference curve**: probability of winning the round given the credit gap,
+  from `team_economy`. Complements Compare Economy.
+
 ---
 
 ## General closing criteria per item

@@ -12,6 +12,7 @@ const NAV_SECTIONS = [
     title: 'Overall',
     items: [
       { id: 'stats-rank',    label: 'Stats Rank',    icon: BarChart2 },
+      { id: 'stats-rank-v2', label: 'Stats Rank v2', icon: BarChart2 },
       { id: 'maps-masters',  label: 'Maps Rank',  icon: LayoutGrid },
       { id: 'neon-dependency', label: 'Neon + Phoenix', icon: Zap },
       { id: 'map-picks',   label: 'Map Info',    icon: Map },
@@ -78,8 +79,8 @@ export function Sidebar({ lastUpdateDate, news }: { lastUpdateDate?: string | nu
   }, []);
 
   function goToSection(section: string) {
-    // Stats Rank y Maps Masters arrancan siempre con su configuración por defecto (sin filtros heredados)
-    if (section === 'stats-rank' || section === 'maps-masters' || section === 'neon-dependency' || section === 'post-pistol-force' || section === 'series-outcomes' || section === 'operator-use' || section === 'weapon-pick' || section === 'time-site') {
+    // Stats Rank and Maps Masters always start on their default setup (no inherited filters)
+    if (section === 'stats-rank' || section === 'stats-rank-v2' || section === 'maps-masters' || section === 'neon-dependency' || section === 'post-pistol-force' || section === 'series-outcomes' || section === 'operator-use' || section === 'weapon-pick' || section === 'time-site') {
       commitParams(new URLSearchParams({ section }), { immediate: true });
       return;
     }

@@ -14,6 +14,10 @@ interface Props {
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
   hasTour?: boolean;
+  /** Stats Rank v2: the teams come from the main filter (relevant / all), so no chip panel */
+  fixedTeams?: string[];
+  /** Section id Reset goes back to */
+  section?: string;
 }
 
 const ECO_CATEGORIES: { key: keyof TeamEconomyCompare; label: string; range: string }[] = [
@@ -224,7 +228,7 @@ function getCellColor(value: number | null, allValues: (number | null)[], lowerI
   return 'text-gray-300';
 }
 
-export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamRegions = {}, hasTour = false }: Props) {
+export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamRegions = {}, hasTour = false, fixedTeams, section = 'stats-rank' }: Props) {
   const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<number | string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -232,11 +236,11 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   const [showDetail, setShowDetail] = useState(false);
 
   const allTeams = Object.keys(rankings).sort();
-  // Equipos seleccionados: por defecto STATS_RANK_DEFAULT_TEAMS, espejados en la URL (param `teams`)
-  // para que la vista sea compartible y sobreviva la recarga — sin round-trip al server (ver useUrlSet).
+  // Selected teams: STATS_RANK_DEFAULT_TEAMS by default, mirrored in the URL (param `teams`) so the
+  // view can be shared and survives a reload — without a server round-trip (see useUrlSet).
   const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
 
-  const baseTeams = allTeams.filter(t => selectedTeams.has(t));
+  const baseTeams = fixedTeams ? allTeams.filter(t => fixedTeams.includes(t)) : allTeams.filter(t => selectedTeams.has(t));
 
   // Column-group visibility (chips). Default: Overall + First 3 visible, economy groups hidden.
   const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(
@@ -252,12 +256,12 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   }
 
   function resetFilters() {
-    // Vuelve al estado inicial: torneos por defecto (sin params) y equipos por defecto
+    // Back to the initial state: default tournaments (no params) and default teams
     setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
     setHiddenGroups(new Set(ECO_CATEGORIES.map(c => c.key)));
     setSortCol(null);
     setSortDir('desc');
-    navigate('?section=stats-rank');
+    navigate(`?section=${section}`);
   }
 
   // Sin datos de torneos no hay chips que mostrar: placeholder completo.
@@ -316,13 +320,15 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   return (
     <div className="flex flex-col gap-4">
 
-    <TeamChipsPanel
-      allTeams={allTeams}
-      selectedTeams={selectedTeams}
-      setSelectedTeams={setSelectedTeams}
-      teamLogos={teamLogos}
-      teamRegions={teamRegions}
-    />
+    {!fixedTeams && (
+      <TeamChipsPanel
+        allTeams={allTeams}
+        selectedTeams={selectedTeams}
+        setSelectedTeams={setSelectedTeams}
+        teamLogos={teamLogos}
+        teamRegions={teamRegions}
+      />
+    )}
 
     {/* Table info subtitle + group filter chips */}
     <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Table info</span>
@@ -373,7 +379,7 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
 
     {baseTeams.length === 0 ? (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
-        Select at least one team to see the ranking...
+        {fixedTeams ? 'No relevant teams in this selection — switch Teams to All' : 'Select at least one team to see the ranking...'}
       </div>
     ) : (
     <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-auto max-h-[85vh]">

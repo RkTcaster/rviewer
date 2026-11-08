@@ -1,7 +1,43 @@
 // lib/data/filters.ts — opciones de filtros (regiones, equipos, torneos)
 import { supabase } from '../supabase';
 import { versioned, getReducedTourIds } from './helpers';
-import { Region, Tournament } from '../types';
+import { Region, Tournament, TournamentNode } from '../types';
+
+// Every tournament with its hierarchy columns, reduced ones included (Stats Rank v2 reads their
+// series from round_info, not draft). A row the scraper uploads before year is filled by hand
+// falls back to the season in its tour_id, so new events don't vanish from the filter.
+// Errors throw inside the cached function so a failed query isn't cached as [] (see ROADMAP 7.3).
+const getTournamentTreeCached = versioned('tournament-tree-v1', getTournamentTree_impl);
+export async function getTournamentTree(): Promise<TournamentNode[]> {
+  try { return await getTournamentTreeCached(); } catch (error) {
+    console.error('[getTournamentTree] Supabase error:', error);
+    return [];
+  }
+}
+async function getTournamentTree_impl(): Promise<TournamentNode[]> {
+  const { data, error } = await supabase
+    .from('tournament')
+    .select('tour_id, event, reg_id, year, subregion, stage');
+  if (error) throw error;
+  return (data ?? []).map(t => ({
+    ...t,
+    year: t.year != null ? Number(t.year) : Number(t.tour_id.match(/20\d{2}/)?.[0]) || null,
+  }));
+}
+
+// Teams marked `relevant` in Supabase (ROADMAP 11.3), shown by default in Stats Rank v2
+const getRelevantTeamsCached = versioned('relevant-teams', getRelevantTeams_impl);
+export async function getRelevantTeams(): Promise<string[]> {
+  try { return await getRelevantTeamsCached(); } catch (error) {
+    console.error('[getRelevantTeams] Supabase error:', error);
+    return [];
+  }
+}
+async function getRelevantTeams_impl(): Promise<string[]> {
+  const { data, error } = await supabase.from('teams').select('team_id').eq('relevant', true);
+  if (error) throw error;
+  return (data ?? []).map(t => t.team_id);
+}
 
 export const getRegions = versioned('regions', getRegions_impl);
 async function getRegions_impl(): Promise<Region[]> {
