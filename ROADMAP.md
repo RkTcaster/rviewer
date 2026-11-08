@@ -576,7 +576,8 @@ Verified (nov 2026): `tsc` + `next build` clean; NA open qualifier map WR matche
 and played each other, so `FAKE` shows 16/19 maps. Old Stats Rank unchanged (T1 25/43 = 58%).
 Still open:
 
-- **12.1 Run the SQL** and check the cascade in the browser (only the data path was verified).
+- **12.1 Check the cascade in the browser**: the SQL is applied (nov 2026: 21 tournaments with
+  year / stage, 96 relevant teams); only the data path was verified so far.
 - **12.2 Roll the filter out** to the other pages.
 - **12.3 Cache**: `versioned()` keys on the latest `draft` date; a qualifier-only upload (no
   draft) doesn't bust it (same as 11.4).
