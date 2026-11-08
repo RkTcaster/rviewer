@@ -50,6 +50,7 @@ export type PlayerStatsRow = {
   tour_id: string;
   reg_id: string;
   player: string | null;
+  player_id_vlr: string;
   team: string | null;
   agent: string | null;
   map: string | null;

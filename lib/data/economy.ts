@@ -307,14 +307,14 @@ const OP_SKIP_ROUNDS: Record<OperatorUseWeapon, Set<number>> = {
   both: new Set([1, 13]),
 };
 const OP_PLAYER_COLS = (['a', 'b'] as const).flatMap(s => [1, 2, 3, 4, 5].flatMap(i =>
-  ['', '_weapon', '_agent'].map(c => `player_${i}_team_${s}${c}`)));
+  ['', '_id', '_weapon', '_agent'].map(c => `player_${i}_team_${s}${c}`)));
 const OP_WEAPON_SETS: Record<OperatorUseWeapon, string[]> = {
   op: ['Operator'],
   outlaw: ['Outlaw'],
   both: ['Operator', 'Outlaw'],
 };
 type RoundBuyRow = { map_id: string; round: number; team_a: string; team_b: string; side_team_a: string } & Record<string, string | number | null>;
-type OpKillRow = { map_id: string; round: number; player_id: string | null; victim_id: string | null; weapon: string | null; is_first_blood: boolean | null; is_team_kill: boolean | null };
+type OpKillRow = { map_id: string; round: number; player_id_vlr: string | null; victim_id_vlr: string | null; weapon: string | null; is_first_blood: boolean | null; is_team_kill: boolean | null };
 type OpEcoRow = { map_id: string; round: number; team_a: string; win_A: number; team_a_economy: number | null; team_b_economy: number | null };
 
 function emptyOpSide(): OperatorUseSide {
@@ -327,7 +327,8 @@ function emptyOpSide(): OperatorUseSide {
 // v5: Outlaw and Op+Outlaw count rounds 2 and 14
 // v6: kills and first kills
 // v7: first deaths
-export const getOperatorUseStats = versioned('operator-use-stats-v7', getOperatorUseStats_impl);
+// v8: players matched by vlr id (round_buy player_N_team_x_id ↔ round_events player_id_vlr)
+export const getOperatorUseStats = versioned('operator-use-stats-v8', getOperatorUseStats_impl);
 async function getOperatorUseStats_impl(
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<OperatorUseData> {
@@ -363,7 +364,7 @@ async function getOperatorUseStats_impl(
     ),
     fetchAllPages<OpKillRow>((from, to) =>
       supabase.from('round_events')
-        .select('map_id, round, player_id, victim_id, weapon, is_first_blood, is_team_kill')
+        .select('map_id, round, player_id_vlr, victim_id_vlr, weapon, is_first_blood, is_team_kill')
         .in('series_id', seriesIds)
         .eq('type', 'kill')
         .order('team_map_round_id')
@@ -373,27 +374,28 @@ async function getOperatorUseStats_impl(
   ]);
   const eco: Record<string, OpEcoRow> = {};
   for (const e of ecoRows) eco[`${e.map_id}|${Number(e.round)}`] = e;
-  // round_events ids are "<team>_<player>"
-  const died = new Set(killRows.map(k => `${k.map_id}|${Number(k.round)}|${k.victim_id}`));
+  // Players are matched by vlr id: the legacy round_events player_id carries the player's latest team,
+  // not the team of that round, so "<team>_<nick>" misses anyone who changed teams
+  const died = new Set(killRows.map(k => `${k.map_id}|${Number(k.round)}|${k.victim_id_vlr}`));
   // Kills by killer and round, team kills left out
   const killsBy: Record<string, { weapon: string; fk: boolean }[]> = {};
   // First death of each round, by victim
   const firstDeath = new Set(killRows.filter(k => k.is_first_blood && !k.is_team_kill)
-    .map(k => `${k.map_id}|${Number(k.round)}|${k.victim_id}`));
+    .map(k => `${k.map_id}|${Number(k.round)}|${k.victim_id_vlr}`));
   for (const k of killRows) {
-    if (k.is_team_kill || !k.player_id) continue;
-    (killsBy[`${k.map_id}|${Number(k.round)}|${k.player_id}`] ??= []).push({ weapon: k.weapon ?? '', fk: !!k.is_first_blood });
+    if (k.is_team_kill || !k.player_id_vlr) continue;
+    (killsBy[`${k.map_id}|${Number(k.round)}|${k.player_id_vlr}`] ??= []).push({ weapon: k.weapon ?? '', fk: !!k.is_first_blood });
   }
   const buyByRound: Record<string, RoundBuyRow> = {};
   for (const r of rows) buyByRound[`${r.map_id}|${Number(r.round)}`] = r;
-  // Player -> weapon for a team's Operator / Outlaw holders in a round, null when that round has no round_buy row
+  // Player vlr id -> weapon for a team's Operator / Outlaw holders in a round, null when that round has no round_buy row
   const sniperHolders = (r: RoundBuyRow | undefined, team: string) => {
     if (!r) return null;
     const s = r.team_a?.trim() === team ? 'a' : r.team_b?.trim() === team ? 'b' : null;
     if (!s) return null;
     return new Map([1, 2, 3, 4, 5]
       .filter(i => OP_WEAPON_SETS.both.includes(String(r[`player_${i}_team_${s}_weapon`])))
-      .map(i => [String(r[`player_${i}_team_${s}`] ?? '').trim(), String(r[`player_${i}_team_${s}_weapon`])]));
+      .map(i => [String(r[`player_${i}_team_${s}_id`] ?? ''), String(r[`player_${i}_team_${s}_weapon`])]));
   };
 
   // won / loadout are null when the round has no matching team_economy row
@@ -442,14 +444,14 @@ async function getOperatorUseStats_impl(
       const allHolders = [1, 2, 3, 4, 5]
         .filter(i => OP_WEAPON_SETS.both.includes(String(r[`player_${i}_team_${s}_weapon`])))
         .map(i => {
-          const player = String(r[`player_${i}_team_${s}`] ?? '').trim();
+          const id = String(r[`player_${i}_team_${s}_id`] ?? '');
           const weapon = String(r[`player_${i}_team_${s}_weapon`]);
-          const diedPrev = died.has(`${r.map_id}|${Number(r.round) - 1}|${team}_${player}`);
+          const diedPrev = died.has(`${r.map_id}|${Number(r.round) - 1}|${id}`);
           return {
-            player,
+            id,
             weapon,
             agent: String(r[`player_${i}_team_${s}_agent`] ?? '').trim(),
-            kept: prevHolders?.get(player) === weapon && (!diedPrev || wonPrev),
+            kept: prevHolders?.get(id) === weapon && (!diedPrev || wonPrev),
           };
         });
 
@@ -458,30 +460,33 @@ async function getOperatorUseStats_impl(
         const { stats, players } = byWeapon[w];
         const holders = allHolders.filter(h => set.includes(h.weapon));
         const hasOp = holders.length > 0;
-        const playerKills = (player: string): Kills => {
-          const ks = killsBy[`${r.map_id}|${Number(r.round)}|${team}_${player}`] ?? [];
-          const fd = firstDeath.has(`${r.map_id}|${Number(r.round)}|${team}_${player}`) ? 1 : 0;
+        const playerKills = (id: string): Kills => {
+          const ks = killsBy[`${r.map_id}|${Number(r.round)}|${id}`] ?? [];
+          const fd = firstDeath.has(`${r.map_id}|${Number(r.round)}|${id}`) ? 1 : 0;
           return {
             opKills: ks.filter(k => set.includes(k.weapon)).length,
             opFk: ks.filter(k => k.fk && set.includes(k.weapon)).length,
             fk: ks.filter(k => k.fk).length,
-            opFd: fd && holders.some(h => h.player === player) ? 1 : 0,
+            opFd: fd && holders.some(h => h.id === id) ? 1 : 0,
             fd,
           };
         };
-        const roster = [1, 2, 3, 4, 5].map(i => String(r[`player_${i}_team_${s}`] ?? '').trim()).filter(Boolean);
+        // Output stays keyed by nick; the vlr id is only used to match kills, deaths and holders
+        const roster = [1, 2, 3, 4, 5]
+          .map(i => ({ player: String(r[`player_${i}_team_${s}`] ?? '').trim(), id: String(r[`player_${i}_team_${s}_id`] ?? '') }))
+          .filter(p => p.player);
         const teamKills: Kills = { opKills: 0, opFk: 0, fk: 0, opFd: 0, fd: 0 };
         for (const p of roster) {
-          const k = playerKills(p);
+          const k = playerKills(p.id);
           teamKills.opKills += k.opKills; teamKills.opFk += k.opFk; teamKills.fk += k.fk;
           teamKills.opFd += k.opFd; teamKills.fd += k.fd;
         }
         // Team-level kept: at least one holder kept their weapon
         add(side(stats[team] ??= {}, map, atk), hasOp, holders.some(h => h.kept), lostPrev, won, loadout, holders.map(h => h.agent).filter(Boolean), teamKills);
 
-        for (const player of roster) {
-          const h = holders.find(x => x.player === player);
-          add(side((players[team] ??= {})[player] ??= {}, map, atk), !!h, !!h?.kept, lostPrev, won, loadout, h?.agent ? [h.agent] : [], playerKills(player));
+        for (const { player, id } of roster) {
+          const h = holders.find(x => x.id === id);
+          add(side((players[team] ??= {})[player] ??= {}, map, atk), !!h, !!h?.kept, lostPrev, won, loadout, h?.agent ? [h.agent] : [], playerKills(id));
         }
       }
     }

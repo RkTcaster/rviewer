@@ -153,13 +153,13 @@ export async function getTournamentPlayerAvg(
 
   let query = supabase
     .from('player_stats')
-    .select('player, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT');
+    .select('player_id_vlr, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT');
 
   if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
   if (filters.reg)  query = query.in('reg_id', filters.reg!);
   if (seriesIds)    query = query.in('series_id', seriesIds);
 
-  const rows = await fetchAllPages<Pick<PlayerStatsRow, 'player'> & PlayerStatsCoreStats>((from, to) => query.range(from, to));
+  const rows = await fetchAllPages<Pick<PlayerStatsRow, 'player_id_vlr'> & PlayerStatsCoreStats>((from, to) => query.range(from, to));
   if (!rows || rows.length === 0) return null;
 
   type Acc2 = {
@@ -186,10 +186,11 @@ export async function getTournamentPlayerAvg(
     maps: 0,
   });
 
+  // Grouped by vlr id: the nick isn't unique across teams (two different "foreign" in league)
   for (const row of rows) {
-    if (!row.player) continue;
-    if (!pm[row.player]) pm[row.player] = z2();
-    const a = pm[row.player];
+    if (!row.player_id_vlr) continue;
+    if (!pm[row.player_id_vlr]) pm[row.player_id_vlr] = z2();
+    const a = pm[row.player_id_vlr];
     a.kills     += Number(row.killsBoth)    || 0;
     a.deaths    += Number(row.deadBoth)     || 0;
     a.killsT    += Number(row.killsT)       || 0;
