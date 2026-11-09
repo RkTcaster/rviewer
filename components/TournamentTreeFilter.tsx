@@ -3,7 +3,10 @@
 // From / To, Bo3 / Bo5 and Relevant / All teams. The only selection is the tournament list
 // (URL `tour`); the upper levels are bulk toggles over the tournaments under them, painted
 // active (all selected), partial (some) or off. Each row only shows what hangs from an active
-// chip above, so what is visible is what is selected.
+// chip above, so what is visible is what is selected. Subregions have no row of their own: they
+// live in a menu opened from the ▾ of their region chip.
+import { useEffect, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { Region, TournamentNode } from '@/lib/types';
 import { useNavigation, useFilterParams } from './NavigationContext';
 
@@ -47,6 +50,19 @@ export function TournamentTreeFilter({ tree, regions, selected }: Props) {
   const { commitParams, hasPendingEdits } = useNavigation();
   const filterParams = useFilterParams();
   const sel = new Set(selected);
+  // Region whose subregion menu is open (one at a time); closes on click outside or Esc
+  const [openRegion, setOpenRegion] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!openRegion) return;
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpenRegion(null);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenRegion(null); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [openRegion]);
 
   const regionKey = (regId: string) => regions.find(r => r.reg_id === regId)?.region.toLowerCase() ?? regId;
   const tours = [...tree].sort((a, b) =>
@@ -141,20 +157,50 @@ export function TournamentTreeFilter({ tree, regions, selected }: Props) {
 
       {regionIds.length > 0 && row('Region', regionIds.map(r => {
         const group = inYears.filter(t => t.reg_id === r);
+        const subs = [...new Set(group.map(t => t.subregion).filter((s): s is string => !!s))].sort();
+        const subGroup = (s: string) => group.filter(t => t.subregion === s);
+        const activeCount = subs.filter(s => isActive(subGroup(s))).length;
+        const open = openRegion === r;
         return (
-          <button key={r} onClick={() => toggleGroup(group)} className={`${CHIP} ${TONE[state(group)]} flex items-center gap-1.5`}>
-            {regionLogo(r)}
-            {REGION_LABELS[regionKey(r)] ?? regionKey(r)}
-          </button>
-        );
-      }))}
-
-      {subregions.length > 0 && row('Subregion', subregions.map(s => {
-        const group = inRegions.filter(t => t.subregion === s);
-        return (
-          <button key={s} onClick={() => toggleGroup(group)} className={`${CHIP} ${TONE[state(group)]}`}>
-            {s}
-          </button>
+          <div key={r} ref={open ? menuRef : undefined} className="relative">
+            <div className={`rounded-xl text-[12px] font-bold tracking-wide transition-colors border ${TONE[state(group)]} flex items-stretch overflow-hidden`}>
+              <button onClick={() => toggleGroup(group)} className="flex items-center gap-1.5 pl-3 pr-1 py-1.5 uppercase">
+                {regionLogo(r)}
+                {REGION_LABELS[regionKey(r)] ?? regionKey(r)}
+              </button>
+              {subs.length > 0 ? (
+                <button
+                  onClick={() => setOpenRegion(open ? null : r)}
+                  title="Subregions"
+                  className="flex items-center gap-0.5 pl-1.5 pr-2.5 py-1.5 border-l border-gray-600/60 text-[11px]"
+                >
+                  {activeCount}/{subs.length}
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+                </button>
+              ) : <span className="pr-2" />}
+            </div>
+            {open && (
+              <div className="absolute top-full left-0 mt-1 z-20 min-w-[200px] bg-[#252a33] border border-gray-700 rounded-lg shadow-xl py-1">
+                {subs.map(s => {
+                  const st = state(subGroup(s));
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => toggleGroup(subGroup(s))}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-gray-200 hover:bg-gray-700/50"
+                    >
+                      <span className={`w-3.5 h-3.5 shrink-0 rounded-sm border flex items-center justify-center text-[10px] leading-none ${
+                        st === 'on' ? 'bg-blue-600 border-blue-500 text-white' : st === 'partial' ? 'border-blue-500 text-blue-400' : 'border-gray-500'
+                      }`}>
+                        {st === 'on' ? '✓' : st === 'partial' ? '–' : ''}
+                      </span>
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         );
       }))}
 

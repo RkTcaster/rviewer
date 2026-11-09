@@ -23,13 +23,36 @@ export async function fetchAllPages<T>(
   let from = 0;
   while (true) {
     const { data, error } = await buildQuery(from, from + pageSize - 1);
-    if (error) console.error('fetchAllPages error:', error);
+    // PostgrestError prints as {} in the dev overlay: log its message
+    if (error) console.error('fetchAllPages error:', (error as { message?: string }).message ?? error);
     if (!data || data.length === 0) break;
     all.push(...data);
     if (data.length < pageSize) break;
     from += pageSize;
   }
   return all;
+}
+
+// fetchAllPages over a long series_id list, split in chunks run a few at a time. One query with
+// hundreds of series (qualifiers) and deep offsets hits the anon statement timeout (~3 s, 57014).
+export async function fetchAllBySeries<T>(
+  seriesIds: (string | number)[],
+  buildQuery: (ids: (string | number)[], from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+  chunkSize = 50,
+  concurrency = 4
+): Promise<T[]> {
+  const chunks: (string | number)[][] = [];
+  for (let i = 0; i < seriesIds.length; i += chunkSize) chunks.push(seriesIds.slice(i, i + chunkSize));
+  const results: T[][] = new Array(chunks.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < chunks.length) {
+      const i = next++;
+      results[i] = await fetchAllPages<T>((from, to) => buildQuery(chunks[i], from, to));
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, chunks.length) }, worker));
+  return results.flat();
 }
 
 // Torneos sin draft (qualifiers, match_format = 'reduced'): se excluyen de los filtros

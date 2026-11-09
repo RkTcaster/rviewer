@@ -559,7 +559,9 @@ A main filter meant to replace the per-page one on almost every page, tried firs
 - **Hierarchy** Year → Region → Subregion → Tournament as chips in cascade
   (`components/TournamentTreeFilter.tsx`). The only selection is the tournament list (`tour`);
   upper chips are bulk toggles painted on / partial / off, and each row only shows what hangs
-  from an active chip above. Plus From / To, Bo3 / Bo5 and Relevant / All teams. No quick
+  from an active chip above. Subregions have no row: they live in a menu opened from the
+  `▾ a/b` of each region chip (nov 2026, click on the name still toggles the whole region).
+  Plus From / To, Bo3 / Bo5 and Relevant / All teams. No quick
   tournament chips, no region chips, no Last X, no team chip panel.
 - **Default**: every tournament of the latest season (2026 starts off).
 - **Metadata**: `tournament.year / subregion / stage`, filled by hand in Supabase
@@ -581,6 +583,11 @@ Still open:
 - **12.2 Roll the filter out** to the other pages.
 - **12.3 Cache**: `versioned()` keys on the latest `draft` date; a qualifier-only upload (no
   draft) doesn't bust it (same as 11.4).
+- **12.4 Big series lists**: with qualifiers, `.in('series_id', …)` over hundreds of series hit the
+  anon statement timeout (57014) on `round_events`, and `fetchAllPages` returned the rows read so
+  far, which got cached. Stats Rank (v1 and v2) now uses `fetchAllBySeries` (chunks of 50, 4 at a
+  time); all 21 tournaments + All teams take ~42 s uncached, ~1 s cached. Rolling the filter out
+  (12.2) needs the same on each page's series-wide queries.
 
 ## Backlog
 

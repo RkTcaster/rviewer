@@ -1,6 +1,6 @@
 // lib/data/economy.ts — economía por ronda (distribución, compare, torneo)
 import { supabase } from '../supabase';
-import { versioned, fetchAllPages, getAllSeriesIds } from './helpers';
+import { versioned, fetchAllPages, fetchAllBySeries, getAllSeriesIds } from './helpers';
 import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare, TeamPostPistolForce, OperatorUseData, OperatorUseStat, OperatorUseSide, OperatorUseWeapon, WeaponPickBank, WeaponPickData, WeaponPickRound, WeaponPickStat } from '../types';
 
 export async function getEconomyDistribution(filters: {
@@ -148,7 +148,8 @@ export async function getEconomyCompare(filters: {
   return stats;
 }
 
-export const getTournamentEconomy = versioned('tournament-economy', getTournamentEconomy_impl);
+// v2: series-wide query in chunks (v1 could cache a result cut by a statement timeout)
+export const getTournamentEconomy = versioned('tournament-economy-v2', getTournamentEconomy_impl);
 async function getTournamentEconomy_impl(filters: {
   tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string;
   // Stats Rank v2: series from round_info, drafts or not; reg and last are ignored
@@ -171,15 +172,15 @@ async function getTournamentEconomy_impl(filters: {
   }
   if (seriesIds.length === 0) return {};
 
-  const rows = await fetchAllPages<{
+  const rows = await fetchAllBySeries<{
     team_a: string; team_b: string;
     team_a_economy: number; team_b_economy: number;
     win_A: number; round: number;
-  }>((from, to) =>
+  }>(seriesIds, (ids, from, to) =>
     supabase
       .from('team_economy')
       .select('team_a,team_b,team_a_economy,team_b_economy,win_A,round')
-      .in('series_id', seriesIds)
+      .in('series_id', ids)
       .range(from, to)
   );
 

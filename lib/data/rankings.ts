@@ -1,6 +1,6 @@
 // lib/data/rankings.ts — stats por torneo: ranking de equipos, maps masters, timeline de forma
 import { supabase } from '../supabase';
-import { versioned, fetchAllPages, getAllSeriesIds } from './helpers';
+import { versioned, fetchAllPages, fetchAllBySeries, getAllSeriesIds } from './helpers';
 import { FormMapPoint, MapsMastersData, MapWL, TeamRankStats } from '../types';
 import { DraftRow, PlayerPerformanceRow, RoundInfoRow } from './rows';
 
@@ -9,7 +9,8 @@ import { DraftRow, PlayerPerformanceRow, RoundInfoRow } from './rows';
 // v4: fk / trueFk from round_events
 // v5: fd / trueFd from round_events
 // v6: trueFkWins / trueFdWins (rounds won after a true FK / FD)
-export const getTournamentRankings = versioned('tournament-rankings-v6', getTournamentRankings_impl);
+// v7: series-wide queries in chunks (v6 could cache a result cut by a statement timeout)
+export const getTournamentRankings = versioned('tournament-rankings-v7', getTournamentRankings_impl);
 async function getTournamentRankings_impl(
   // allSeries (Stats Rank v2): series from round_info, drafts or not; reg and last are ignored
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string; allSeries?: boolean }
@@ -30,20 +31,20 @@ async function getTournamentRankings_impl(
     seriesIds = [...new Set((idList ?? []).map(x => x.series_id))];
   }
   if (seriesIds.length === 0) return {};
-  const rounds = await fetchAllPages<RoundInfoRow>((from, to) =>
-    supabase.from('round_info').select('*').in('series_id', seriesIds).range(from, to)
+  const rounds = await fetchAllBySeries<RoundInfoRow>(seriesIds, (ids, from, to) =>
+    supabase.from('round_info').select('*').in('series_id', ids).range(from, to)
   );
   if (!rounds || rounds.length === 0) return {};
 
   // Deaths per round and team from round_events, to know who survived a lost round. Distinct
   // victims, since a revived player can die twice. Only maps with kill rows have data.
-  const killRows = await fetchAllPages<{
+  const killRows = await fetchAllBySeries<{
     map_id: string; round: number; team: string | null; victim_id: string | null; victim_team: string | null;
     is_first_blood: boolean | null; is_traded: boolean | null;
-  }>((from, to) =>
+  }>(seriesIds, (ids, from, to) =>
     supabase.from('round_events')
       .select('map_id, round, team, victim_id, victim_team, is_first_blood, is_traded')
-      .in('series_id', seriesIds)
+      .in('series_id', ids)
       .eq('type', 'kill')
       .order('team_map_round_id')
       .order('ev_index')
@@ -242,10 +243,10 @@ async function getTournamentRankings_impl(
   }
 
   // Trades: round_summary kills already leave team kills out, and one team's kills are the other's deaths
-  const summaryRows = await fetchAllPages<{ team_a: string; team_b: string; kills_team_a: number; kills_team_b: number; trades_team_a: number; trades_team_b: number }>((from, to) =>
+  const summaryRows = await fetchAllBySeries<{ team_a: string; team_b: string; kills_team_a: number; kills_team_b: number; trades_team_a: number; trades_team_b: number }>(seriesIds, (ids, from, to) =>
     supabase.from('round_summary')
       .select('team_a, team_b, kills_team_a, kills_team_b, trades_team_a, trades_team_b')
-      .in('series_id', seriesIds)
+      .in('series_id', ids)
       .order('team_map_round_id')
       .range(from, to)
   );
@@ -261,10 +262,10 @@ async function getTournamentRankings_impl(
   }
 
   // Retake efficiency from player_performance
-  const perfRows = await fetchAllPages<PlayerPerformanceRow>((from, to) =>
+  const perfRows = await fetchAllBySeries<PlayerPerformanceRow>(seriesIds, (ids, from, to) =>
     supabase.from('player_performance')
       .select('map_id, team, DE, PL')
-      .in('series_id', seriesIds)
+      .in('series_id', ids)
       .range(from, to)
   );
 
