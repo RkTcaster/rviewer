@@ -2,9 +2,10 @@
 
 import { Fragment, useState } from 'react';
 import { Info } from 'lucide-react';
-import { OperatorUseData, OperatorUseSide, OperatorUseStat, OperatorUseWeapon, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { OperatorUseData, OperatorUseSide, OperatorUseStat, OperatorUseWeapon } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { useUrlSet } from '@/hooks/useUrlSet';
+import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 import { TeamChipsPanel } from '../TeamChipsPanel';
 import { Tooltip } from '../Tooltip';
 
@@ -17,6 +18,11 @@ interface Props {
   agentImages?: Record<string, string>;
   hasTour?: boolean;
   defaultHiddenMaps?: string[];
+  // Series of the filter and how many of them have buy data (round_buy)
+  series: number;
+  buySeries: number;
+  // Teams of the main filter (the relevant ones) that played the selection
+  fixedTeams: string[];
 }
 
 type Side = 'all' | 'atk' | 'def';
@@ -189,7 +195,7 @@ function heatmapBg(pct: number | null): string {
   return `hsl(${hue}, ${sat}%, ${light}%)`;
 }
 
-export function OperatorUseSection({ byWeapon, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, agentImages = {}, hasTour = false, defaultHiddenMaps = [] }: Props) {
+export function OperatorUseSection({ byWeapon, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, agentImages = {}, hasTour = false, defaultHiddenMaps = [], series, buySeries, fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [side, setSide] = useState<Side>('all');
   const [showDetail, setShowDetail] = useState(false);
@@ -202,8 +208,8 @@ export function OperatorUseSection({ byWeapon, maps, teamLogos = {}, teamRegions
   const stats = byWeapon?.[weapon].stats ?? {};
   const players = byWeapon?.[weapon].players ?? {};
 
-  const allTeams = Object.keys(stats).sort();
-  const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
+  const allTeams = Object.keys(stats).filter(t => fixedTeams.includes(t)).sort();
+  const { selected: selectedTeams, setSelected: setSelectedTeams, reset: resetTeams } = useHiddenTeams(allTeams);
   const baseTeams = allTeams.filter(t => selectedTeams.has(t));
 
   // Hidden maps: not columns, they filter which rounds are summed per team
@@ -235,7 +241,7 @@ export function OperatorUseSection({ byWeapon, maps, teamLogos = {}, teamRegions
   }
 
   function resetFilters() {
-    setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
+    resetTeams();
     setHiddenMaps(new Set(maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase()))));
     setSide('all');
     setWeaponChips({ op: true, outlaw: false });
@@ -355,6 +361,11 @@ export function OperatorUseSection({ byWeapon, maps, teamLogos = {}, teamRegions
 
   return (
     <div className="flex flex-col gap-4">
+      {buySeries < series && (
+        <p className="px-1 text-xs text-gray-400">
+          Buy data: {buySeries} of {series} series selected (the rest have no round_buy rows)
+        </p>
+      )}
 
       {/* Filters: teams on the left + maps on the right */}
       <div className="flex flex-wrap gap-x-10 gap-y-4">

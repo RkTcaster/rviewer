@@ -1,6 +1,6 @@
 // lib/data/timeSite.ts — Time & Site: plant times, plant sites and first-blood times per team
 import { supabase } from '../supabase';
-import { versioned, fetchAllPages } from './helpers';
+import { versioned, fetchAllPages, getReducedTourList } from './helpers';
 import { TimeSiteData, TimeSiteRound } from '../types';
 import type { RoundSummaryRow } from './rows';
 
@@ -12,7 +12,7 @@ export const getTimeSiteStats = versioned('time-site-stats-v1', getTimeSiteStats
 async function getTimeSiteStats_impl(
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<TimeSiteData> {
-  let idQuery = supabase.from('draft').select('series_id');
+  let idQuery = supabase.from('draft').select('series_id').not('tour_id', 'in', await getReducedTourList());
   if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
   if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
   if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));

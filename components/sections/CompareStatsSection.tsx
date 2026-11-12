@@ -16,7 +16,10 @@ interface Props {
   pabB: PabStat;
   teamAName: string;
   teamBName: string;
-  rankings: Record<string, TeamRankStats>;
+  // Rank universe of each side: the teams of that side's selection, with the compared team's
+  // entry replaced by the figures of its own series
+  rankingsA: Record<string, TeamRankStats>;
+  rankingsB: Record<string, TeamRankStats>;
   teamLogos?: Record<string, string>;
 }
 
@@ -107,14 +110,15 @@ function RankBadge({ rankInfo }: { rankInfo: { rank: number; total: number } | n
 
 const thBase = 'sticky top-[70px] z-10 bg-[#0f1115] px-4 py-3 text-[10px] uppercase tracking-widest text-gray-500 font-bold border-b border-gray-800';
 
-function StatRow({ row, teamAName, teamBName, rankings }: {
+function StatRow({ row, teamAName, teamBName, rankingsA, rankingsB }: {
   row: RowData;
   teamAName: string;
   teamBName: string;
-  rankings: Record<string, TeamRankStats>;
+  rankingsA: Record<string, TeamRankStats>;
+  rankingsB: Record<string, TeamRankStats>;
 }) {
-  const rankA = getRank(rankings, teamAName, row.key, row.lowerIsBetter);
-  const rankB = getRank(rankings, teamBName, row.key, row.lowerIsBetter);
+  const rankA = getRank(rankingsA, teamAName, row.key, row.lowerIsBetter);
+  const rankB = getRank(rankingsB, teamBName, row.key, row.lowerIsBetter);
 
   // Color: for normal metrics higher = green; for lowerIsBetter higher = red
   let colorA = 'text-gray-300';
@@ -174,14 +178,14 @@ function StatRow({ row, teamAName, teamBName, rankings }: {
 export function CompareStatsSection({
   statsA, statsB, pistolsA, pistolsB,
   antiEcoA, antiEcoB, recoveryA, recoveryB,
-  pabA, pabB, teamAName, teamBName, rankings, teamLogos = {},
+  pabA, pabB, teamAName, teamBName, rankingsA, rankingsB, teamLogos = {},
 }: Props) {
-  const retakeA = rankings[teamAName] ?? { retakeDe: 0, retakePl: 0 };
-  const retakeB = rankings[teamBName] ?? { retakeDe: 0, retakePl: 0 };
-  const ppA = rankings[teamAName] ?? { postPlantPl: 0, postPlantDe: 0 };
-  const ppB = rankings[teamBName] ?? { postPlantPl: 0, postPlantDe: 0 };
-  const rankA = rankings[teamAName] as TeamRankStats | undefined;
-  const rankB = rankings[teamBName] as TeamRankStats | undefined;
+  const retakeA = rankingsA[teamAName] ?? { retakeDe: 0, retakePl: 0 };
+  const retakeB = rankingsB[teamBName] ?? { retakeDe: 0, retakePl: 0 };
+  const ppA = rankingsA[teamAName] ?? { postPlantPl: 0, postPlantDe: 0 };
+  const ppB = rankingsB[teamBName] ?? { postPlantPl: 0, postPlantDe: 0 };
+  const rankA = rankingsA[teamAName] as TeamRankStats | undefined;
+  const rankB = rankingsB[teamBName] as TeamRankStats | undefined;
   if (!teamBName) {
     return (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
@@ -242,10 +246,10 @@ export function CompareStatsSection({
     },
     {
       label: swordLabel('Plant Rate ATK'), key: 'plantAtk',
-      valA: pct(rankings[teamAName]?.postPlantPl ?? 0, rankings[teamAName]?.attTotal ?? 0),
-      winsA: rankings[teamAName]?.postPlantPl ?? 0, totalA: rankings[teamAName]?.attTotal ?? 0,
-      valB: pct(rankings[teamBName]?.postPlantPl ?? 0, rankings[teamBName]?.attTotal ?? 0),
-      winsB: rankings[teamBName]?.postPlantPl ?? 0, totalB: rankings[teamBName]?.attTotal ?? 0,
+      valA: pct(rankingsA[teamAName]?.postPlantPl ?? 0, rankingsA[teamAName]?.attTotal ?? 0),
+      winsA: rankingsA[teamAName]?.postPlantPl ?? 0, totalA: rankingsA[teamAName]?.attTotal ?? 0,
+      valB: pct(rankingsB[teamBName]?.postPlantPl ?? 0, rankingsB[teamBName]?.attTotal ?? 0),
+      winsB: rankingsB[teamBName]?.postPlantPl ?? 0, totalB: rankingsB[teamBName]?.attTotal ?? 0,
     },
     {
       label: swordLabel('Post Plant WR'), key: 'postPlant',
@@ -261,10 +265,10 @@ export function CompareStatsSection({
     },
     {
       label: shieldLabel('Plant Rate DEF'), key: 'plantDef',
-      valA: pct(rankings[teamAName]?.retakePl ?? 0, rankings[teamAName]?.defTotal ?? 0),
-      winsA: rankings[teamAName]?.retakePl ?? 0, totalA: rankings[teamAName]?.defTotal ?? 0,
-      valB: pct(rankings[teamBName]?.retakePl ?? 0, rankings[teamBName]?.defTotal ?? 0),
-      winsB: rankings[teamBName]?.retakePl ?? 0, totalB: rankings[teamBName]?.defTotal ?? 0,
+      valA: pct(rankingsA[teamAName]?.retakePl ?? 0, rankingsA[teamAName]?.defTotal ?? 0),
+      winsA: rankingsA[teamAName]?.retakePl ?? 0, totalA: rankingsA[teamAName]?.defTotal ?? 0,
+      valB: pct(rankingsB[teamBName]?.retakePl ?? 0, rankingsB[teamBName]?.defTotal ?? 0),
+      winsB: rankingsB[teamBName]?.retakePl ?? 0, totalB: rankingsB[teamBName]?.defTotal ?? 0,
       lowerIsBetter: true,
     },
     {
@@ -334,10 +338,10 @@ export function CompareStatsSection({
     },
     {
       label: 'Losing to enemy bonus (L-L-L)', key: 'first3Lost',
-      valA: pct(rankings[teamAName]?.first3Lost ?? 0, rankings[teamAName]?.first3Total ?? 0),
-      winsA: rankings[teamAName]?.first3Lost ?? 0, totalA: rankings[teamAName]?.first3Total ?? 0,
-      valB: pct(rankings[teamBName]?.first3Lost ?? 0, rankings[teamBName]?.first3Total ?? 0),
-      winsB: rankings[teamBName]?.first3Lost ?? 0, totalB: rankings[teamBName]?.first3Total ?? 0,
+      valA: pct(rankingsA[teamAName]?.first3Lost ?? 0, rankingsA[teamAName]?.first3Total ?? 0),
+      winsA: rankingsA[teamAName]?.first3Lost ?? 0, totalA: rankingsA[teamAName]?.first3Total ?? 0,
+      valB: pct(rankingsB[teamBName]?.first3Lost ?? 0, rankingsB[teamBName]?.first3Total ?? 0),
+      winsB: rankingsB[teamBName]?.first3Lost ?? 0, totalB: rankingsB[teamBName]?.first3Total ?? 0,
       lowerIsBetter: true,
     },
   ];
@@ -391,7 +395,8 @@ export function CompareStatsSection({
                 row={row}
                 teamAName={teamAName}
                 teamBName={teamBName}
-                rankings={rankings}
+                rankingsA={rankingsA}
+                rankingsB={rankingsB}
               />
             )
           )}

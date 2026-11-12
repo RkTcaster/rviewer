@@ -1,6 +1,6 @@
 // lib/data/economy.ts — economía por ronda (distribución, compare, torneo)
 import { supabase } from '../supabase';
-import { versioned, fetchAllPages } from './helpers';
+import { versioned, fetchAllPages, fetchAllBySeries, getAllSeriesIds, getTeamSeriesIds, TeamFilters, getReducedTourList } from './helpers';
 import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare, TeamPostPistolForce, OperatorUseData, OperatorUseStat, OperatorUseSide, OperatorUseWeapon, WeaponPickBank, WeaponPickData, WeaponPickRound, WeaponPickStat } from '../types';
 
 export async function getEconomyDistribution(filters: {
@@ -13,7 +13,7 @@ export async function getEconomyDistribution(filters: {
   const emptyBins = (): EconomyBin[] =>
     Array.from({ length: BIN_COUNT }, (_, i) => ({ label: String(i * BIN_SIZE), count: 0, wins: 0 }));
 
-  let draftQuery = supabase.from('draft').select('series_id');
+  let draftQuery = supabase.from('draft').select('series_id').not('tour_id', 'in', await getReducedTourList());
   if (reg && reg.length > 0) draftQuery = draftQuery.in('reg_id', reg);
   if (tour) {
     const tourIds = tour.split(',').filter(Boolean);
@@ -92,47 +92,46 @@ function emptyTeamEconomyCompare(): TeamEconomyCompare {
   return { eco: emptyCategory(), semiEco: emptyCategory(), semiBuy: emptyCategory(), fullBuy: emptyCategory() };
 }
 
-export async function getEconomyCompare(filters: {
-  reg?: string[]; tour?: string; team?: string;
-}): Promise<TeamEconomyCompare> {
-  const { reg, tour, team } = filters;
+// One side of Compare Economy on the new main filter (ROADMAP Phase 12): the team by vlr id, its
+// series from round_info (getTeamSeriesIds). team_economy has no ids, so the team's column comes
+// from round_info: it is team_a on the maps where it is round_info's team A. Only rows in that
+// orientation count: four 2026 tournaments store every round twice with the teams swapped (see
+// getPostPistolForce), which the old page counted double.
+export const getEconomyCompare = versioned('economy-compare-v2', getEconomyCompare_impl);
+async function getEconomyCompare_impl(filters: TeamFilters): Promise<TeamEconomyCompare> {
   const stats = emptyTeamEconomyCompare();
-  if (!team) return stats;
+  const { seriesIds, tagOf } = await getTeamSeriesIds(filters);
+  if (seriesIds.length === 0) return stats;
 
-  let draftQuery = supabase.from('draft').select('series_id');
-  if (reg && reg.length > 0) draftQuery = draftQuery.in('reg_id', reg);
-  if (tour) {
-    const tourIds = tour.split(',').filter(Boolean);
-    draftQuery = tourIds.length === 1
-      ? draftQuery.eq('tour_id', tourIds[0])
-      : draftQuery.in('tour_id', tourIds);
+  const [rows, firstRounds] = await Promise.all([
+    fetchAllBySeries<{
+      series_id: number; map_id: string; team_a: string; team_b: string;
+      team_a_economy: number; team_b_economy: number; win_A: number; round: number;
+    }>(seriesIds, (ids, from, to) =>
+      supabase.from('team_economy')
+        .select('series_id,map_id,team_a,team_b,team_a_economy,team_b_economy,win_A,round')
+        .in('series_id', ids).order('team_map_round_id').range(from, to)
+    ),
+    fetchAllBySeries<{ map_id: string; team_a_id_vlr: string | null; team_b_id_vlr: string | null }>(seriesIds, (ids, from, to) =>
+      supabase.from('round_info').select('map_id, team_a_id_vlr, team_b_id_vlr').in('series_id', ids).eq('round', 1)
+        .order('team_map_round_id').range(from, to)
+    ),
+  ]);
+  const isAByMap = new Map<string, boolean>();
+  for (const r of firstRounds) {
+    if (r.team_a_id_vlr === filters.teamId) isAByMap.set(r.map_id, true);
+    else if (r.team_b_id_vlr === filters.teamId) isAByMap.set(r.map_id, false);
   }
-  const { data: drafts } = await draftQuery;
-  if (!drafts?.length) return stats;
-  const seriesIds = [...new Set(drafts.map((d: { series_id: string }) => d.series_id))];
-
-  const rows = await fetchAllPages<{
-    team_a: string; team_b: string;
-    team_a_economy: number; team_b_economy: number;
-    win_A: number; round: number;
-  }>((from, to) =>
-    supabase
-      .from('team_economy')
-      .select('team_a,team_b,team_a_economy,team_b_economy,win_A,round')
-      .in('series_id', seriesIds)
-      .range(from, to)
-  );
 
   for (const row of rows) {
-    if (row.round === 1 || row.round === 13) continue;
+    if (Number(row.round) === 1 || Number(row.round) === 13) continue;
+    const isA = isAByMap.get(row.map_id);
+    if (isA === undefined) continue;
+    if ((isA ? row.team_a : row.team_b)?.trim() !== tagOf.get(Number(row.series_id))) continue;
 
-    let teamEco: number, oppEco: number, won: boolean;
-    if (row.team_a === team) {
-      teamEco = row.team_a_economy; oppEco = row.team_b_economy; won = row.win_A === 1;
-    } else if (row.team_b === team) {
-      teamEco = row.team_b_economy; oppEco = row.team_a_economy; won = row.win_A === 0;
-    } else continue;
-
+    const teamEco = isA ? row.team_a_economy : row.team_b_economy;
+    const oppEco = isA ? row.team_b_economy : row.team_a_economy;
+    const won = Number(row.win_A) === (isA ? 1 : 0);
     if (teamEco == null || oppEco == null) continue;
 
     const teamCat = classifyEconomy(teamEco);
@@ -148,31 +147,28 @@ export async function getEconomyCompare(filters: {
   return stats;
 }
 
-export const getTournamentEconomy = versioned('tournament-economy', getTournamentEconomy_impl);
+// v2: series-wide query in chunks (v1 could cache a result cut by a statement timeout)
+// v3: chunks retry and throw instead of returning cut rows
+// v4 / v5: pages of 10000 rows, retries with backoff (same figures; new keys to time uncached loads)
+// v6: getAllSeriesIds strict (v5 could cache an empty result after a timeout)
+export const getTournamentEconomy = versioned('tournament-economy-v6', getTournamentEconomy_impl);
+// Stats Rank: series from round_info, drafts or not (getAllSeriesIds); `teams` (Relevant): only
+// series those teams played
 async function getTournamentEconomy_impl(filters: {
-  tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string;
+  tour?: string; bo?: string; dateFrom?: string; dateTo?: string; teams?: string[];
 }): Promise<Record<string, TeamEconomyCompare>> {
-  let idQuery = supabase.from('draft').select('series_id');
-  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
-  if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
-  if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
-  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
-  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
-  if (filters.last && filters.last !== 'all') idQuery = idQuery.order('date', { ascending: false }).limit(parseInt(filters.last));
+  const seriesIds = await getAllSeriesIds(filters);
+  if (seriesIds.length === 0) return {};
 
-  const { data: idList } = await idQuery;
-  if (!idList || idList.length === 0) return {};
-  const seriesIds = [...new Set(idList.map((x: { series_id: string }) => x.series_id))];
-
-  const rows = await fetchAllPages<{
+  const rows = await fetchAllBySeries<{
     team_a: string; team_b: string;
     team_a_economy: number; team_b_economy: number;
     win_A: number; round: number;
-  }>((from, to) =>
+  }>(seriesIds, (ids, from, to) =>
     supabase
       .from('team_economy')
       .select('team_a,team_b,team_a_economy,team_b_economy,win_A,round')
-      .in('series_id', seriesIds)
+      .in('series_id', ids)
       .range(from, to)
   );
 
@@ -207,39 +203,42 @@ async function getTournamentEconomy_impl(filters: {
 const FORCE_SPEND = 10000;
 const FORCE_BANK = 1000;
 
-export const getPostPistolForce = versioned('post-pistol-force-v3', getPostPistolForce_impl);
+// v4: new main filter (ROADMAP Phase 12): series from round_info (getAllSeriesIds), so qualifiers
+// count; `teams` (Relevant) keeps only the series those teams played. Rows by series in chunks.
+// v5: rounds stored twice with the teams swapped: only the row in round_info's orientation counts
+export const getPostPistolForce = versioned('post-pistol-force-v5', getPostPistolForce_impl);
 async function getPostPistolForce_impl(filters: {
-  tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string;
+  tour?: string; bo?: string; dateFrom?: string; dateTo?: string; teams?: string[];
 }): Promise<Record<string, TeamPostPistolForce>> {
-  let idQuery = supabase.from('draft').select('series_id');
-  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
-  if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
-  if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
-  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
-  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
-  if (filters.last && filters.last !== 'all') idQuery = idQuery.order('date', { ascending: false }).limit(parseInt(filters.last));
-
-  const { data: idList } = await idQuery;
-  if (!idList || idList.length === 0) return {};
-  const seriesIds = [...new Set(idList.map((x: { series_id: string }) => x.series_id))];
+  const seriesIds = await getAllSeriesIds(filters);
+  if (seriesIds.length === 0) return {};
 
   type EcoRow = {
     map_id: string; round: number; team_a: string; team_b: string;
     team_a_economy: number; team_b_economy: number; team_a_bank: number; team_b_bank: number; win_A: number; winCon: string;
   };
   // Ordered by the PK so the pages never overlap or skip rows
-  const rows = await fetchAllPages<EcoRow>((from, to) =>
+  const [rows, firstRounds] = await Promise.all([fetchAllBySeries<EcoRow>(seriesIds, (ids, from, to) =>
     supabase
       .from('team_economy')
       .select('map_id,round,team_a,team_b,team_a_economy,team_b_economy,team_a_bank,team_b_bank,win_A,winCon')
-      .in('series_id', seriesIds)
+      .in('series_id', ids)
       .in('round', [1, 2, 3, 13, 14, 15])
       .order('team_map_round_id')
       .range(from, to)
-  );
+  ), fetchAllBySeries<{ map_id: string; teamA: string }>(seriesIds, (ids, from, to) =>
+    supabase.from('round_info').select('map_id, teamA').in('series_id', ids).eq('round', 1)
+      .order('team_map_round_id').range(from, to)
+  )]);
 
+  // Four 2026 tournaments (the three Kickoffs and Masters Santiago) have every round twice, the
+  // second time with team_a / team_b swapped but the banks left in place, so that copy pairs each
+  // team with the other's bank. Only the row in round_info's orientation (team_a = teamA) is used.
+  const teamAByMap = new Map(firstRounds.map(r => [r.map_id, r.teamA?.trim()]));
   const byMap: Record<string, Record<number, EcoRow>> = {};
-  for (const r of rows) (byMap[r.map_id] ??= {})[Number(r.round)] = r;
+  for (const r of rows) {
+    if (r.team_a?.trim() === teamAByMap.get(r.map_id)) (byMap[r.map_id] ??= {})[Number(r.round)] = r;
+  }
 
   const result: Record<string, TeamPostPistolForce> = {};
   const empty = () => ({ losses: 0, forced: 0, forcedWins: 0, ecoWins: 0, postEcoTotal: 0, postEcoWins: 0 });
@@ -328,52 +327,58 @@ function emptyOpSide(): OperatorUseSide {
 // v6: kills and first kills
 // v7: first deaths
 // v8: players matched by vlr id (round_buy player_N_team_x_id ↔ round_events player_id_vlr)
-export const getOperatorUseStats = versioned('operator-use-stats-v8', getOperatorUseStats_impl);
+// v9: new main filter (ROADMAP Phase 12): series from round_info (getAllSeriesIds), so qualifiers
+// count; `teams` (Relevant) keeps only the series those teams played; rows by series in chunks.
+// `series` / `buySeries`: series selected and how many of them have round_buy rows (China has
+// none). team_economy rows are matched in round_buy's orientation: the tournaments that store
+// every round twice with the teams swapped (see getPostPistolForce) used to lose the round winner
+// whenever the swapped copy came last.
+export const getOperatorUseStats = versioned('operator-use-stats-v9', getOperatorUseStats_impl);
 async function getOperatorUseStats_impl(
-  filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
+  // keepTags: tricodes whose entries are returned (the relevant teams; their rivals in those
+  // series are dropped here, inside the cached function, so the entry stays under the 2 MB limit
+  // of unstable_cache instead of being recomputed on every load)
+  filters: { tour?: string; bo?: string; dateFrom?: string; dateTo?: string; teams?: string[]; keepTags?: string[] }
 ): Promise<OperatorUseData> {
-  let idQuery = supabase.from('draft').select('series_id');
-  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
-  if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
-  if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
-  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
-  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
-  if (filters.last && filters.last !== 'all') idQuery = idQuery.order('date', { ascending: false }).limit(parseInt(filters.last));
-
-  const { data: idList } = await idQuery;
+  const seriesIds = await getAllSeriesIds(filters);
   const byWeapon = {} as OperatorUseData['byWeapon'];
   for (const w of Object.keys(OP_WEAPON_SETS) as OperatorUseWeapon[]) byWeapon[w] = { stats: {}, players: {} };
-  if (!idList || idList.length === 0) return { byWeapon, maps: [] };
+  if (seriesIds.length === 0) return { byWeapon, maps: [], series: 0, buySeries: 0 };
 
-  const seriesIds = [...new Set(idList.map(x => x.series_id))];
-  // Ordered by the PK so the pages never overlap or skip rows
-  const [rows, ecoRows, killRows] = await Promise.all([
-    fetchAllPages<RoundBuyRow>((from, to) =>
+  // Ordered by the PK so the pages never overlap or skip rows. The kills go after the other two,
+  // in smaller chunks: all three at once (9 queries, the kills ~7 rows per round) hit the anon
+  // statement timeout with a hundred-odd series.
+  const [rows, ecoRows] = await Promise.all([
+    fetchAllBySeries<RoundBuyRow>(seriesIds, (ids, from, to) =>
       supabase.from('round_buy')
         .select(`map_id, round, team_a, team_b, side_team_a, ${OP_PLAYER_COLS.join(', ')}`)
-        .in('series_id', seriesIds)
+        .in('series_id', ids)
         .order('team_map_round_id')
         .range(from, to) as unknown as PromiseLike<{ data: RoundBuyRow[] | null; error: unknown }>
     ),
-    fetchAllPages<OpEcoRow>((from, to) =>
+    fetchAllBySeries<OpEcoRow>(seriesIds, (ids, from, to) =>
       supabase.from('team_economy')
         .select('map_id, round, team_a, win_A, team_a_economy, team_b_economy')
-        .in('series_id', seriesIds)
+        .in('series_id', ids)
         .order('team_map_round_id')
-        .range(from, to)
-    ),
-    fetchAllPages<OpKillRow>((from, to) =>
-      supabase.from('round_events')
-        .select('map_id, round, player_id_vlr, victim_id_vlr, weapon, is_first_blood, is_team_kill')
-        .in('series_id', seriesIds)
-        .eq('type', 'kill')
-        .order('team_map_round_id')
-        .order('ev_index')
         .range(from, to)
     ),
   ]);
+  const killRows = await fetchAllBySeries<OpKillRow>(seriesIds, (ids, from, to) =>
+    supabase.from('round_events')
+      .select('map_id, round, player_id_vlr, victim_id_vlr, weapon, is_first_blood, is_team_kill')
+      .in('series_id', ids)
+      .eq('type', 'kill')
+      .order('series_id')
+      .order('team_map_round_id')
+      .order('ev_index')
+      .range(from, to),
+    40
+  );
+  // Keyed with team_a too, so a round stored twice keeps the row in round_buy's orientation
   const eco: Record<string, OpEcoRow> = {};
-  for (const e of ecoRows) eco[`${e.map_id}|${Number(e.round)}`] = e;
+  for (const e of ecoRows) eco[`${e.map_id}|${Number(e.round)}|${e.team_a?.trim()}`] = e;
+  const ecoOf = (r: RoundBuyRow, round: number): OpEcoRow | undefined => eco[`${r.map_id}|${round}|${r.team_a?.trim()}`];
   // Players are matched by vlr id: the legacy round_events player_id carries the player's latest team,
   // not the team of that round, so "<team>_<nick>" misses anyone who changed teams
   const died = new Set(killRows.map(k => `${k.map_id}|${Number(k.round)}|${k.victim_id_vlr}`));
@@ -426,19 +431,17 @@ async function getOperatorUseStats_impl(
     const map = r.map_id?.slice(r.map_id.indexOf('-') + 1);
     if (!map) continue;
     maps.add(map);
-    const e = eco[`${r.map_id}|${Number(r.round)}`];
-    const ecoOk = !!e && e.team_a?.trim() === r.team_a?.trim();
-    const prev = eco[`${r.map_id}|${Number(r.round) - 1}`];
-    const prevOk = !!prev && prev.team_a?.trim() === r.team_a?.trim();
+    const e = ecoOf(r, Number(r.round));
+    const prev = ecoOf(r, Number(r.round) - 1);
     for (const s of ['a', 'b'] as const) {
       const team = (s === 'a' ? r.team_a : r.team_b)?.trim();
       if (!team) continue;
       const atk = (r.side_team_a === 'atk') === (s === 'a');
-      const won = ecoOk ? (Number(e.win_A) === 1) === (s === 'a') : null;
-      const lostPrev = prevOk && (Number(prev.win_A) === 1) !== (s === 'a');
-      const wonPrev = prevOk && !lostPrev;
+      const won = e ? (Number(e.win_A) === 1) === (s === 'a') : null;
+      const lostPrev = !!prev && (Number(prev.win_A) === 1) !== (s === 'a');
+      const wonPrev = !!prev && !lostPrev;
       const prevHolders = sniperHolders(buyByRound[`${r.map_id}|${Number(r.round) - 1}`], team);
-      const loadoutRaw = ecoOk ? (s === 'a' ? e.team_a_economy : e.team_b_economy) : null;
+      const loadoutRaw = e ? (s === 'a' ? e.team_a_economy : e.team_b_economy) : null;
       const loadout = loadoutRaw == null ? null : Number(loadoutRaw);
 
       const allHolders = [1, 2, 3, 4, 5]
@@ -492,7 +495,16 @@ async function getOperatorUseStats_impl(
     }
   }
 
-  return { byWeapon, maps: [...maps].sort() };
+  if (filters.keepTags) {
+    const keep = new Set(filters.keepTags);
+    for (const d of Object.values(byWeapon)) {
+      for (const t of Object.keys(d.stats)) if (!keep.has(t)) delete d.stats[t];
+      for (const t of Object.keys(d.players)) if (!keep.has(t)) delete d.players[t];
+    }
+  }
+  // map_id is "<series_id>-<Map>"
+  const buySeries = new Set(rows.map(r => r.map_id?.slice(0, r.map_id.indexOf('-')))).size;
+  return { byWeapon, maps: [...maps].sort(), series: seriesIds.length, buySeries };
 }
 
 // Weapon Pick: per team, map and side, how many rounds each loadout was fielded and its WR.
@@ -543,7 +555,7 @@ export const getWeaponPickStats = versioned('weapon-pick-stats-v6', getWeaponPic
 async function getWeaponPickStats_impl(
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<WeaponPickData> {
-  let idQuery = supabase.from('draft').select('series_id');
+  let idQuery = supabase.from('draft').select('series_id').not('tour_id', 'in', await getReducedTourList());
   if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
   if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
   if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));

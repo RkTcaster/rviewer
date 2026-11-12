@@ -17,6 +17,12 @@ interface Props {
   teamLogos?: Record<string, string>;
   mapImages?: Record<string, string>;
   defaultHiddenMaps?: string[];
+  // Series of each team in its selection and how many of them have a draft (qualifiers come
+  // without one): picks / bans / deciders and the draft order only count those
+  seriesA: number;
+  seriesB: number;
+  draftSeriesA: number;
+  draftSeriesB: number;
   draftOrderA: { a: number; b: number };
   draftOrderB: { a: number; b: number };
   vetoModel?: VetoModelCore | null;
@@ -210,7 +216,7 @@ function CompCells({
   );
 }
 
-export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, teamAName, teamBName, teamLogos = {}, mapImages = {}, defaultHiddenMaps = [], draftOrderA, draftOrderB, vetoModel }: Props) {
+export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, teamAName, teamBName, teamLogos = {}, mapImages = {}, defaultHiddenMaps = [], seriesA, seriesB, draftSeriesA, draftSeriesB, draftOrderA, draftOrderB, vetoModel }: Props) {
   const [expandedMap, setExpandedMap] = useState<string | null>(null);
 
   // Most likely veto Left vs Right (Left opens unless swapped); the table marks each map's slot.
@@ -277,6 +283,11 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
         </div>
       ) : (
         <div className="flex flex-col gap-4">
+        {(draftSeriesA < seriesA || draftSeriesB < seriesB) && (
+          <p className="px-1 text-xs text-gray-400">
+            Picks / Bans / Decider: {teamAName} {draftSeriesA} of {seriesA} series with draft data · {teamBName} {draftSeriesB} of {seriesB}
+          </p>
+        )}
         {/* Map filter chips */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3 px-1">

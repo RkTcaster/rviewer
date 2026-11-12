@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { Info } from 'lucide-react';
-import { TeamRankStats, TeamEconomyCompare, EconomyCategoryStats, EconomyMatchup, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { TeamRankStats, TeamEconomyCompare, EconomyCategoryStats, EconomyMatchup } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
-import { useUrlSet } from '@/hooks/useUrlSet';
-import { TeamChipsPanel } from '../TeamChipsPanel';
 import { Tooltip } from '../Tooltip';
+import { TeamChipsPanel } from '../TeamChipsPanel';
+import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 
 interface Props {
   rankings: Record<string, TeamRankStats>;
@@ -14,6 +14,8 @@ interface Props {
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
   hasTour?: boolean;
+  /** Teams of the main filter (relevant / all) */
+  fixedTeams: string[];
 }
 
 const ECO_CATEGORIES: { key: keyof TeamEconomyCompare; label: string; range: string }[] = [
@@ -224,7 +226,7 @@ function getCellColor(value: number | null, allValues: (number | null)[], lowerI
   return 'text-gray-300';
 }
 
-export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamRegions = {}, hasTour = false }: Props) {
+export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamRegions = {}, hasTour = false, fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<number | string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -232,11 +234,11 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   const [showDetail, setShowDetail] = useState(false);
 
   const allTeams = Object.keys(rankings).sort();
-  // Equipos seleccionados: por defecto STATS_RANK_DEFAULT_TEAMS, espejados en la URL (param `teams`)
-  // para que la vista sea compartible y sobreviva la recarga — sin round-trip al server (ver useUrlSet).
-  const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
-
-  const baseTeams = allTeams.filter(t => selectedTeams.has(t));
+  // Chip list: the filter's teams (relevant / all) that played the selection, grouped by the
+  // region they played it in (teamRegions); all selected by default
+  const chipTeams = allTeams.filter(t => fixedTeams.includes(t));
+  const { selected: selectedTeams, setSelected: setSelectedTeams, reset: resetTeams } = useHiddenTeams(chipTeams);
+  const baseTeams = chipTeams.filter(t => selectedTeams.has(t));
 
   // Column-group visibility (chips). Default: Overall + First 3 visible, economy groups hidden.
   const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(
@@ -252,8 +254,8 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   }
 
   function resetFilters() {
-    // Vuelve al estado inicial: torneos por defecto (sin params) y equipos por defecto
-    setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
+    // Back to the initial state: default tournaments and teams (no params)
+    resetTeams();
     setHiddenGroups(new Set(ECO_CATEGORIES.map(c => c.key)));
     setSortCol(null);
     setSortDir('desc');
@@ -317,7 +319,7 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
     <div className="flex flex-col gap-4">
 
     <TeamChipsPanel
-      allTeams={allTeams}
+      allTeams={chipTeams}
       selectedTeams={selectedTeams}
       setSelectedTeams={setSelectedTeams}
       teamLogos={teamLogos}
@@ -373,7 +375,7 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
 
     {baseTeams.length === 0 ? (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
-        Select at least one team to see the ranking...
+        {chipTeams.length === 0 ? 'No relevant teams in this selection — switch Teams to All' : 'Select at least one team to see the ranking...'}
       </div>
     ) : (
     <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-auto max-h-[85vh]">

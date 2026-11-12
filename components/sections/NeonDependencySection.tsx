@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { Check, Info, Minus, X } from 'lucide-react';
-import { DuoMapStat, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { DuoMapStat } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { Tooltip } from '../Tooltip';
 import { useUrlSet } from '@/hooks/useUrlSet';
+import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 import { TeamChipsPanel } from '../TeamChipsPanel';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer } from 'recharts';
 
@@ -16,6 +17,8 @@ interface Props {
   teamRegions?: Record<string, string>;
   mapImages?: Record<string, string>;
   defaultHiddenMaps?: string[];
+  /** Teams of the main filter (relevant / all) */
+  fixedTeams: string[];
 }
 
 // color: dominant color of each logo in public/region, used for the region chart bars
@@ -196,20 +199,18 @@ function getCellRank(value: number | null, allValues: (number | null)[]): 'best'
   return null;
 }
 
-export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, defaultHiddenMaps = [] }: Props) {
+export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, defaultHiddenMaps = [], fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<number | 'overall' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [showDetail, setShowDetail] = useState(false);
 
   const allTeams = Object.keys(stats).sort();
-  // Equipos seleccionados (modelo canónico, compartido con Stats Rank / Maps Rank): por defecto
-  // STATS_RANK_DEFAULT_TEAMS, espejados en la URL (`teams`). Internamente la tabla razona en términos
-  // de `hiddenTeams` (opt-out), que derivamos del set seleccionado.
-  const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
-  const hiddenTeams = new Set(allTeams.filter(t => !selectedTeams.has(t)));
-
-  const baseTeams = allTeams.filter(t => !hiddenTeams.has(t));
+  // Chip list: the filter's teams (relevant / all) that played the selection, grouped by the
+  // region they played it in (teamRegions); all selected by default
+  const chipTeams = allTeams.filter(t => fixedTeams.includes(t));
+  const { selected: selectedTeams, setSelected: setSelectedTeams, reset: resetTeams } = useHiddenTeams(chipTeams);
+  const baseTeams = chipTeams.filter(t => selectedTeams.has(t));
 
   // Mapas ocultos: por defecto los que están fuera de rotación, espejados en la URL (`hideMaps`).
   const [hiddenMaps, setHiddenMaps] = useUrlSet('hideMaps', maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase())));
@@ -225,19 +226,18 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
   }
 
   function resetFilters() {
-    setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
+    resetTeams();
     setHiddenMaps(new Set(maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase()))));
     setSortCol(null);
     setSortDir('desc');
     navigate('?section=neon-dependency');
   }
 
-  // Guarded on allTeams, not baseTeams: hiding every team must still render the chips so the
-  // selection can be undone. Only a lack of data replaces the whole section with the placeholder.
+  // Only a lack of data replaces the whole section with the placeholder
   if (allTeams.length === 0 || maps.length === 0) {
     return (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
-        Select a region and tournament to see the maps...
+        Select a tournament to see the maps...
       </div>
     );
   }
@@ -277,7 +277,7 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
   return (
     <div className="flex flex-col gap-4">
 
-      {/* Filtros: equipos (por región) a la izquierda + mapas a la derecha */}
+      {/* Filters: teams (by region) on the left + maps on the right */}
       {(() => {
         const renderMapChip = (map: string) => {
           const active = !hiddenMaps.has(map);
@@ -307,7 +307,7 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
         return (
           <div className="flex flex-wrap gap-x-10 gap-y-4">
             <TeamChipsPanel
-              allTeams={allTeams}
+              allTeams={chipTeams}
               selectedTeams={selectedTeams}
               setSelectedTeams={setSelectedTeams}
               teamLogos={teamLogos}

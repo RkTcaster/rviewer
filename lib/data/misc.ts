@@ -1,6 +1,6 @@
 // lib/data/misc.ts — misceláneas: mapas más largos, skirmish, simulaciones
 import { supabase } from '../supabase';
-import { fetchAllPages } from './helpers';
+import { fetchAllPages, getReducedTourList } from './helpers';
 import { LongestMapEntry, SimulationRow, SkirmishStats, SkirmishTeamStat } from '../types';
 import { SkirmishRow } from './rows';
 
@@ -15,7 +15,7 @@ export async function getLongestMaps(filters: {
 
   // BO filter
   if (filters.bo && filters.bo !== 'all') {
-    let draftQuery = supabase.from('draft').select('series_id').eq('bo', parseInt(filters.bo));
+    let draftQuery = supabase.from('draft').select('series_id').not('tour_id', 'in', await getReducedTourList()).eq('bo', parseInt(filters.bo));
     if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
     if (filters.reg)  draftQuery = draftQuery.in('reg_id', filters.reg!);
     const draftData = await fetchAllPages<{ series_id: string }>((from, to) => draftQuery.range(from, to));
@@ -29,6 +29,7 @@ export async function getLongestMaps(filters: {
     let lastQuery = supabase
       .from('draft')
       .select('series_id, date')
+      .not('tour_id', 'in', await getReducedTourList())
       .or(`team.eq.${filters.team},rival.eq.${filters.team}`)
       .order('date', { ascending: false });
     if (filters.reg)  lastQuery = lastQuery.in('reg_id', filters.reg!);

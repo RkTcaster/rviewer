@@ -13,9 +13,13 @@ interface Props {
   agentImages: Record<string, string>;
   mapImages?: Record<string, string>;
   defaultHiddenMaps?: string[];
+  // Series of the team in the selection and how many of them have a draft (qualifiers come
+  // without one): picks / bans / deciders only count those
+  series: number;
+  draftSeries: number;
 }
 
-export function MapsSection({ stats, compositions, agentImages, mapImages = {}, defaultHiddenMaps = [] }: Props) {
+export function MapsSection({ stats, compositions, agentImages, mapImages = {}, defaultHiddenMaps = [], series, draftSeries }: Props) {
   const compsByMap = compositions.reduce<Record<string, CompositionStat[]>>((acc, c) => {
     if (!acc[c.map]) acc[c.map] = [];
     acc[c.map].push(c);
@@ -74,8 +78,21 @@ export function MapsSection({ stats, compositions, agentImages, mapImages = {}, 
     );
   }
 
+  if (series === 0) {
+    return (
+      <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
+        No data for the selected filters
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
+    {draftSeries < series && (
+      <p className="px-1 text-xs text-gray-400">
+        Picks / Bans / Decider: {draftSeries} of {series} series with draft data
+      </p>
+    )}
     {/* Map filter chips */}
     <div className="flex flex-col gap-2">
       <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Maps</span>
