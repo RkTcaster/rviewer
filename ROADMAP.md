@@ -506,6 +506,18 @@ the default view has to keep showing the league teams, with the rest behind a fi
     have no logo); `public/teams/**` is in `outputFileTracingIncludes` for the deploy.
   - Stats need no change today: every section takes its `series_id`s from `draft`, so series
     without draft are already out.
+  - Nov 2026: the NA open qualifier came `reduced` but with draft in 72 of its 246 series, so the
+    draft queries without a tournament filter (a team's series, "last match") mixed them in, and
+    with MIBR they were another team's (11.5). Every draft query that picks series now has
+    `.not('tour_id', 'in', getReducedTourList())` (28 sites; left out: `getAllSeriesIds`, which
+    only reads `bo`, and the date / event lookups by already-picked series). Verified: draft
+    739 → 667 rows (the league ones); MIBR's last match 2026-11-08 (qualifier) → 2026-08-30.
+    Asked vlr-scraper what the rule is (`handoff/VLR_SCRAPER_TEAM_ID_Y_DATOS.md`).
+- **11.0 Data audit after each upload**: `node scripts/data-audit.mjs` (read-only, anon key, ~20 s).
+  Per tournament: series / drafts / maps / rounds / economy / buy / stats / perf against
+  `round_info`; tournament metadata (year / stage / subregion); cache version; tricodes shared
+  by different teams (no players in common between a league and a qualifier team); rows without
+  `player_id_vlr`; agent images. Lines with ⚠ are what to check or report to vlr-scraper.
 - **11.2 Default tournaments from the DB** (ex 5.1): evaluate a boolean `default` column in
   `tournament` to replace the hardcoded `DEFAULT_TOURS` (`lib/types.ts`), changed from the
   Supabase dashboard instead of a code edit + deploy. Same pattern as the DB-driven hidden maps
@@ -526,7 +538,11 @@ the default view has to keep showing the league teams, with the rest behind a fi
   from `draft`) and `getLastUpdateDate` (cache version keyed on the latest `draft` date, so a
   qualifier-only upload doesn't bust the cache). With this, 11.1's filter guard goes away.
 - **11.5 Risks to keep in mind**: `team_id` is vlr's tricode and can collide between a small team
-  and a league team (they merge in `teams`, region color included); `player_id` follows the team
+  and a league team (they merge in `teams`, region color included). Seen nov 2026: `100T`, `MIBR`,
+  `FUR`, `NOVA` and `TS` are each a league team plus a different qualifier team, and `FAKE` is two
+  qualifier teams that played each other (785082). Asked vlr-scraper for a vlr team id, like
+  `player_id_vlr` (`handoff/VLR_SCRAPER_TEAM_ID_Y_DATOS.md`); until then a 2027 view shows those
+  qualifier teams as the league one. `player_id` follows the team
   of the latest match, so a league player in a qualifier can move id; forfeited series are not
   loaded (qualifier brackets will have gaps); a re-marked event only updates old `match_id` rows
   after a `--full` upload.
@@ -561,6 +577,18 @@ A main filter meant to replace the per-page one on almost every page, tried firs
   upper chips are bulk toggles painted on / partial / off, and each row only shows what hangs
   from an active chip above. Subregions have no row: they live in a menu opened from the
   `▾ a/b` of each region chip (nov 2026, click on the name still toggles the whole region).
+  All open qualifiers of a year share a single Tournament chip, "Open", with the same `▾ a/b` menu
+  as the region chips listing its regions (logo + name), and the four region logos on the chip
+  toned by selection like the Quick Tournament chips; the chip and each entry toggle every
+  open of the year / of that region, like a region chip (`GROUPED_STAGES`, nov 2026). The menu
+  goes "Kickoff Open 1" (later "Cup 1 Open 2"…) → regions → each open, every level a checkbox plus
+  an `a/b ▶` side panel (on hover or click), to pick a single open (e.g. only NA). The first level
+  is the circuit stage the qualifier feeds, parsed from the event (`qualifierTarget`: "vct 2027
+  america kickoff - … open qualifier" → Kickoff), numbered in circuit order (Kickoff, Cup 1,
+  Cup 2…), no column needed. Every open loaded so far is Kickoff Open 1. Subregions carry a flag
+  in both menus (`public/flags/`, `SUBREGION_FLAGS` by subregion name without case or spaces). The region chips' subregion menu stays as is: the stage is picked
+  from the Tournament row, the place from the Region row. Goal: Open /
+  Closed / Kickoff; Closed joins the list when closed qualifiers arrive.
   Plus From / To, Bo3 / Bo5 and Relevant / All teams. No quick
   tournament chips, no region chips, no Last X, no team chip panel.
 - **Default**: every tournament of the latest season (2026 starts off).
@@ -580,14 +608,252 @@ Still open:
 
 - **12.1 Check the cascade in the browser**: the SQL is applied (nov 2026: 21 tournaments with
   year / stage, 96 relevant teams); only the data path was verified so far.
-- **12.2 Roll the filter out** to the other pages.
-- **12.3 Cache**: `versioned()` keys on the latest `draft` date; a qualifier-only upload (no
-  draft) doesn't bust it (same as 11.4).
+- **12.2 Roll the filter out** to the other pages. Done so far:
+  - **Map Info** (`map-picks`, nov 2026): `usesTreeFilter` in `app/page.tsx` (tree, latest-season
+    default, Relevant / All) and `getMapInfo` (`lib/data/draft.ts`): series from `getAllSeriesIds`,
+    rounds and drafts by series in chunks. Atk / Def WR, rounds and the new "Maps played" use every
+    series; picks / bans / deciders only the series with a draft (the NA open's 72 count, no
+    reduced guard here), and an "Incomplete data" notice says how many those are. With none, the
+    chart and those columns are hidden. Relevant = series where a relevant team played. The old
+    exclude-teams filter (`excA`) is gone from this page. Verified: 2026 Stage 2s + Champions on
+    All match the old draft-based figures map by map (280 series); 2027 All = 840 series, 72 with
+    draft; Lotus 421 maps (2027), 117 maps / 2228 rounds (Europe) by hand count.
+  - **Stats Rank** (nov 2026): v2 replaced the old page and took its id (`stats-rank`; the
+    `stats-rank-v2` entry and URL are gone). `StatsRankSection` always gets the teams from the
+    filter (`fixedTeams`) and `getTournamentEconomy` only takes series from `getAllSeriesIds`
+    (its draft branch only served the old page). `getTournamentRankings` keeps its draft branch
+    for Compare Stats / Graphs.
+  - **Maps Rank** (`maps-masters`, nov 2026): on the new filter (`getMapsMastersStats` v2:
+    `getAllSeriesIds`, rounds and drafts by series in chunks; teams from the filter, team chips
+    like Stats Rank). Wins / played use every series; bans only the series with a draft (no
+    reduced guard, like Map Info), with a "Bans: incomplete data" line saying how many those are;
+    with none, bans are hidden in Detail info. Region chips, Quick Tournament and Last X are gone
+    from this page. Verified on All against a hand count from `round_info` / `draft`, every
+    team-map cell: Champions 2026 (34 series, all with draft; 100T Ascent 3W-2L, 1 ban), NA open
+    (246 series, 72 with draft), Brazil open (163 series, no draft).
+  - **Agent Picks** (`agent-picks`, nov 2026): on the new filter. `getAgentPickStats` and
+    `getOverallCompositions` take `allSeries` + `teams` (series from `getAllSeriesIds`, rows by
+    series in chunks; their draft-based branch stays for Meta Shift / Maps); the non-mirror
+    instances (`getNonMirrorInstances` v4) are always on the new filter, with the series date
+    taken from its first map in `round_info`. Relevant = series where a relevant team played, and
+    both teams of those series count. The map header reads `getMapInfo`: Atk / Def WR from every
+    series, Picks / Bans / Deciders only from the ones with a draft, with the "incomplete data"
+    line (hidden with none). `getOverallMapFullStats` and the exclude-teams filter (`excA`) are
+    gone from this page. Verified: Champions 2026 and Americas + EMEA Stage 2 Bo3 give the same
+    stats / compositions / instances / map header as before the change; Brazil open (163 series)
+    and NA open (246) match a hand count from `player_stats` / `round_info` on every agent-map
+    cell (played, maps, non-mirror played / wins). Size: 2027 All is a 5.8 MB page; every
+    tournament on All is 10 MB and ~4.5 s on reload (the instance list goes over the 2 MB
+    `unstable_cache` limit, so it is not cached).
+  - **Post Pistol Force** (`post-pistol-force`, nov 2026): on the new filter (`getPostPistolForce`
+    v5: `getAllSeriesIds`, `team_economy` by series in chunks; teams from the filter, team chips
+    like Stats Rank; Last X and the region / Quick Tournament chips are gone from this page).
+    Found while verifying: the three 2026 Kickoffs and Masters Santiago have every `team_economy`
+    round twice, and the second copy is not identical: `team_a` / `team_b`, economies, side and
+    `win_A` are swapped but the banks are not, so it pairs each team with the other's bank. The
+    page kept whichever copy came last, so the force rule (`bank < 1000`) was wrong on those four
+    tournaments and changed with the row order. Now only the row in `round_info`'s team order
+    (`team_a = teamA`, one extra round 1 query) is used. Checked on its own: the pistol loser
+    has >= 9500 credits (spend + bank) the next round in 589 / 589 rows kept and 46 / 589 rows
+    dropped. Verified against a hand count by team name, every team-half cell: those four
+    tournaments (39 teams), the three Stage 2s (48), NA open (244); Champions 2026 gives the same
+    as before the change. Weapon Pick reads the same banks (`getWeaponPickStats`) and still
+    takes either copy.
+  - **Neon + Phoenix** (`neon-dependency`, nov 2026): on the new filter (`getNeonDependencyStats`
+    v3: `getAllSeriesIds`, queries by series in chunks; teams from the filter) and hidden from the
+    sidebar (commented out in `components/Sidebar.tsx`; re-add `Zap` to its icon import).
+    Reachable at `?section=neon-dependency`. Verified on Champions 2026 / All: overall 16 / 172
+    team-maps = 9%, 100T 3 / 18 = 17%, both by hand count.
+  - **Meta Shift** (`meta-shift`, nov 2026): two cascades, one per side (`MetaShiftFilters` over
+    `TournamentTreeFilter`, which gained `suffix` / `title` / `children`): side A writes
+    `tour` / `dateFrom` / `dateTo`, side B `tour2` / `dateFrom2` / `dateTo2`; Team and Exclude Teams
+    stay per side (lists = the teams of that side's tournaments, relevant or all); Serie and
+    Relevant / All are shared: both sides show them and write the same `bo` / `allTeams`. Region A / B are gone: each side's label, logos
+    and Region color come from the regions of its tournaments (every region = "All regions").
+    Both sides start on the latest season. Data: `getAgentPickStats` v3 with `allSeries` plus
+    `team` (only that tricode's comps, from the series it played; Relevant doesn't apply) or
+    `excludeTeams` (their comps leave the picks and the comps count; the old path left them in
+    the denominator). The old Meta Shift block of `Filters` is removed. v3 also reads
+    `player_stats` of the selected tournaments only: 80 rows with an empty `tour_id` for 8 maps
+    never played (4 in the Brazil open, 3 Türkiye, 1 NA open) were picked up by series and moved
+    Brazil open rates by 1 point (this also fixes Agent Picks' table; `getOverallCompositions`,
+    the non-mirror instances and the other by-series readers of `player_stats` still take them).
+    Verified against a hand count from `player_stats` by `team_id_vlr`, 0 diffs: Champions 2026
+    (172 comps) vs Americas Stage 2 (300); G2 in Champions (17) vs Champions minus G2 and NRG
+    (143); NA open All (1098) vs Brazil open All (728); 2027 Relevant (798) vs NA open Relevant
+    minus MIBR (218). Not checked in a browser.
+  - **Team → Maps** (`maps`, nov 2026): first team page on the new filter, and the first one by
+    **vlr team id**. The cascade plus `TeamTreeControls` (Team select and Last X, rendered inside
+    `TournamentTreeFilter`). URL: `teamId` (vlr id) next to `team` (tricode, kept for the team
+    pages still on the old filter). `getTeamOptions` lists the teams that played the selected
+    tournaments (Relevant / All only filters this list), labeled by tricode plus the name when two
+    options share it ("FAKE · counterfeit" / "FAKE · Faker Rex"), and resolves the team: `teamId`
+    when it still goes with `team`, else the team with that tricode in the selection, a relevant
+    one first. Starts on the latest season, so a league team shows "No data for the selected
+    filters" until 2026 is turned on. Data: `getTeamMaps` (`lib/data/draft.ts`): series from
+    `round_info` by id (`getAllSeriesIds` with `teams: [id]`), Last X = its newest N series by
+    first-map date, rounds oriented by `team_a_id_vlr` / `team_b_id_vlr` (rows with null ids are
+    dropped), compositions from `player_stats.team_id_vlr`; `draft` has no id, so inside a series
+    the team is the side with its tricode. It reuses `procesarTodo` (the team's side renamed to a
+    fixed key; `drafts[0]?.date` guard for series without draft). Picks / Bans / Decider only
+    count series with draft, with a "X of Y series with draft data" line. "Last team match date"
+    is now the team's latest match in the selected tournaments (a table-wide lookup by id took
+    3.1 s against the ~3 s anon limit). Verified: same output as the old `getMapStats` (Compare
+    Maps side A, by tricode) for G2 and NRG in Champions 2026, G2 Last 3, PRX from 2026-06-01 and
+    TS over the 2026 league tournaments (720 cells, 0 diffs; compositions equal, Compare splits
+    them by players); by hand count from `round_info` / `player_stats` by id: `team=MIBR` in the
+    NA open resolves to Made in Brampton (16255: 2 series, 1 with draft, 0 diffs), Faker Rex
+    (21068, `FAKE`) 4 series, 0 diffs. Not checked in a browser.
+  - **Compare Maps** (`compare-maps`, the landing page; nov 2026): two cascades, one per team
+    (`CompareFilters`: Team Left writes `tour` / `dateFrom` / `dateTo` / `team` / `teamId`, Team
+    Right the same with the 2 suffix); Serie, Last X and Relevant / All are shared and shown on
+    both sides. Teams by vlr id like Team → Maps (`TeamTreeControls` with `suffix`,
+    `getTeamOptions` per side). Both sides start on the latest season instead of Champions 2026.
+    Data: `getTeamCompare` (`lib/data/draft.ts`), which shares `loadTeamSeries` with `getTeamMaps`
+    and returns the map table, the draft order and the compositions per map and roster (rounds by
+    side, W-L, last played link and date = first map of that series in `round_info`).
+    `getTeamMapCompositions` is removed. A "X of Y series with draft data" line per team when
+    some series have no draft. Verified against the old `getMapStats` (Charts section, by
+    tricode), 795 cells, 0 diffs: G2 vs NRG in Champions 2026, PRX over the 2026 tournaments Bo3,
+    G2 from 2026-06-01, G2 vs NRG Last 3. PRX up to 2026-06-30 differs by one series, 626544 (NS
+    vs PRX, Masters Santiago), which has no `draft` row: the old page missed it. Compositions by
+    hand count from `round_info` / `player_stats` by id, equal: G2 (7) and NRG (6) in Champions,
+    Made in Brampton (3) and Faker Rex (7) in the NA open. Not checked in a browser.
+  - **Compare Stats / Compare Economy** (nov 2026): same `CompareFilters` and teams by vlr id as
+    Compare Maps, so the three Compare pages share the URL. `getTeamSeriesIds`
+    (`lib/data/helpers.ts`) is the one place that picks a team's series (by id, Last X); the
+    loader of the team pages uses it.
+    - Compare Stats: each team's figures come from its own series: the map / pistol / PAB rows
+      from `getTeamDashboard` (`procesarTodo` by id) and the rest from `getTournamentRankings`
+      with `teamId` (run over those series; it still goes by tricode, the page reads the team's).
+      Ranks (user's choice): each team against the teams (Relevant / All) of its own side's
+      selection, the same call as Stats Rank (shared cache), with the team's entry replaced by
+      its own figures; Last X only applies to the compared team. Before, both teams were ranked
+      and partly read from Team Left's tournaments. `CompareStatsSection` takes `rankingsA` /
+      `rankingsB`. Verified: all 20 rows of both teams equal their Stats Rank entry for G2 vs NRG
+      (Champions 2026), PRX vs TS (2026 tournaments) and FNC (2026 tournaments) vs EDG (Champions)
+      (120 cells, 0 diffs; rank universe 16 and 64, the Stats Rank team counts); map / round /
+      atk / def / pistol rows by hand count from `round_info` by id for G2 Last 3, Made in
+      Brampton in the NA open and G2 in the Americas Kickoff, 0 diffs. Uncached, PRX vs TS over
+      every 2026 tournament took 17 s (two 64-team universes); cached 0.7 s.
+    - Compare Economy: `getEconomyCompare` v2 by team id; Serie, dates and Last X now apply
+      (before only tournaments). The team's column in `team_economy` comes from `round_info`'s
+      orientation, and only rows in that orientation count, so the rounds stored twice in the
+      three 2026 Kickoffs and Masters Santiago are no longer counted double. Verified: rounds
+      counted = the team's non-pistol rounds in `round_info`: G2 Last 3 157, Made in Brampton 63,
+      G2 in the Americas Kickoff 229.
+    - `Filters` lost its Compare parts (second team row, `tours2` / `teams2`, per-side defaults);
+      `COMPARE_DEFAULT_TOURS` and `sectionUsesDefaultTours` are removed. Not checked in a browser.
+  - **Filter layout and hand-edited tables** (2026-11-12): From / To, Last X, Serie and Teams
+    moved to the right of Year, in the same row (they wrap under it on a narrow window);
+    `TournamentTreeFilter` takes `topControls` (Last X, `LastXSelect`) and its `children` (Team,
+    Exclude Teams) keep a row of their own at the bottom. Türkiye showed broken in the Open menu
+    after the database was fixed: the tournament tree was still cached with the old row
+    (`tã¼rkiye`), since `versioned` only changes with a new `round_info` date. `tournament` and
+    `teams` are edited by hand, so their reads (`getTournamentTree`, `getRelevantTeams`, the
+    team names of `getTeamOptions`) are now cached 5 minutes instead. `capitalize` no longer
+    breaks words at "ü". Not checked in a browser.
+  - **Date dropdown** (2026-11-12, `components/DateFilter.tsx`): From / To became one "Date"
+    button showing the range ("Any date", "From 12/08/2026", "Until …", "a – b"); it opens a
+    panel with the From / To inputs, three presets (Last month, Last 3 months, Last 6 months) and
+    "Any date" to clear. A preset writes From = today minus N months and To = today, so the URL
+    keeps plain dates (`dateFrom` / `dateTo`, and the 2 suffix on side B) and the data functions
+    are untouched; clicking the active preset clears it. Verified on the server HTML only (button
+    text for no range, From, To and both); the panel was not opened in a browser.
+  - **Year row at select height** (2026-11-12, user's choices): everything in the Year row is
+    38 px tall. Year chips grew to that height, and later the Region and Tournament chips too; the
+    date button lost its "Date" title; "Last X" (shortened from "Last X matches"), "Serie" and
+    "Teams" have the label on the left like Year; BO3 / BO5 and Relevant / All are chips
+    of the same size as the years, side by side (stacked 18 px pills were tried first). The row
+    reads left to right with no gap: years, Serie, Teams, date, Last X. Not checked in a browser.
+  - **Testing cleanup** (2026-11-12): Veto Draft and Economy are hidden from the sidebar
+    (commented out in `components/Sidebar.tsx`), still reachable at `?section=veto` and
+    `?section=economy`. Both stay on the old filter.
+  - **Series Outcomes** (`series-outcomes`, 2026-11-12; first of the "Advance" group, renamed
+    from "Testing"): `getSeriesOutcomes` v4 takes the series from `getAllSeriesIds`
+    (tournaments, dates, Relevant) and counts **only the ones with a draft** (user's choice: the
+    whole table on the same series, since veto order and picks need it); a line says "Only
+    series with draft data are counted: X of Y" when some are left out. No Serie chips on this
+    page (`hideSerie` in `TournamentTreeFilter`): Bo3 for the series blocks, every format for
+    overtime, as before. Team chips from the filter (`fixedTeams` + `useHiddenTeams`). Its
+    special cases left `Filters`. Verified against a hand count from `draft` + `round_info` by
+    tournament, 0 diffs: Champions 2026 (34 series, 197 cells), Stage 2 ×4 + Champions (280,
+    749), NA open All (72 of 246 with draft, 929), 2027 Relevant (29 of 185, 389). Not checked
+    in a browser.
+  - **Operator Use** (`operator-use`, 2026-11-12): `getOperatorUseStats` v9 on the new filter
+    (`getAllSeriesIds`, rows by series in chunks, strict). **Relevant only** (user's choice): the
+    page has no Relevant / All chips (`hideTeams`) and ignores `allTeams`; with the per-player
+    detail for three weapon sets, All teams on 2027 was estimated at ~40 MB. `keepTags` drops the
+    rivals' entries inside the cached function, so the entry fits the 2 MB cache (2027 Relevant:
+    8.5 s uncached, 0.5 s after; without it every load recomputed). The kills are read after
+    `round_buy` and `team_economy`, in chunks of 40 series: the three at once timed out with
+    Americas + EMEA Stage 2. `team_economy` rows are matched in `round_buy`'s orientation (rounds
+    stored twice). "Buy data: X of Y series" when a selection has series without `round_buy`
+    (China: 214 of 280 on Stage 2 ×4 + Champions). Team chips from the filter.
+    **The old page was showing a cut kill count**: for Champions 2026 it had 140 Operator kills
+    and 233 first kills against 661 and 1464 by hand (a result cut by a timeout had been cached,
+    the old query was not strict). Verified: kill columns against a hand count from `round_buy` +
+    `round_events`, 0 diffs (Champions 2026 522 cells, Americas Kickoff 432); everything else
+    identical to the old page leaf by leaf (Champions 54 912 values, Americas + EMEA Stage 2 Bo3
+    128 197, Americas Kickoff 45 873; the only differences are the kill-derived fields, which
+    also move Kept / Saved since those use the deaths). Not checked in a browser.
+  - **Team chips** (Stats Rank, Neon + Phoenix; nov 2026): the `TeamChipsPanel` is back, listing
+    the filter's teams (relevant / all) that played the selection, all on by default; what is
+    stored is the teams turned off (`useHiddenTeams`, URL `hideTeams`), so a newly activated
+    region's teams come in selected. Rows group by `getTeamRegions(tour)`: the regional
+    tournaments of the selection decide first, then the overall count (which now includes
+    qualifiers). No manual region column needed: by tricode alone, 7 MENA teams (ATL, VEIL, ETER,
+    XENO, ZERO, THE, INVI) plus 100T / NOVA share a tricode with another region's team; with the
+    selection first, MENA alone gives 79 / 79 teams in EMEA. Verified: MENA 79 chips, Americas
+    Stage 2 16, + EMEA Stage 2 32, + Champions 28 (Champions-only teams in their own region).
+  - **`getAllSeriesIds` strict** (nov 2026): its round 1 scan (~0.3–2.3 s, against the ~3 s anon
+    limit) returned no series on a timeout, and the callers cached an empty page ("No data").
+    Now it throws (retries first), like `fetchAllBySeries`; cache keys bumped (rankings v11,
+    economy v6, map info v2, Neon v4). Under load a page can still fail with a 500 and work on
+    reload: an index on `round_info (tour_id, round)` should help (to propose).
+- **12.3 Cache** ✅ (nov 2026): `getLastUpdateDate` keys on the latest `round_info` date instead of
+  `draft`, so a qualifier-only upload busts the cache (Brazil / MENA on 11-09 didn't: the latest
+  draft was 11-08). ~0.3 s, cached 5 min. The "last update" shown on the page follows it.
 - **12.4 Big series lists**: with qualifiers, `.in('series_id', …)` over hundreds of series hit the
   anon statement timeout (57014) on `round_events`, and `fetchAllPages` returned the rows read so
-  far, which got cached. Stats Rank (v1 and v2) now uses `fetchAllBySeries` (chunks of 50, 4 at a
-  time); all 21 tournaments + All teams take ~42 s uncached, ~1 s cached. Rolling the filter out
-  (12.2) needs the same on each page's series-wide queries.
+  far, which got cached. Stats Rank (v1 and v2) now uses `fetchAllBySeries`: chunks of 100 series,
+  3 at a time, pages of 10000 rows (Supabase Max rows raised to 10000), a failed page retried after
+  1 s and 2 s, then it throws so nothing cut is cached. Uncached: all 21 tournaments + All teams
+  42 s → 26 s, 2026 minus one tournament 22 s → 13 s; ~1 s cached. An index on `round_events`
+  wouldn't help much: ~170 ms of each request is latency. Rolling the filter out (12.2) needs the
+  same on each page's series-wide queries.
+- **12.5 Relevant fetches only relevant series**: on Relevant, `getAllSeriesIds` keeps only series
+  where a relevant team played (their stats only depend on their own series; hidden teams aren't used
+  for colors). Same table as before on 2027 and 2026; 2027 default 627 → 170 series, 13 s → 4.8 s
+  uncached. For a closed qualifier: mark the open teams that made it as `relevant`.
+- **12.7 Relevant by vlr team id** (nov 2026, `team_id_vlr` phase 1 of vlr-scraper,
+  `handoff/RKTDATA_TEAM_ID_VLR.md`): `getRelevantTeams` returns `teams.team_id_vlr` and
+  `getAllSeriesIds` matches it against `round_info.team_a_id_vlr` / `team_b_id_vlr`, so a
+  qualifier team sharing a league tricode (Made in Brampton / MIBR, 100Throwers / 100T) no longer
+  brings its series into Relevant. The team lists (`fixedTeams`) come from `getRelevantTags(tour)`:
+  the tricodes of the relevant ids that played the selected tournaments. Both read the round 1
+  scan through `getFirstRounds` (cached), so a page runs it once. Verified on Maps Rank against a
+  hand count by id: 2027 (176 series, 37 teams), Champions 2026 (34, 16), Americas Stage 2 + NA
+  open (113, 26). Today both rows of each shared tricode are still `relevant`, so MIBR / 100T
+  still show in 2027; with only the league row marked the same count gives 169 series, 32 teams
+  and none of MIBR / 100T / FUR / NOVA / TS.
+  Still by tricode (needs phase 2, asked in `handoff/VLR_SCRAPER_TEAM_ID_FASE_2.md`): the stats
+  themselves, so two teams with the same tricode inside one selection (All teams with
+  qualifiers) add up in one row; region, logo. Also found: `round_info` has 5 maps of
+  `vct_2026_pacific_stage_1` twice (series 644656 and 644659, the copy with null ids), which
+  count double for TS, NS and DRX.
+- **12.6 Relevant teams wiped — the user reloads them (next session)**: on 2026-11-11 every row of
+  `teams` had `relevant = false` (972 teams, was 96 true / 921), most likely a vlr-scraper upload
+  of `teams` during the `team_id_vlr` work (item 5 of `handoff/VLR_SCRAPER_TEAM_ID_Y_DATOS.md`).
+  The user is reloading the list by hand, better curated (tooltip: teams qualified to the Closed
+  qualifiers, plus the league teams). `handoff/STATS_RANK_V2.sql` is the old snapshot (2026 league +
+  top 8 of 4 opens, no Brazil / MENA). Next session:
+  - Check with `node scripts/data-audit.mjs` ("N teams, M relevant") that the new list is in and
+    that a scraper upload didn't wipe it again.
+  - Until then, Stats Rank / Map Info on Relevant (the default) show nothing once the cache of
+    `getRelevantTeams` renews; on All they work.
+  - With shared tricodes (100T, MIBR, FUR, NOVA, TS, ATL, VEIL, THE…) `relevant` marks both teams
+    until `team_id_vlr` lands; once `teams` is keyed by it, the flag has to move to the new rows.
 
 ## Backlog
 

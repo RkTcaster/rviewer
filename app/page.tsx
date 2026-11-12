@@ -1,9 +1,12 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getTeamMapCompositions, getAgentPickStats, getAgentNonMirrorMatches, getAgentCompMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getOverallMapFullStats, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows, getSeriesOutcomes, emptySeriesOutcomes, getOperatorUseStats, getWeaponPickStats, getTimeSiteStats, getTournamentTree, getRelevantTeams } from '@/lib/data-service';
-import { DEFAULT_TOURS, COMPARE_DEFAULT_TOURS, sectionUsesDefaultTours, Tournament, OverallMapFullStat, TeamRankStats } from '@/lib/types';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getAgentPickStats, getAgentNonMirrorMatches, getAgentCompMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getMapInfo, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows, getSeriesOutcomes, emptySeriesOutcomes, getOperatorUseStats, getWeaponPickStats, getTimeSiteStats, getTournamentTree, getRelevantTeams, getRelevantTags, getPlayedTags, getTeamMaps, getTeamCompare, getTeamDashboard, getTeamSeriesIds, getTeamOptions } from '@/lib/data-service';
+import { DEFAULT_TOURS, MapInfoData, TeamRankStats, TeamMapsData, TeamCompareData } from '@/lib/types';
 import { getLatestNews } from '@/lib/news';
 import { Filters } from '@/components/Filters';
 import { TournamentTreeFilter } from '@/components/TournamentTreeFilter';
+import { MetaShiftFilters } from '@/components/MetaShiftFilters';
+import { TeamTreeControls, LastXSelect } from '@/components/TeamTreeControls';
+import { CompareFilters } from '@/components/CompareFilters';
 import { Sidebar } from '@/components/Sidebar';
 import { ContentOverlay } from '@/components/ContentOverlay';
 import { MapsSection } from '@/components/sections/MapsSection';
@@ -49,41 +52,36 @@ export async function generateMetadata({
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ reg?: string; team?: string; tour?: string; bo?: string; last?: string; section?: string; team2?: string; tour2?: string; reg2?: string; dateFrom?: string; dateTo?: string; dateFrom2?: string; dateTo2?: string; excA?: string; excB?: string; allTeams?: string }>;
+  searchParams: Promise<{ reg?: string; team?: string; tour?: string; bo?: string; last?: string; section?: string; team2?: string; tour2?: string; reg2?: string; dateFrom?: string; dateTo?: string; dateFrom2?: string; dateTo2?: string; excA?: string; excB?: string; allTeams?: string; teamId?: string; teamId2?: string }>;
 }) {
   const params = await searchParams;
-  const { reg, team, tour: tourParam, bo, last, section = 'compare-maps', team2, tour2: tour2Param, reg2, dateFrom, dateTo, dateFrom2, dateTo2, excA, excB, allTeams } = params;
+  const { reg, team, tour: tourParam, bo, last, section = 'compare-maps', team2, tour2: tour2Param, dateFrom, dateTo, dateFrom2, dateTo2, excA, excB, allTeams, teamId, teamId2 } = params;
   const regArr = reg ? reg.split(',').filter(Boolean) : undefined;
-  const reg2Arr = reg2 ? reg2.split(',').filter(Boolean) : undefined;
-  // No `tour` param → DEFAULT_TOURS (tour2 too, only Meta Shift reads it outside Compare).
-  // Compare: each side defaults to COMPARE_DEFAULT_TOURS among its team's tours, so those are
-  // fetched up front (and reused for the Tournament selects below). An empty `tour=` means all.
-  const usesDefaultTours = sectionUsesDefaultTours(section);
-  const compareTours = usesDefaultTours ? null : await Promise.all([getTours(team, regArr), getTours(team2, regArr)]);
-  const compareDefault = (list: Tournament[]) => {
-    const ids = list.map(t => t.tour_id).filter(id => COMPARE_DEFAULT_TOURS.includes(id));
-    return ids.length > 0 ? ids.join(',') : undefined;
-  };
-  // Stats Rank v2 reads its own tournament tree; without a `tour` param it starts on the latest season
-  const isStatsRankV2 = section === 'stats-rank-v2';
-  const tourTree = isStatsRankV2 ? await getTournamentTree() : [];
+  // No `tour` param → DEFAULT_TOURS on the old filter. An empty `tour=` means all.
+  const isCompareMaps = section === 'compare-maps';
+  const isCompareStats = section === 'compare-stats';
+  const isCompareEconomy = section === 'compare-economy';
+  const isCompare = isCompareMaps || isCompareStats || isCompareEconomy;
+  // Sections on the new main filter (ROADMAP Phase 12) read their own tournament tree; without a
+  // `tour` param they start on the latest season
+  const isStatsRank = section === 'stats-rank';
+  const isNeonDependency = section === 'neon-dependency';
+  const usesTreeFilter = isStatsRank || isNeonDependency || section === 'map-picks' || section === 'maps-masters' || section === 'agent-picks' || section === 'post-pistol-force' || section === 'meta-shift' || section === 'maps' || isCompare || section === 'series-outcomes' || section === 'operator-use';
+  const tourTree = usesTreeFilter ? await getTournamentTree() : [];
   const latestYear = Math.max(...tourTree.map(t => t.year ?? 0));
   const v2DefaultTours = tourTree.filter(t => t.year === latestYear).map(t => t.tour_id).join(',');
-  const tour = tourParam !== undefined ? tourParam : isStatsRankV2 ? v2DefaultTours : compareTours ? compareDefault(compareTours[0]) : DEFAULT_TOURS.join(',');
-  const tour2 = tour2Param !== undefined ? tour2Param : compareTours ? compareDefault(compareTours[1]) : DEFAULT_TOURS.join(',');
+  const tour = tourParam !== undefined ? tourParam : usesTreeFilter ? v2DefaultTours : DEFAULT_TOURS.join(',');
+  const tour2 = tour2Param !== undefined ? tour2Param : usesTreeFilter ? v2DefaultTours : DEFAULT_TOURS.join(',');
   const hasTour = (tour?.split(',').filter(Boolean).length ?? 0) > 0;
   const excludeTeamsA = excA ? excA.split(',') : [];
   const excludeTeamsB = excB ? excB.split(',') : [];
 
   const isOverall = section === 'map-picks' || section === 'agent-picks';
-  const isCompare = section === 'compare-maps' || section === 'compare-stats' || section === 'compare-economy';
   const isMetaShift = section === 'meta-shift';
-  const isStatsRank = section === 'stats-rank';
+  const isTeamMaps = section === 'maps';
   const isMapsMasters = section === 'maps-masters';
-  const isNeonDependency = section === 'neon-dependency';
   const isPostPistolForce = section === 'post-pistol-force';
   const isEconomy = section === 'economy';
-  const isCompareEconomy = section === 'compare-economy';
   const isRelevantInfo = section === 'relevant-info';
   const isSkirmish = section === 'skirmish-americas';
   const isPlayoffPct = section === 'playoff-pct';
@@ -97,59 +95,91 @@ export default async function Page({
   // solo Promise.all para evitar la cascada secuencial de awaits.
 
   // Team data (only for team sections)
-  const resultP = (!isOverall && !isMetaShift && !isEconomy && !isRelevantInfo && !isSkirmish && !isPlayoffPct && !isStatsRank && !isMapsMasters && !isOperatorUse && !isWeaponPick && !isTimeSite && team)
+  const resultP = (!isOverall && !isMetaShift && !isTeamMaps && !isCompare && !isEconomy && !isRelevantInfo && !isSkirmish && !isPlayoffPct && !isStatsRank && !isMapsMasters && !isOperatorUse && !isWeaponPick && !isTimeSite && team)
     ? getMapStats({ team, tour, bo, reg: regArr, last, dateFrom, dateTo })
     : Promise.resolve(null);
 
-  const resultBP = (isCompare && team2)
-    ? getMapStats({ team: team2, tour: tour2, bo, reg: regArr, last, dateFrom: dateFrom2, dateTo: dateTo2 })
-    : Promise.resolve(null);
 
-  const compsAP = (section === 'compare-maps' && team)
-    ? getTeamMapCompositions({ team, tour, bo, reg: regArr, last, dateFrom, dateTo })
-    : Promise.resolve([]);
-  const compsBP = (section === 'compare-maps' && team2)
-    ? getTeamMapCompositions({ team: team2, tour: tour2, bo, reg: regArr, last, dateFrom: dateFrom2, dateTo: dateTo2 })
-    : Promise.resolve([]);
+  // New filter: only teams marked relevant unless the Teams filter is on All. On Relevant only
+  // their series are fetched (Stats Rank / Neon + Phoenix: same figures for them, far fewer qualifier series;
+  // Map Info: the maps of the series a relevant team played)
+  // relevantTeams: their tricodes among the teams of the selection, for the team lists (the stats
+  // are keyed by tricode); v2Teams: their vlr ids, which pick the series. v2Teams waits for the
+  // tricodes so the round 1 scan they share with the data functions runs once.
+  // Operator Use always works with the relevant teams (its per-player detail is too heavy for All)
+  const relevantTeamsP = (usesTreeFilter && (allTeams !== '1' || isOperatorUse)) ? getRelevantTags(tour) : Promise.resolve(null);
+  const v2Teams = relevantTeamsP.then(tags => tags ? getRelevantTeams() : null).then(t => t?.length ? [...t].sort() : undefined);
 
-  const rankingsP = (isStatsRankV2 && hasTour)
-    ? getTournamentRankings({ tour, bo, dateFrom, dateTo, allSeries: true })
-    : (section === 'compare-stats' || section === 'graphs' || (isStatsRank && hasTour))
+  const rankingsP = (isStatsRank && hasTour)
+    ? v2Teams.then(teams => getTournamentRankings({ tour, bo, dateFrom, dateTo, allSeries: true, teams }))
+    : section === 'graphs'
     ? getTournamentRankings({ tour, reg: regArr, bo, last, dateFrom, dateTo })
     : Promise.resolve<Record<string, TeamRankStats>>({});
 
-  const economyP = (isStatsRankV2 && hasTour)
-    ? getTournamentEconomy({ tour, bo, dateFrom, dateTo, allSeries: true })
-    : (isStatsRank && hasTour)
-    ? getTournamentEconomy({ tour, reg: regArr, bo, last, dateFrom, dateTo })
+  const economyP = (isStatsRank && hasTour)
+    ? v2Teams.then(teams => getTournamentEconomy({ tour, bo, dateFrom, dateTo, teams }))
     : Promise.resolve({});
 
-  // Stats Rank v2: only teams marked relevant unless the Teams filter is on All
-  const relevantTeamsP = (isStatsRankV2 && allTeams !== '1') ? getRelevantTeams() : Promise.resolve(null);
-
   // Overall data (only for overall sections)
-  const mapPicksFullStatsP = (section === 'map-picks')
-    ? getOverallMapFullStats({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
-    : Promise.resolve<Record<string, OverallMapFullStat>>({});
+  const mapInfoP = (isOverall && hasTour)
+    ? v2Teams.then(teams => getMapInfo({ tour, bo, dateFrom, dateTo, teams }))
+    : Promise.resolve<MapInfoData>({ stats: [], series: 0, draftSeries: 0 });
 
-  const compositionsDataP = (section === 'maps' && team)
-    ? getOverallCompositions({ team, reg: regArr, tour, bo, last, dateFrom, dateTo })
+  // Team → Maps: the team is a vlr id, resolved from `teamId` or, coming from a page that only
+  // writes the tricode, from `team` (see getTeamOptions)
+  const noTeamOptions = Promise.resolve({ options: [], selected: null });
+  const teamOptionsP = (isTeamMaps || isCompare) ? getTeamOptions(tour, allTeams === '1', team, teamId) : noTeamOptions;
+  // Compare pages: each side has its own tournaments, dates and team; Serie and Last X are shared
+  const teamOptions2P = isCompare ? getTeamOptions(tour2, allTeams === '1', team2, teamId2) : noTeamOptions;
+  const compareSide = (optionsP: typeof teamOptionsP, sideTour: string | undefined, from: string | undefined, to: string | undefined) =>
+    isCompareMaps
+      ? optionsP.then(({ selected }) => selected ? getTeamCompare({ teamId: selected.id, tour: sideTour, bo, dateFrom: from, dateTo: to, last }) : null)
+      : Promise.resolve<TeamCompareData | null>(null);
+  const compareAP = compareSide(teamOptionsP, tour, dateFrom, dateTo);
+  const compareBP = compareSide(teamOptions2P, tour2, dateFrom2, dateTo2);
+  // Compare Stats: the team's own figures come from its series (by id, with Last X); the ranks
+  // compare them with every team of that side's selection, the same data as Stats Rank
+  const statsSide = (optionsP: typeof teamOptionsP, sideTour: string | undefined, from: string | undefined, to: string | undefined) =>
+    isCompareStats
+      ? Promise.all([optionsP, v2Teams]).then(async ([{ selected }, teams]) => {
+          if (!selected) return null;
+          const [dash, own, universe] = await Promise.all([
+            getTeamDashboard({ teamId: selected.id, tour: sideTour, bo, dateFrom: from, dateTo: to, last }),
+            getTournamentRankings({ tour: sideTour, bo, dateFrom: from, dateTo: to, last, allSeries: true, teamId: selected.id }),
+            getTournamentRankings({ tour: sideTour, bo, dateFrom: from, dateTo: to, allSeries: true, teams }),
+          ]);
+          const rankings = { ...universe };
+          if (own[selected.tag]) rankings[selected.tag] = own[selected.tag]; else delete rankings[selected.tag];
+          return { dash, rankings };
+        })
+      : Promise.resolve(null);
+  const statsAP = statsSide(teamOptionsP, tour, dateFrom, dateTo);
+  const statsBP = statsSide(teamOptions2P, tour2, dateFrom2, dateTo2);
+  // Each compared team's latest match in its selected tournaments (header)
+  const lastMatchOf = (optionsP: typeof teamOptionsP, sideTour: string | undefined) =>
+    isCompare
+      ? optionsP.then(async ({ selected }) => selected ? (await getTeamSeriesIds({ teamId: selected.id, tour: sideTour })).lastMatchDate : null)
+      : Promise.resolve(null);
+  const lastMatchAP = lastMatchOf(teamOptionsP, tour);
+  const lastMatchBP = lastMatchOf(teamOptions2P, tour2);
+  const teamMapsP = isTeamMaps
+    ? teamOptionsP.then(({ selected }) => selected && hasTour ? getTeamMaps({ teamId: selected.id, tour, bo, dateFrom, dateTo, last }) : null)
+    : Promise.resolve<TeamMapsData | null>(null);
+
+  const agentPickStatsP = (section === 'agent-picks' && hasTour)
+    ? v2Teams.then(teams => getAgentPickStats({ tour, bo, dateFrom, dateTo, allSeries: true, teams }))
     : Promise.resolve([]);
 
-  const agentPickStatsP = (section === 'agent-picks')
-    ? getAgentPickStats({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
+  const agentCompositionsP = (section === 'agent-picks' && hasTour)
+    ? v2Teams.then(teams => getOverallCompositions({ tour, bo, dateFrom, dateTo, allSeries: true, teams }))
     : Promise.resolve([]);
 
-  const agentCompositionsP = (section === 'agent-picks')
-    ? getOverallCompositions({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
+  const agentMatchesP = (section === 'agent-picks' && hasTour)
+    ? v2Teams.then(teams => getAgentNonMirrorMatches({ tour, bo, dateFrom, dateTo, teams }))
     : Promise.resolve([]);
 
-  const agentMatchesP = (section === 'agent-picks')
-    ? getAgentNonMirrorMatches({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
-    : Promise.resolve([]);
-
-  const agentCompMatchesP = (section === 'agent-picks')
-    ? getAgentCompMatches({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
+  const agentCompMatchesP = (section === 'agent-picks' && hasTour)
+    ? v2Teams.then(teams => getAgentCompMatches({ tour, bo, dateFrom, dateTo, teams }))
     : Promise.resolve([]);
 
   const mapImagesP = (section === 'agent-picks' || section === 'maps-masters' || isOperatorUse || isWeaponPick || isTimeSite || section === 'neon-dependency' || section === 'compare-maps' || section === 'maps' || isVetoPredictor)
@@ -169,19 +199,22 @@ export default async function Page({
     ? getAgentRoles()
     : Promise.resolve({});
 
-  const needsLogos = isStatsRank || isStatsRankV2 || isMapsMasters || isOperatorUse || isWeaponPick || isTimeSite || isNeonDependency || isPostPistolForce || isMetaShift || isVetoPredictor || isSeriesOutcomes || section === 'compare-maps' || section === 'compare-stats' || isCompareEconomy;
+  const needsLogos = isStatsRank || isMapsMasters || isOperatorUse || isWeaponPick || isTimeSite || isNeonDependency || isPostPistolForce || isMetaShift || isVetoPredictor || isSeriesOutcomes || section === 'compare-maps' || section === 'compare-stats' || isCompareEconomy;
   // Every section that renders Filters gets logos for its team selects
-  const showsFilters = !isSkirmish && !isPlayoffPct && !isVetoPredictor && !isStatsRankV2;
-  const teamLogosP = (needsLogos || showsFilters) ? getTeamLogos() : Promise.resolve({});
-  const teamRegionsP = needsLogos ? getTeamRegions() : Promise.resolve({});
+  const showsFilters = !isSkirmish && !isPlayoffPct && !isVetoPredictor && !usesTreeFilter;
+  const teamLogosP = (needsLogos || showsFilters || isTeamMaps) ? getTeamLogos() : Promise.resolve({});
+  // New filter: regions from the selected tournaments first (tricodes shared across qualifiers)
+  const teamRegionsP = needsLogos ? getTeamRegions(usesTreeFilter ? (isMetaShift ? `${tour},${tour2}` : tour) : undefined) : Promise.resolve({});
 
   const mapsMastersP = (isMapsMasters && hasTour)
-    ? getMapsMastersStats({ tour, reg: regArr, bo, last, dateFrom, dateTo })
-    : Promise.resolve({ stats: {}, maps: [] });
+    ? v2Teams.then(teams => getMapsMastersStats({ tour, bo, dateFrom, dateTo, teams }))
+    : Promise.resolve({ stats: {}, maps: [], series: 0, draftSeries: 0 });
 
+  // Only the relevant teams' entries travel to the client (their rivals in those series don't)
   const operatorUseP = (isOperatorUse && hasTour)
-    ? getOperatorUseStats({ tour, reg: regArr, bo, last, dateFrom, dateTo })
-    : Promise.resolve({ byWeapon: null, maps: [] as string[] });
+    ? Promise.all([v2Teams, relevantTeamsP]).then(([teams, tags]) =>
+        getOperatorUseStats({ tour, bo, dateFrom, dateTo, teams, keepTags: tags ?? [] }))
+    : Promise.resolve({ byWeapon: null, maps: [] as string[], series: 0, buySeries: 0 });
 
   const weaponPickP = (isWeaponPick && hasTour)
     ? getWeaponPickStats({ tour, reg: regArr, bo, last, dateFrom, dateTo })
@@ -193,28 +226,29 @@ export default async function Page({
 
   // Series Outcomes is Bo3-only by definition, so it ignores the bo filter
   const seriesOutcomesP = (isSeriesOutcomes && hasTour)
-    ? getSeriesOutcomes({ tour, reg: regArr, dateFrom, dateTo })
+    ? v2Teams.then(teams => getSeriesOutcomes({ tour, dateFrom, dateTo, teams }))
     : Promise.resolve(emptySeriesOutcomes());
 
-  const neonDepP = isNeonDependency
-    ? getNeonDependencyStats({ tour, reg: regArr, bo, last, dateFrom, dateTo })
+  const neonDepP = (isNeonDependency && hasTour)
+    ? v2Teams.then(teams => getNeonDependencyStats({ tour, bo, dateFrom, dateTo, teams }))
     : Promise.resolve({ stats: {}, maps: [] });
 
-  const postPistolForceP = isPostPistolForce
-    ? getPostPistolForce({ tour, reg: regArr, bo, last, dateFrom, dateTo })
+  const postPistolForceP = (isPostPistolForce && hasTour)
+    ? v2Teams.then(teams => getPostPistolForce({ tour, bo, dateFrom, dateTo, teams }))
     : Promise.resolve({});
 
-  const mapFullStatsP = (section === 'agent-picks')
-    ? getOverallMapFullStats({ reg: regArr, tour, bo, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
-    : Promise.resolve({});
-
-  const agentPickStatsLeftP = isMetaShift
-    ? getAgentPickStats({ reg: regArr, tour, team: team || undefined, dateFrom, dateTo, excludeTeams: excludeTeamsA.length > 0 ? excludeTeamsA : undefined })
-    : Promise.resolve([]);
-
-  const agentPickStatsRightP = isMetaShift
-    ? getAgentPickStats({ reg: reg2Arr, tour: tour2, team: team2 || undefined, dateFrom: dateFrom2, dateTo: dateTo2, excludeTeams: excludeTeamsB.length > 0 ? excludeTeamsB : undefined })
-    : Promise.resolve([]);
+  // Meta Shift: one selection per side. A side with a team reads only that team's series (Relevant
+  // doesn't apply); otherwise Relevant / All like Agent Picks, minus the excluded teams
+  const metaSide = (sideTour: string | undefined, sideTeam: string | undefined, from: string | undefined, to: string | undefined, exclude: string[]) =>
+    v2Teams.then(teams => getAgentPickStats({
+      tour: sideTour, bo, dateFrom: from, dateTo: to, allSeries: true,
+      ...(sideTeam ? { team: sideTeam } : { teams, excludeTeams: exclude.length > 0 ? exclude : undefined }),
+    }));
+  const agentPickStatsLeftP = isMetaShift ? metaSide(tour, team, dateFrom, dateTo, excludeTeamsA) : Promise.resolve([]);
+  const agentPickStatsRightP = isMetaShift ? metaSide(tour2, team2, dateFrom2, dateTo2, excludeTeamsB) : Promise.resolve([]);
+  // Team lists of each side: the teams of its tournaments (the relevant ones unless All teams)
+  const sideTags = (sideTour: string | undefined) => allTeams === '1' ? getPlayedTags(sideTour) : getRelevantTags(sideTour);
+  const metaTeamsP = isMetaShift ? Promise.all([sideTags(tour), sideTags(tour2)]) : Promise.resolve([[], []] as string[][]);
 
   const playerStatsP = (section === 'player-stats' && team)
     ? getPlayerStats({ team, reg: regArr, tour, bo, dateFrom, dateTo })
@@ -228,7 +262,6 @@ export default async function Page({
     ? getPlayerTimeline({ team, reg: regArr, tour, bo, last, dateFrom, dateTo })
     : Promise.resolve([]);
 
-  const teams2P = isMetaShift ? getTeams(reg2Arr) : Promise.resolve([]);
 
   const vetoFlowsP = (section === 'veto' && team)
     ? getVetoFlows({ team, tour, bo, reg: regArr, last, dateFrom, dateTo })
@@ -241,12 +274,12 @@ export default async function Page({
     : Promise.resolve([]);
 
   // Compare Economy
-  const econCompareAP = isCompareEconomy && team
-    ? getEconomyCompare({ reg: regArr, tour, team })
-    : Promise.resolve(null);
-  const econCompareBP = isCompareEconomy && team2
-    ? getEconomyCompare({ reg: regArr, tour: tour2, team: team2 })
-    : Promise.resolve(null);
+  const econSide = (optionsP: typeof teamOptionsP, sideTour: string | undefined, from: string | undefined, to: string | undefined) =>
+    isCompareEconomy
+      ? optionsP.then(({ selected }) => selected ? getEconomyCompare({ teamId: selected.id, tour: sideTour, bo, dateFrom: from, dateTo: to, last }) : null)
+      : Promise.resolve(null);
+  const econCompareAP = econSide(teamOptionsP, tour, dateFrom, dateTo);
+  const econCompareBP = econSide(teamOptions2P, tour2, dateFrom2, dateTo2);
 
   // Economy histogram bins
   const economyBinsP = isEconomy
@@ -266,35 +299,29 @@ export default async function Page({
   const simulationScenariosP = isPlayoffPct ? getSimulationScenarios() : Promise.resolve([]);
 
   // Tours source differs by context
-  const toursP = (isOverall || isMetaShift || isEconomy || isRelevantInfo || isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isSeriesOutcomes || isOperatorUse || isWeaponPick || isTimeSite) ? getAllTours(regArr)
-    : compareTours ? Promise.resolve(compareTours[0]) : getTours(team, regArr);
-  const tours2P = compareTours
-    ? Promise.resolve(compareTours[1])
-    : isMetaShift
-      ? (team2 ? getTours(team2, reg2Arr) : getAllTours(reg2Arr))
-      : Promise.resolve([]);
+  const toursP = (isEconomy || isRelevantInfo || isWeaponPick || isTimeSite) ? getAllTours(regArr)
+    : getTours(team, regArr);
 
   const [
-    result, resultB, compsA, compsB, rankings, economy, mapPicksFullStatsRaw,
-    compositionsData, agentPickStats, agentCompositions, agentMatches, agentCompMatches,
+    result, compareA, compareB, statsA, statsB, lastMatchA, lastMatchB, teamOptions2, rankings, economy, mapInfo,
+    teamOptions, teamMaps, agentPickStats, agentCompositions, agentMatches, agentCompMatches,
     mapImages, defaultHiddenMaps, agentImages, agentRoles, teamLogos, teamRegions, mapsMasters, neonDep, postPistolForce,
-    mapFullStats, agentPickStatsLeft, agentPickStatsRight,
+    agentPickStatsLeft, agentPickStatsRight,
     playerStats, tournamentPlayerAvg, playerTimeline,
-    regions, teams, lastUpdateDate, news, teams2,
+    regions, teams, lastUpdateDate, news,
     econCompareA, econCompareB, economyBins, longestMaps, topPerformances,
-    skirmishStats, simulationScenarios, tours, tours2, vetoFlows, formTimeline, vetoModel, seriesOutcomes, operatorUse, weaponPick, timeSite, relevantTeams,
+    skirmishStats, simulationScenarios, tours, vetoFlows, formTimeline, vetoModel, seriesOutcomes, operatorUse, weaponPick, timeSite, relevantTeams, metaTeams,
   ] = await Promise.all([
-    resultP, resultBP, compsAP, compsBP, rankingsP, economyP, mapPicksFullStatsP,
-    compositionsDataP, agentPickStatsP, agentCompositionsP, agentMatchesP, agentCompMatchesP,
+    resultP, compareAP, compareBP, statsAP, statsBP, lastMatchAP, lastMatchBP, teamOptions2P, rankingsP, economyP, mapInfoP,
+    teamOptionsP, teamMapsP, agentPickStatsP, agentCompositionsP, agentMatchesP, agentCompMatchesP,
     mapImagesP, defaultHiddenMapsP, agentImagesP, agentRolesP, teamLogosP, teamRegionsP, mapsMastersP, neonDepP, postPistolForceP,
-    mapFullStatsP, agentPickStatsLeftP, agentPickStatsRightP,
+    agentPickStatsLeftP, agentPickStatsRightP,
     playerStatsP, tournamentPlayerAvgP, playerTimelineP,
-    getRegions(), getTeams(regArr), getLastUpdateDate(), getLatestNews(), teams2P,
+    getRegions(), getTeams(regArr), getLastUpdateDate(), getLatestNews(),
     econCompareAP, econCompareBP, economyBinsP, longestMapsP, topPerformancesP,
-    skirmishStatsP, simulationScenariosP, toursP, tours2P, vetoFlowsP, formTimelineP, vetoModelP, seriesOutcomesP, operatorUseP, weaponPickP, timeSiteP, relevantTeamsP,
+    skirmishStatsP, simulationScenariosP, toursP, vetoFlowsP, formTimelineP, vetoModelP, seriesOutcomesP, operatorUseP, weaponPickP, timeSiteP, relevantTeamsP, metaTeamsP,
   ]);
 
-  const mapPicksFullStats = Object.values(mapPicksFullStatsRaw).sort((a, b) => b.picks - a.picks);
 
   const stats = result?.mapStats || [];
   const draftOrder = result?.draftOrder || { a: 0, b: 0 };
@@ -303,19 +330,30 @@ export default async function Page({
   const recovery = result?.recovery || { wins: 0, total: 0 };
   const pab = result?.pab || { atkWins: 0, defWins: 0, wins: 0, atkTotal: 0, defTotal: 0, total: 0 };
 
+  // Meta Shift labels each side by the regions of its tournaments; [] (every region) = "All regions"
+  const allTreeRegions = new Set(tourTree.map(t => t.reg_id)).size;
+  const sideRegions = (sideTour: string | undefined) => {
+    const ids = new Set(sideTour?.split(','));
+    const regs = [...new Set(tourTree.filter(t => ids.has(t.tour_id)).map(t => t.reg_id))];
+    return regs.length === allTreeRegions ? [] : regs;
+  };
+
+  // Team → Maps: the team's latest match in the selected tournaments
+  const lastMatch = isTeamMaps ? teamMaps?.lastMatchDate : result?.lastMatchData;
+
   function renderSection() {
     switch (section) {
       case 'map-picks':
-        return <MapPicksSection stats={mapPicksFullStats} />;
+        return <MapPicksSection data={mapInfo} />;
       case 'agent-picks':
-        return <AgentPicksSection stats={agentPickStats} compositions={agentCompositions} agentMatches={agentMatches} compMatches={agentCompMatches} mapImages={mapImages} agentImages={agentImages} agentRoles={agentRoles} mapFullStats={mapFullStats} />;
+        return <AgentPicksSection stats={agentPickStats} compositions={agentCompositions} agentMatches={agentMatches} compMatches={agentCompMatches} mapImages={mapImages} agentImages={agentImages} agentRoles={agentRoles} mapInfo={mapInfo} />;
       case 'meta-shift':
         return <MetaShiftSection
           statsLeft={agentPickStatsLeft}
           statsRight={agentPickStatsRight}
           agentImages={agentImages}
-          left={{ regIds: regArr ?? [], team: team || undefined }}
-          right={{ regIds: reg2Arr ?? [], team: team2 || undefined }}
+          left={{ regIds: sideRegions(tour), team: team || undefined }}
+          right={{ regIds: sideRegions(tour2), team: team2 || undefined }}
           teamRegions={teamRegions}
           teamLogos={teamLogos}
         />;
@@ -335,7 +373,7 @@ export default async function Page({
       case 'economy':
         return <EconomySection bins={economyBins} />;
       case 'compare-economy':
-        return <CompareEconomySection statsA={econCompareA} statsB={econCompareB} teamAName={team || ''} teamBName={team2 || ''} />;
+        return <CompareEconomySection statsA={econCompareA} statsB={econCompareB} teamAName={teamOptions.selected?.tag ?? ''} teamBName={teamOptions2.selected?.tag ?? ''} />;
       case 'relevant-info':
         return <RelevantInfoSection maps={longestMaps} performances={topPerformances} />;
       case 'skirmish-americas':
@@ -343,27 +381,25 @@ export default async function Page({
       case 'playoff-pct':
         return <PlayoffPctSection scenarios={simulationScenarios} />;
       case 'stats-rank':
-        return <StatsRankSection rankings={rankings} economy={economy} teamLogos={teamLogos} teamRegions={teamRegions} hasTour={hasTour} />;
-      case 'stats-rank-v2':
-        return <StatsRankSection rankings={rankings} economy={economy} teamLogos={teamLogos} teamRegions={teamRegions} hasTour={hasTour} fixedTeams={relevantTeams ?? Object.keys(rankings)} section="stats-rank-v2" />;
+        return <StatsRankSection rankings={rankings} economy={economy} teamLogos={teamLogos} teamRegions={teamRegions} hasTour={hasTour} fixedTeams={relevantTeams ?? Object.keys(rankings)} />;
       case 'maps-masters':
-        return <MapsMastersSection stats={mapsMasters.stats} maps={mapsMasters.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} />;
+        return <MapsMastersSection stats={mapsMasters.stats} maps={mapsMasters.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} series={mapsMasters.series} draftSeries={mapsMasters.draftSeries} fixedTeams={relevantTeams ?? Object.keys(mapsMasters.stats)} />;
       case 'neon-dependency':
-        return <NeonDependencySection stats={neonDep.stats} maps={neonDep.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} defaultHiddenMaps={defaultHiddenMaps} />;
+        return <NeonDependencySection stats={neonDep.stats} maps={neonDep.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} defaultHiddenMaps={defaultHiddenMaps} fixedTeams={relevantTeams ?? Object.keys(neonDep.stats)} />;
       case 'operator-use':
-        return <OperatorUseSection byWeapon={operatorUse.byWeapon} maps={operatorUse.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} agentImages={agentImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} />;
+        return <OperatorUseSection byWeapon={operatorUse.byWeapon} maps={operatorUse.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} agentImages={agentImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} series={operatorUse.series} buySeries={operatorUse.buySeries} fixedTeams={relevantTeams ?? []} />;
       case 'weapon-pick':
         return <WeaponPickSection stats={weaponPick.stats} maps={weaponPick.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} />;
       case 'time-site':
         return <TimeSiteSection stats={timeSite.stats} maps={timeSite.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} />;
       case 'post-pistol-force':
-        return <PostPistolForceSection stats={postPistolForce} teamLogos={teamLogos} teamRegions={teamRegions} />;
+        return <PostPistolForceSection stats={postPistolForce} teamLogos={teamLogos} teamRegions={teamRegions} fixedTeams={relevantTeams ?? Object.keys(postPistolForce)} />;
       case 'veto':
         return <VetoSection flows={vetoFlows} teamName={team || ''} />;
       case 'veto-predictor':
         return <VetoPredictorSection model={vetoModel!} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} />;
       case 'series-outcomes':
-        return <SeriesOutcomesSection data={seriesOutcomes} teamLogos={teamLogos} teamRegions={teamRegions} />;
+        return <SeriesOutcomesSection data={seriesOutcomes} teamLogos={teamLogos} teamRegions={teamRegions} fixedTeams={relevantTeams ?? Object.keys(seriesOutcomes.teams)} />;
       case 'form':
         return <FormSection points={formTimeline} teamName={team || ''} />;
       case 'charts':
@@ -373,18 +409,23 @@ export default async function Page({
       case 'compare-maps':
         return (
           <CompareSection
-            statsA={stats}
-            statsB={resultB?.mapStats || []}
-            compsA={compsA}
-            compsB={compsB}
+            key={`${teamOptions.selected?.id}|${teamOptions2.selected?.id}`}
+            statsA={compareA?.mapStats ?? []}
+            statsB={compareB?.mapStats ?? []}
+            compsA={compareA?.comps ?? []}
+            compsB={compareB?.comps ?? []}
+            seriesA={compareA?.series ?? 0}
+            seriesB={compareB?.series ?? 0}
+            draftSeriesA={compareA?.draftSeries ?? 0}
+            draftSeriesB={compareB?.draftSeries ?? 0}
             agentImages={agentImages}
-            teamAName={team || ''}
-            teamBName={team2 || ''}
+            teamAName={teamOptions.selected?.tag ?? ''}
+            teamBName={teamOptions2.selected?.tag ?? ''}
             teamLogos={teamLogos}
             mapImages={mapImages}
             defaultHiddenMaps={defaultHiddenMaps}
-            draftOrderA={draftOrder}
-            draftOrderB={resultB?.draftOrder || { a: 0, b: 0 }}
+            draftOrderA={compareA?.draftOrder ?? { a: 0, b: 0 }}
+            draftOrderB={compareB?.draftOrder ?? { a: 0, b: 0 }}
             // Only the veto tables travel to the client; the result_* ones are Veto Predictor's
             vetoModel={vetoModel && { teamMap: vetoModel.teamMap, maps: vetoModel.maps, coef: vetoModel.coef, meta: vetoModel.meta }}
           />
@@ -392,24 +433,25 @@ export default async function Page({
       case 'compare-stats':
         return (
           <CompareStatsSection
-            statsA={stats}
-            statsB={resultB?.mapStats || []}
-            pistolsA={pistols}
-            pistolsB={resultB?.pistols || { wins: 0, total: 0 }}
-            antiEcoA={antiEco}
-            antiEcoB={resultB?.antiEco || { wins: 0, total: 0 }}
-            recoveryA={recovery}
-            recoveryB={resultB?.recovery || { wins: 0, total: 0 }}
-            pabA={pab}
-            pabB={resultB?.pab || { atkWins: 0, defWins: 0, wins: 0, atkTotal: 0, defTotal: 0, total: 0 }}
-            teamAName={team || ''}
-            teamBName={team2 || ''}
-            rankings={rankings}
+            statsA={statsA?.dash.mapStats ?? []}
+            statsB={statsB?.dash.mapStats ?? []}
+            pistolsA={statsA?.dash.pistols ?? pistols}
+            pistolsB={statsB?.dash.pistols ?? pistols}
+            antiEcoA={statsA?.dash.antiEco ?? antiEco}
+            antiEcoB={statsB?.dash.antiEco ?? antiEco}
+            recoveryA={statsA?.dash.recovery ?? recovery}
+            recoveryB={statsB?.dash.recovery ?? recovery}
+            pabA={statsA?.dash.pab ?? pab}
+            pabB={statsB?.dash.pab ?? pab}
+            teamAName={teamOptions.selected?.tag ?? ''}
+            teamBName={teamOptions2.selected?.tag ?? ''}
+            rankingsA={statsA?.rankings ?? {}}
+            rankingsB={statsB?.rankings ?? {}}
             teamLogos={teamLogos}
           />
         );
       default:
-        return <MapsSection stats={stats} compositions={compositionsData} agentImages={agentImages} mapImages={mapImages} defaultHiddenMaps={defaultHiddenMaps} />;
+        return <MapsSection key={`${teamOptions.selected?.id}|${teamMaps?.series}`} stats={teamMaps?.mapStats ?? []} compositions={teamMaps?.compositions ?? []} agentImages={agentImages} mapImages={mapImages} defaultHiddenMaps={defaultHiddenMaps} series={teamMaps?.series ?? 0} draftSeries={teamMaps?.draftSeries ?? 0} />;
     }
   }
 
@@ -437,7 +479,6 @@ export default async function Page({
           'skirmish-americas': 'Skirmish VCT Americas Stage 1',
           'playoff-pct': 'Playoff % (Number of possible results, not probability)',
           'stats-rank': 'Stats Rank',
-          'stats-rank-v2': 'Stats Rank v2',
           'maps-masters': 'Maps Rank',
           'neon-dependency': 'Neon + Phoenix',
           'post-pistol-force': 'Post Pistol Force',
@@ -451,33 +492,49 @@ export default async function Page({
             </span>
           )}
           {isCompare ? (
-            (result?.lastMatchData || resultB?.lastMatchData) && (
+            (lastMatchA || lastMatchB) && (
               <div className="flex flex-wrap gap-x-6 mt-1">
-                {result?.lastMatchData && (
+                {lastMatchA && (
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                     {team} — Last match:{' '}
-                    {new Date(result.lastMatchData).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    {new Date(lastMatchA).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
                 )}
-                {resultB?.lastMatchData && (
+                {lastMatchB && (
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                     {team2} — Last match:{' '}
-                    {new Date(resultB.lastMatchData).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    {new Date(lastMatchB).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
                 )}
               </div>
             )
           ) : (
-            result?.lastMatchData && (
+            lastMatch && (
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
                 Last team match date:{' '}
-                {new Date(result.lastMatchData).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {new Date(lastMatch).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
             )
           )}
-          {isStatsRankV2 && (
+          {isMetaShift && (
             <div className="mt-4">
-              <TournamentTreeFilter tree={tourTree} regions={regions} selected={tour?.split(',').filter(Boolean) ?? []} />
+              <MetaShiftFilters tree={tourTree} regions={regions} teamLogos={teamLogos}
+                selectedA={tour?.split(',').filter(Boolean) ?? []} selectedB={tour2?.split(',').filter(Boolean) ?? []}
+                teamsA={metaTeams[0]} teamsB={metaTeams[1]} />
+            </div>
+          )}
+          {isCompare && (
+            <div className="mt-4">
+              <CompareFilters tree={tourTree} regions={regions} teamLogos={teamLogos}
+                left={{ selected: tour?.split(',').filter(Boolean) ?? [], options: teamOptions.options, team: teamOptions.selected }}
+                right={{ selected: tour2?.split(',').filter(Boolean) ?? [], options: teamOptions2.options, team: teamOptions2.selected }} />
+            </div>
+          )}
+          {usesTreeFilter && !isMetaShift && !isCompare && (
+            <div className="mt-4">
+              <TournamentTreeFilter tree={tourTree} regions={regions} selected={tour?.split(',').filter(Boolean) ?? []} topControls={isTeamMaps ? <LastXSelect /> : undefined} hideSerie={isSeriesOutcomes} hideTeams={isOperatorUse}>
+                {isTeamMaps && <TeamTreeControls options={teamOptions.options} selected={teamOptions.selected} teamLogos={teamLogos} />}
+              </TournamentTreeFilter>
             </div>
           )}
           {showsFilters && (
@@ -486,10 +543,8 @@ export default async function Page({
                 regions={regions}
                 teams={teams}
                 tours={tours}
-                tours2={tours2}
-                teams2={teams2}
                 teamLogos={teamLogos}
-                mode={isOverall ? 'overall' : isMetaShift ? 'meta-shift' : isEconomy ? 'economy' : (isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isSeriesOutcomes || isOperatorUse || isWeaponPick || isTimeSite) ? 'stats-rank' : 'team'}
+                mode={isOverall ? 'overall' : isEconomy ? 'economy' : (isWeaponPick || isTimeSite) ? 'stats-rank' : 'team'}
               />
             </div>
           )}
@@ -497,9 +552,9 @@ export default async function Page({
 
         <main className="relative p-8 pt-6">
           <ContentOverlay />
-          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isVetoPredictor || isStatsRank || isStatsRankV2 || isMapsMasters || isNeonDependency || isPostPistolForce || isSeriesOutcomes || isOperatorUse || isWeaponPick || isTimeSite) ? (
+          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isVetoPredictor || isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isSeriesOutcomes || isOperatorUse || isWeaponPick || isTimeSite) ? (
             renderSection()
-          ) : !team ? (
+          ) : ((isTeamMaps || isCompare) ? !teamOptions.selected : !team) ? (
             <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
               Choose a team to see the data...
             </div>

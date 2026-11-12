@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, ReferenceLine } from 'recharts';
-import { AgentMatchDetail, AgentPickStat, CompMatch, CompositionStat, OverallMapFullStat } from '@/lib/types';
+import { AgentMatchDetail, AgentPickStat, CompMatch, CompositionStat, MapInfoData } from '@/lib/types';
 import { KPICard } from '@/components/KPICard';
 
 // Una composición son 5 agentes: es el tope tanto de agentes elegidos como de la suma de roles
@@ -21,7 +21,8 @@ interface Props {
   mapImages: Record<string, string>;
   agentImages: Record<string, string>;
   agentRoles: Record<string, string>;
-  mapFullStats: Record<string, OverallMapFullStat>;
+  /** Atk / Def WR from every series; picks / bans / deciders only from the ones with a draft */
+  mapInfo: MapInfoData;
 }
 
 function AgentYTick({ x, y, payload, agentImages }: any) {
@@ -294,7 +295,10 @@ function CompFilterSelector({ label, filter, agentsByRole, agentImages, enabled 
   );
 }
 
-export function AgentPicksSection({ stats, compositions, agentMatches, compMatches, mapImages, agentImages, agentRoles, mapFullStats }: Props) {
+export function AgentPicksSection({ stats, compositions, agentMatches, compMatches, mapImages, agentImages, agentRoles, mapInfo }: Props) {
+  const mapFullStats = useMemo(() => Object.fromEntries(mapInfo.stats.map(s => [s.mapName, s])), [mapInfo]);
+  // Qualifiers come without draft: with none in the selection, picks / bans / deciders are hidden
+  const hasDraft = mapInfo.draftSeries > 0;
   const [selectedMaps, setSelectedMaps] = useState<Set<string>>(new Set());
   const own = useCompFilter(agentRoles);
   const { selectedAgents, roleCounts, roleTotal, roleOf, active: compFilterActive } = own;
@@ -581,6 +585,15 @@ export function AgentPicksSection({ stats, compositions, agentMatches, compMatch
 
   return (
     <div className="flex flex-col gap-6">
+      {mapInfo.draftSeries < mapInfo.series && (
+        <p className="text-xs text-amber-200/90">
+          <span className="font-bold text-amber-300">Picks, bans &amp; deciders: incomplete data.</span>{' '}
+          {hasDraft
+            ? <>Only <b>{mapInfo.draftSeries}</b> of the <b>{mapInfo.series}</b> series selected ({Math.round(mapInfo.draftSeries / mapInfo.series * 100)}%) have a draft, and the map picks / bans / deciders count just those. </>
+            : <>None of the <b>{mapInfo.series}</b> series selected has a draft, so the map picks / bans / deciders are hidden. </>}
+          Qualifiers come without draft; agents, compositions and Atk / Def WR use all {mapInfo.series} series.
+        </p>
+      )}
       {/* Filters — same 50/50 split as the panels below */}
       <div className="flex gap-6 items-start">
         {/* Map filter — left half */}
@@ -945,7 +958,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, compMatch
                             <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider text-center leading-tight">Overall</span>
                             <span className="text-[11px] font-bold text-green-400">ATK {atk}%</span>
                             <span className="text-[11px] font-bold text-red-400">DEF {def}%</span>
-                            <span className="text-[10px] text-gray-400">P {s.picks} · B {s.bans} · D {s.deciders}</span>
+                            {hasDraft && <span className="text-[10px] text-gray-400">P {s.picks} · B {s.bans} · D {s.deciders}</span>}
                           </div>
                         );
                       })()}
@@ -1017,7 +1030,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, compMatch
                         <div className="flex flex-col justify-center gap-1 shrink-0">
                           <span className="text-[12.5px] font-bold text-green-400">ATK {atk}%</span>
                           <span className="text-[12.5px] font-bold text-red-400">DEF {def}%</span>
-                          <span className="text-[12.5px] text-gray-400">Picks {s.picks} · Bans {s.bans} · Deciders {s.deciders}</span>
+                          {hasDraft && <span className="text-[12.5px] text-gray-400">Picks {s.picks} · Bans {s.bans} · Deciders {s.deciders}</span>}
                         </div>
                       );
                     })()}

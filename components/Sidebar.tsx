@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Zap, ListOrdered, Sparkles, Swords, Crosshair, ShoppingCart, Timer } from 'lucide-react';
+import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Sparkles, Swords, Crosshair, ShoppingCart, Timer } from 'lucide-react';
 import { useNavigation, useFilterParams } from './NavigationContext';
 import { NewsButton } from './NewsButton';
 import type { NewsEntry } from '@/lib/news';
@@ -12,9 +12,9 @@ const NAV_SECTIONS = [
     title: 'Overall',
     items: [
       { id: 'stats-rank',    label: 'Stats Rank',    icon: BarChart2 },
-      { id: 'stats-rank-v2', label: 'Stats Rank v2', icon: BarChart2 },
       { id: 'maps-masters',  label: 'Maps Rank',  icon: LayoutGrid },
-      { id: 'neon-dependency', label: 'Neon + Phoenix', icon: Zap },
+      // Hidden (nov 2026), already on the new filter: uncomment to bring it back
+      // { id: 'neon-dependency', label: 'Neon + Phoenix', icon: Zap },
       { id: 'map-picks',   label: 'Map Info',    icon: Map },
       { id: 'agent-picks',   label: 'Agent Picks',   icon: Users },
       { id: 'post-pistol-force', label: 'Post Pistol Force', icon: DollarSign },
@@ -33,19 +33,21 @@ const NAV_SECTIONS = [
     ],
   },
   {
-    title: 'Testing',
+    title: 'Advance',
     items: [
-      { id: 'veto', label: 'Veto Draft', icon: ListOrdered },
-      { id: 'veto-predictor', label: 'Veto Predictor', icon: Sparkles },
+      // Hidden (nov 2026), still reachable at ?section=veto / ?section=economy: uncomment to bring
+      // them back (re-add ListOrdered to the icon import for Veto Draft)
+      // { id: 'veto', label: 'Veto Draft', icon: ListOrdered },
       { id: 'series-outcomes', label: 'Series Outcomes', icon: Swords },
       { id: 'operator-use', label: 'Operator Use', icon: Crosshair },
       { id: 'weapon-pick', label: 'Weapon Pick', icon: ShoppingCart },
       { id: 'time-site', label: 'Time & Site', icon: Timer },
       // { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Zap },
       { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
-      { id: 'economy',       label: 'Economy',       icon: DollarSign },
+      // { id: 'economy',       label: 'Economy',       icon: DollarSign },
       { id: 'player-stats',  label: 'Player Stats',  icon: UserRound },
       // { id: 'playoff-pct',        label: 'Playoff %',          icon: Trophy }, 
+      { id: 'veto-predictor', label: 'Veto Predictor', icon: Sparkles },
     ],
   },
 ];
@@ -80,7 +82,7 @@ export function Sidebar({ lastUpdateDate, news }: { lastUpdateDate?: string | nu
 
   function goToSection(section: string) {
     // Stats Rank and Maps Masters always start on their default setup (no inherited filters)
-    if (section === 'stats-rank' || section === 'stats-rank-v2' || section === 'maps-masters' || section === 'neon-dependency' || section === 'post-pistol-force' || section === 'series-outcomes' || section === 'operator-use' || section === 'weapon-pick' || section === 'time-site') {
+    if (section === 'stats-rank' || section === 'maps-masters' || section === 'neon-dependency' || section === 'post-pistol-force' || section === 'series-outcomes' || section === 'operator-use' || section === 'weapon-pick' || section === 'time-site') {
       commitParams(new URLSearchParams({ section }), { immediate: true });
       return;
     }

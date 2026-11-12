@@ -3,7 +3,7 @@ import { unstable_cache } from 'next/cache';
 import { supabase } from '../supabase';
 import fs from 'fs';
 import path from 'path';
-import { versioned, getReducedTourIds } from './helpers';
+import { versioned } from './helpers';
 
 export const getAgentImages = versioned('agent-images', getAgentImages_impl);
 async function getAgentImages_impl(): Promise<Record<string, string>> {
@@ -27,22 +27,27 @@ async function getAgentRoles_impl(): Promise<Record<string, string>> {
   );
 }
 
-export const getTeamRegions = versioned('team-regions', getTeamRegions_impl);
-async function getTeamRegions_impl(): Promise<Record<string, string>> {
+// v2: qualifiers count too, so teams that only played one get a region. No league team changes
+// region: a tricode shared with a qualifier team keeps its league region, where it played more.
+// `tours` (new filter): the regional tournaments of the selection decide first, so a tricode two
+// teams share (MENA vs Americas qualifiers: ATL, VEIL, THE…) takes the region of the one that
+// played the selection; teams with only international events in it fall back to the overall count.
+export const getTeamRegions = versioned('team-regions-v2', getTeamRegions_impl);
+async function getTeamRegions_impl(tours?: string): Promise<Record<string, string>> {
   // Map each team to its home region (reg_0..reg_3), ignoring reg_4 (international events).
   // If a team appears in multiple regions, the most frequent one wins.
-  const [{ data }, reduced] = await Promise.all([
-    supabase.from('tournament_played').select('teamA, reg_id, tour_id'),
-    getReducedTourIds(),
-  ]);
+  const { data } = await supabase.from('tournament_played').select('teamA, reg_id, tour_id');
   if (!data) return {};
+  const selected = tours ? new Set(tours.split(',')) : null;
   const counts: Record<string, Record<string, number>> = {};
+  const inSelection: Record<string, Record<string, number>> = {};
   for (const r of data as { teamA: string; reg_id: string; tour_id: string }[]) {
-    if (!r.teamA || r.reg_id === 'reg_4' || reduced.has(r.tour_id)) continue;
+    if (!r.teamA || r.reg_id === 'reg_4') continue;
     (counts[r.teamA] ??= {})[r.reg_id] = (counts[r.teamA]?.[r.reg_id] ?? 0) + 1;
+    if (selected?.has(r.tour_id)) (inSelection[r.teamA] ??= {})[r.reg_id] = (inSelection[r.teamA]?.[r.reg_id] ?? 0) + 1;
   }
   const result: Record<string, string> = {};
-  for (const [team, regs] of Object.entries(counts)) {
+  for (const [team, regs] of [...Object.entries(counts), ...Object.entries(inSelection)]) {
     result[team] = Object.entries(regs).sort((a, b) => b[1] - a[1])[0][0];
   }
   return result;

@@ -71,15 +71,6 @@ export const DEFAULT_TOURS = [
   'valorant_champions_2026',
 ];
 
-// Compare starts each side on these tournaments, among the ones that side's team played; a team
-// that played none of them starts on all its tournaments.
-export const COMPARE_DEFAULT_TOURS = ['valorant_champions_2026'];
-
-// Every section with a Tournament filter starts on DEFAULT_TOURS, except Compare, which uses
-// COMPARE_DEFAULT_TOURS per side (each side's tours depend on the team picked there).
-export const sectionUsesDefaultTours = (section: string) =>
-  section !== 'compare-maps' && section !== 'compare-stats' && section !== 'compare-economy';
-
 // Equipos visibles por defecto en la tabla de Stats Rank y Neon + Phoenix
 export const STATS_RANK_DEFAULT_TEAMS = [
   '100T', 'LOUD', 'G2', 'NRG', 'T1', 'JDG', 'FUT', 'GE', 'VIT', 'EDG', 'TYL', 'TL', 'PRX', 'KC', 'XLG', 'NS'
@@ -102,6 +93,11 @@ export type OverallMapFullStat = {
   defWins: number;
   defTotal: number;
 };
+
+// Map Info on the new filter: `played` = maps played; picks / bans / deciders only count the
+// `draftSeries` of the `series` selected that have a draft (qualifiers come without one)
+export type MapInfoStat = OverallMapFullStat & { played: number };
+export type MapInfoData = { stats: MapInfoStat[]; series: number; draftSeries: number };
 
 export type TeamRankStats = {
   mapWins: number; mapPlayed: number;
@@ -136,6 +132,9 @@ export type MapWL = { wins: number; played: number; bans: number };
 export type MapsMastersData = {
   stats: Record<string, Record<string, MapWL>>;
   maps: string[];
+  /** Series selected, and how many of them have a draft (bans only count those) */
+  series: number;
+  draftSeries: number;
 };
 
 // Neon + Phoenix: per team and map — maps played, of those how many had the duo,
@@ -293,9 +292,12 @@ export type OperatorUseWeaponData = {
   // team -> player -> map; for a player, op = eligible rounds where that player held the weapon
   players: Record<string, Record<string, Record<string, OperatorUseStat>>>;
 };
+// `series`: series of the filter; `buySeries`: the ones with round_buy rows (the data it needs)
 export type OperatorUseData = {
   byWeapon: Record<OperatorUseWeapon, OperatorUseWeaponData>;
   maps: string[];
+  series: number;
+  buySeries: number;
 };
 
 // Time & Site, from round_summary. One entry per round and team, raw so the client can take
@@ -435,6 +437,30 @@ export type FormMapPoint = {
   won: boolean;
 };
 
+// Team → Maps on the new main filter: `series` the team played in the selection, `draftSeries`
+// of them with a draft (picks / bans / deciders only count those), `lastMatchDate` its latest
+// match in the selected tournaments
+export type TeamMapsData = {
+  mapStats: MapStat[];
+  compositions: CompositionStat[];
+  series: number;
+  draftSeries: number;
+  lastMatchDate: string | null;
+};
+// One side of Compare Maps on the new main filter (same counts as TeamMapsData)
+export type TeamCompareData = {
+  mapStats: MapStat[];
+  draftOrder: { a: number; b: number };
+  comps: MapCompositionStat[];
+  series: number;
+  draftSeries: number;
+  lastMatchDate: string | null;
+};
+// One team's DashboardData on the new main filter (Compare Stats)
+export type TeamDashboardData = Omit<DashboardData, 'lastMatchData'> & { series: number; draftSeries: number };
+// A team of the Team select, by vlr id; `label` = tricode, plus the name when another option shares it
+export type TeamOption = { id: string; tag: string; label: string };
+
 export type DashboardData = {
   mapStats: MapStat[];
   draftOrder: {
@@ -474,7 +500,10 @@ export type SeriesOutcomeGlobal = {
   maps: number; otMaps: number;
 };
 
+// `selected`: series of the filter; `withDraft`: the ones counted (only series with a draft are)
 export type SeriesOutcomesData = {
   global: SeriesOutcomeGlobal;
   teams: Record<string, SeriesOutcomeStats>;
+  selected: number;
+  withDraft: number;
 };

@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { Check, Minus, X } from 'lucide-react';
-import { MapWL, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { MapWL } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { useUrlSet } from '@/hooks/useUrlSet';
+import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 import { TeamChipsPanel } from '../TeamChipsPanel';
 
 interface Props {
@@ -15,6 +16,11 @@ interface Props {
   mapImages?: Record<string, string>;
   hasTour?: boolean;
   defaultHiddenMaps?: string[];
+  /** Series selected, and how many of them have a draft (bans only count those) */
+  series: number;
+  draftSeries: number;
+  /** Teams of the main filter (relevant / all) */
+  fixedTeams: string[];
 }
 
 const OVERALL_COL = -1;
@@ -66,18 +72,21 @@ function getCellRank(value: number | null, allValues: (number | null)[]): 'best'
   return null;
 }
 
-export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, hasTour = false, defaultHiddenMaps = [] }: Props) {
+export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, hasTour = false, defaultHiddenMaps = [], series, draftSeries, fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [showDetail, setShowDetail] = useState(false);
 
   const allTeams = Object.keys(stats).sort();
-  // Equipos seleccionados: por defecto STATS_RANK_DEFAULT_TEAMS, espejados en la URL (`teams`)
-  // para compartir/recargar sin round-trip al server — ver useUrlSet.
-  const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
-
-  const baseTeams = allTeams.filter(t => selectedTeams.has(t));
+  // Chip list: the filter's teams (relevant / all) that played the selection, grouped by the
+  // region they played it in (teamRegions); all selected by default
+  const chipTeams = allTeams.filter(t => fixedTeams.includes(t));
+  const { selected: selectedTeams, setSelected: setSelectedTeams, reset: resetTeams } = useHiddenTeams(chipTeams);
+  const baseTeams = chipTeams.filter(t => selectedTeams.has(t));
+  // Qualifiers come without draft: bans only count the series that have one, and with none of
+  // them they are hidden
+  const hasDraft = draftSeries > 0;
 
   // Mapas ocultos: por defecto los que están fuera de rotación, espejados en la URL (`hideMaps`).
   const [hiddenMaps, setHiddenMaps] = useUrlSet('hideMaps', maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase())));
@@ -93,7 +102,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
   }
 
   function resetFilters() {
-    setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
+    resetTeams();
     setHiddenMaps(new Set(maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase()))));
     setSortCol(null);
     setSortDir('desc');
@@ -177,7 +186,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
         return (
           <div className="flex flex-wrap gap-x-10 gap-y-4">
             <TeamChipsPanel
-              allTeams={allTeams}
+              allTeams={chipTeams}
               selectedTeams={selectedTeams}
               setSelectedTeams={setSelectedTeams}
               teamLogos={teamLogos}
@@ -214,6 +223,16 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
           Reset filters
         </button>
       </div>
+
+      {draftSeries < series && (
+        <p className="px-1 text-xs text-amber-200/90">
+          <span className="font-bold text-amber-300">Bans: incomplete data.</span>{' '}
+          {hasDraft
+            ? <>Only <b>{draftSeries}</b> of the <b>{series}</b> series selected ({Math.round(draftSeries / series * 100)}%) have a draft, and bans count just those. </>
+            : <>None of the <b>{series}</b> series selected has a draft, so they are hidden. </>}
+          Qualifiers come without draft; win rates and maps played use all {series} series.
+        </p>
+      )}
 
       {baseTeams.length === 0 ? (
         <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
@@ -340,11 +359,11 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
                           </div>
                           {showDetail && (
                             <div className="text-[13px] text-gray-200/80 whitespace-nowrap">
-                              {wl.played} Ply - {wl.bans} Ban
+                              {wl.played} Ply{hasDraft && <> - {wl.bans} Ban</>}
                             </div>
                           )}
                         </>
-                      ) : showDetail && wl && wl.bans > 0 ? (
+                      ) : showDetail && hasDraft && wl && wl.bans > 0 ? (
                         <div className="text-[15px] text-gray-600 font-normal whitespace-nowrap">
                           {wl.bans} Ban
                         </div>

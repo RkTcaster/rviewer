@@ -1,6 +1,6 @@
 // lib/data/rankings.ts — stats por torneo: ranking de equipos, maps masters, timeline de forma
 import { supabase } from '../supabase';
-import { versioned, fetchAllPages, fetchAllBySeries, getAllSeriesIds } from './helpers';
+import { versioned, fetchAllPages, fetchAllBySeries, getAllSeriesIds, getTeamSeriesIds, getReducedTourList } from './helpers';
 import { FormMapPoint, MapsMastersData, MapWL, TeamRankStats } from '../types';
 import { DraftRow, PlayerPerformanceRow, RoundInfoRow } from './rows';
 
@@ -10,16 +10,24 @@ import { DraftRow, PlayerPerformanceRow, RoundInfoRow } from './rows';
 // v5: fd / trueFd from round_events
 // v6: trueFkWins / trueFdWins (rounds won after a true FK / FD)
 // v7: series-wide queries in chunks (v6 could cache a result cut by a statement timeout)
-export const getTournamentRankings = versioned('tournament-rankings-v7', getTournamentRankings_impl);
+// v8: chunks retry and throw instead of returning cut rows (v7 could still cache them)
+// v9 / v10: pages of 10000 rows, retries with backoff (same figures; new keys to time uncached loads)
+// v11: getAllSeriesIds strict (v10 could cache an empty result after a timeout)
+export const getTournamentRankings = versioned('tournament-rankings-v11', getTournamentRankings_impl);
 async function getTournamentRankings_impl(
-  // allSeries (Stats Rank v2): series from round_info, drafts or not; reg and last are ignored
-  filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string; allSeries?: boolean }
+  // allSeries (Stats Rank v2): series from round_info, drafts or not; reg and last are ignored.
+  // teams (with allSeries): only series those teams played, see getAllSeriesIds
+  // teamId (with allSeries, Compare Stats): only the series of that team (vlr id), cut to its
+  // last N with `last`; the result still goes by tricode, the caller reads the team's own
+  filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string; allSeries?: boolean; teams?: string[]; teamId?: string }
 ): Promise<Record<string, TeamRankStats>> {
   let seriesIds: (string | number)[];
   if (filters.allSeries) {
-    seriesIds = await getAllSeriesIds(filters);
+    seriesIds = filters.teamId
+      ? (await getTeamSeriesIds({ ...filters, teamId: filters.teamId })).seriesIds
+      : await getAllSeriesIds(filters);
   } else {
-    let idQuery = supabase.from('draft').select('series_id');
+    let idQuery = supabase.from('draft').select('series_id').not('tour_id', 'in', await getReducedTourList());
     if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
     if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
     if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
@@ -46,6 +54,7 @@ async function getTournamentRankings_impl(
       .select('map_id, round, team, victim_id, victim_team, is_first_blood, is_traded')
       .in('series_id', ids)
       .eq('type', 'kill')
+      .order('series_id')
       .order('team_map_round_id')
       .order('ev_index')
       .range(from, to)
@@ -247,6 +256,7 @@ async function getTournamentRankings_impl(
     supabase.from('round_summary')
       .select('team_a, team_b, kills_team_a, kills_team_b, trades_team_a, trades_team_b')
       .in('series_id', ids)
+      .order('series_id')
       .order('team_map_round_id')
       .range(from, to)
   );
@@ -298,29 +308,30 @@ async function getTournamentRankings_impl(
   return teamStats;
 }
 
-// Maps Masters: usa la misma lógica de filtro que Stats Rank (draft → series → round_info)
-// y devuelve, por equipo y por mapa, victorias/jugados.
-export const getMapsMastersStats = versioned('maps-masters-stats', getMapsMastersStats_impl);
+// Maps Rank on the new main filter (ROADMAP Phase 12): series from round_info (getAllSeriesIds),
+// so qualifiers without draft count. Per team and map, wins / played come from every series;
+// bans only from the series with a draft (no reduced guard: the NA open qualifier has 72 real
+// ones), so the section says how many those are. `teams` (Relevant): only series they played.
+export const getMapsMastersStats = versioned('maps-masters-stats-v2', getMapsMastersStats_impl);
 async function getMapsMastersStats_impl(
-  filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
+  filters: { tour?: string; bo?: string; dateFrom?: string; dateTo?: string; teams?: string[] }
 ): Promise<MapsMastersData> {
-  let idQuery = supabase.from('draft').select('series_id, team, rival, bo, team_1_select_1, team_1_select_3, team_2_select_1, team_2_select_3');
-  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
-  if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
-  if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
-  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
-  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
-  if (filters.last && filters.last !== 'all') idQuery = idQuery.order('date', { ascending: false }).limit(parseInt(filters.last));
+  const seriesIds = await getAllSeriesIds(filters);
+  if (seriesIds.length === 0) return { stats: {}, maps: [], series: 0, draftSeries: 0 };
 
-  const { data: idList } = await idQuery;
-  if (!idList || idList.length === 0) return { stats: {}, maps: [] };
-
-  const seriesIds = [...new Set(idList.map(x => x.series_id))];
   type MastersRound = Pick<RoundInfoRow, 'map_id' | 'map' | 'teamA' | 'teamB' | 'rndA' | 'round'>;
-  const rounds = await fetchAllPages<MastersRound>((from, to) =>
-    supabase.from('round_info').select('map_id, map, teamA, teamB, rndA, round').in('series_id', seriesIds).range(from, to)
-  );
-  if (!rounds || rounds.length === 0) return { stats: {}, maps: [] };
+  type MastersDraft = Pick<DraftRow, 'series_id' | 'team' | 'rival' | 'bo' | 'team_1_select_1' | 'team_1_select_3' | 'team_2_select_1' | 'team_2_select_3'>;
+  const [rounds, idList] = await Promise.all([
+    fetchAllBySeries<MastersRound>(seriesIds, (ids, from, to) =>
+      supabase.from('round_info').select('map_id, map, teamA, teamB, rndA, round').in('series_id', ids)
+        .order('series_id').order('team_map_round_id').range(from, to)
+    ),
+    fetchAllBySeries<MastersDraft>(seriesIds, (ids, from, to) =>
+      supabase.from('draft').select('series_id, team, rival, bo, team_1_select_1, team_1_select_3, team_2_select_1, team_2_select_3')
+        .in('series_id', ids).order('series_id').range(from, to)
+    ),
+  ]);
+  if (rounds.length === 0) return { stats: {}, maps: [], series: 0, draftSeries: 0 };
 
   // Última ronda por map_id → define al ganador del mapa
   const mapLastRound: Record<string, MastersRound> = {};
@@ -352,7 +363,7 @@ async function getMapsMastersStats_impl(
 
   // Bans por equipo y mapa (desde el draft).
   // select_1 siempre es un ban; en BO3 select_3 también es ban.
-  idList.forEach((d: Pick<DraftRow, 'team' | 'rival' | 'bo' | 'team_1_select_1' | 'team_1_select_3' | 'team_2_select_1' | 'team_2_select_3'>) => {
+  idList.forEach((d) => {
     const t1 = d.team?.trim();
     const t2 = d.rival?.trim();
     const isBo3 = Number(d.bo) === 3;
@@ -372,7 +383,7 @@ async function getMapsMastersStats_impl(
 
   // Mapas ordenados por cantidad de partidas jugadas (desc)
   const maps = Object.keys(mapTotals).sort((a, b) => mapTotals[b] - mapTotals[a] || a.localeCompare(b));
-  return { stats, maps };
+  return { stats, maps, series: seriesIds.length, draftSeries: new Set(idList.map(d => Number(d.series_id))).size };
 }
 
 // Mapas jugados por el equipo en orden cronológico, con rondas ganadas/perdidas y
@@ -381,6 +392,7 @@ export async function getTeamFormTimeline(filters: { team: string; tour?: string
   let idQuery = supabase
     .from('draft')
     .select('series_id, date, team, rival, event')
+    .not('tour_id', 'in', await getReducedTourList())
     .or(`team.eq."${filters.team}",rival.eq."${filters.team}"`)
     .order('date', { ascending: false });
 

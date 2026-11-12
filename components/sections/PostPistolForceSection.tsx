@@ -3,16 +3,18 @@
 import { useState } from 'react';
 import { Info } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer, LabelList } from 'recharts';
-import { PostPistolForceStat, STATS_RANK_DEFAULT_TEAMS, TeamPostPistolForce } from '@/lib/types';
+import { PostPistolForceStat, TeamPostPistolForce } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { Tooltip } from '../Tooltip';
-import { useUrlSet } from '@/hooks/useUrlSet';
+import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 import { TeamChipsPanel } from '../TeamChipsPanel';
 
 interface Props {
   stats: Record<string, TeamPostPistolForce>;
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
+  /** Teams of the main filter (relevant / all) */
+  fixedTeams: string[];
 }
 
 // color: dominant color of each logo in public/region (same as the Neon + Phoenix region chart)
@@ -174,7 +176,7 @@ function RegionTooltipContent({ active, payload }: { active?: boolean; payload?:
   );
 }
 
-export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {} }: Props) {
+export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {}, fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [half, setHalf] = useState<Half>('both');
   const [postPlant, setPostPlant] = useState(false);
@@ -183,13 +185,16 @@ export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {}
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const allTeams = Object.keys(stats).sort();
-  const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
-  const baseTeams = allTeams.filter(t => selectedTeams.has(t));
+  // Chip list: the filter's teams (relevant / all) that played the selection, grouped by the
+  // region they played it in (teamRegions); all selected by default
+  const chipTeams = allTeams.filter(t => fixedTeams.includes(t));
+  const { selected: selectedTeams, setSelected: setSelectedTeams, reset: resetTeams } = useHiddenTeams(chipTeams);
+  const baseTeams = chipTeams.filter(t => selectedTeams.has(t));
 
   if (allTeams.length === 0) {
     return (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
-        Select a region and tournament to see the data...
+        No data for the selected filters
       </div>
     );
   }
@@ -206,7 +211,7 @@ export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {}
   const roundLabel = HALF_OPTIONS.find(([k]) => k === half)![1];
 
   function resetFilters() {
-    setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
+    resetTeams();
     setHalf('both');
     setPostPlant(false);
     setSortCol('forcePct');
@@ -252,7 +257,7 @@ export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {}
     <div className="flex flex-col gap-4">
 
       <TeamChipsPanel
-        allTeams={allTeams}
+        allTeams={chipTeams}
         selectedTeams={selectedTeams}
         setSelectedTeams={setSelectedTeams}
         teamLogos={teamLogos}

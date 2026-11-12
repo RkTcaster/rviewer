@@ -7,7 +7,7 @@
 // the overtime block is per map and covers every format. Restricting OT to Bo3 too
 // would silently drop the Bo5 finals, which is where the high-stakes OT maps are.
 import { supabase } from '../supabase';
-import { versioned, fetchAllPages } from './helpers';
+import { versioned, fetchAllBySeries, getAllSeriesIds } from './helpers';
 import { SeriesOutcomeGlobal, SeriesOutcomeStats, SeriesOutcomesData } from '../types';
 import { RoundInfoRow } from './rows';
 
@@ -21,44 +21,51 @@ const REGULATION_ROUNDS = 24;
 export const emptySeriesOutcomes = (): SeriesOutcomesData => ({
   global: { series: 0, teamAWins: 0, sweeps: 0, comebacks: 0, closers: 0, maps: 0, otMaps: 0 },
   teams: {},
+  selected: 0,
+  withDraft: 0,
 });
 
-export const getSeriesOutcomes = versioned('series-outcomes-v3', getSeriesOutcomes_impl);
+// v4: new main filter (ROADMAP Phase 12). The series come from round_info (getAllSeriesIds:
+// tournaments, dates by day, `teams` = Relevant), but only the ones with a draft are counted
+// (user's choice): the veto order and the pick columns need it, and the whole table stays on
+// the same series. `selected` / `withDraft` say how many that leaves out (qualifiers).
+// Drafts are read by series_id with no reduced guard: the NA open qualifier has 72 real ones.
+export const getSeriesOutcomes = versioned('series-outcomes-v4', getSeriesOutcomes_impl);
 
 async function getSeriesOutcomes_impl(filters: {
   tour?: string;
-  reg?: string[];
   dateFrom?: string;
   dateTo?: string;
+  teams?: string[];
 }): Promise<SeriesOutcomesData> {
-  let idQuery = supabase.from('draft').select('series_id, team, rival, bo');
-  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
-  if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
-  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
-  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
-
-  const { data: idList, error } = await idQuery;
-  if (error || !idList || idList.length === 0) return emptySeriesOutcomes();
+  const selected = await getAllSeriesIds(filters);
+  if (selected.length === 0) return emptySeriesOutcomes();
+  const idList = await fetchAllBySeries<SeriesRow>(selected, (ids, from, to) =>
+    supabase.from('draft').select('series_id, team, rival, bo').in('series_id', ids).order('series_id').range(from, to)
+  );
+  if (idList.length === 0) return { ...emptySeriesOutcomes(), selected: selected.length };
 
   // Team A is the side that opens the veto (draft.team), the same notion as the
   // orderA/orderB counters in lib/data/draft.ts.
   const teamAbySeries: Record<string, string> = {};
   const boBySeries: Record<string, number> = {};
-  for (const s of idList as SeriesRow[]) {
+  for (const s of idList) {
     if (!s.team) continue;
     teamAbySeries[s.series_id] = s.team.trim();
     boBySeries[s.series_id] = Number(s.bo);
   }
   const seriesIds = Object.keys(teamAbySeries);
 
-  const rounds = await fetchAllPages<OutcomeRound>((from, to) =>
+  const counts = { selected: selected.length, withDraft: seriesIds.length };
+  const rounds = await fetchAllBySeries<OutcomeRound>(seriesIds, (ids, from, to) =>
     supabase
       .from('round_info')
       .select('series_id, map_id, map_order, round, teamA, teamB, rndA')
-      .in('series_id', seriesIds)
+      .in('series_id', ids)
+      .order('series_id').order('team_map_round_id')
       .range(from, to)
   );
-  if (rounds.length === 0) return emptySeriesOutcomes();
+  if (rounds.length === 0) return { ...emptySeriesOutcomes(), ...counts };
 
   // Last round per map_id decides the map winner; the highest round number also
   // tells whether the map went to overtime.
@@ -158,5 +165,5 @@ async function getSeriesOutcomes_impl(filters: {
     }
   }
 
-  return { global, teams };
+  return { global, teams, ...counts };
 }

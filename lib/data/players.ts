@@ -1,6 +1,6 @@
 // lib/data/players.ts — stats individuales de jugadores
 import { supabase } from '../supabase';
-import { fetchAllPages } from './helpers';
+import { fetchAllPages, getReducedTourList } from './helpers';
 import { PlayerMatchPoint, PlayerStat, PlayerTimelineData, TopPlayerPerformance, TournamentPlayerAvg } from '../types';
 import { PlayerStatsCoreStats, PlayerStatsRow, RoundInfoRow } from './rows';
 
@@ -10,7 +10,7 @@ export async function getPlayerStats(
   // Pre-fetch series_ids from draft when bo or date filters are active
   let seriesIds: string[] | null = null;
   if ((filters.bo && filters.bo !== 'all') || filters.dateFrom || filters.dateTo) {
-    let draftQuery = supabase.from('draft').select('series_id');
+    let draftQuery = supabase.from('draft').select('series_id').not('tour_id', 'in', await getReducedTourList());
     if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
     if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
     if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
@@ -140,7 +140,7 @@ export async function getTournamentPlayerAvg(
 ): Promise<TournamentPlayerAvg | null> {
   let seriesIds: string[] | null = null;
   if ((filters.bo && filters.bo !== 'all') || filters.dateFrom || filters.dateTo) {
-    let draftQuery = supabase.from('draft').select('series_id');
+    let draftQuery = supabase.from('draft').select('series_id').not('tour_id', 'in', await getReducedTourList());
     if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
     if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
     if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
@@ -260,6 +260,7 @@ export async function getPlayerTimeline(
   let draftQuery = supabase
     .from('draft')
     .select('series_id, date, team, rival')
+    .not('tour_id', 'in', await getReducedTourList())
     .or(`team.eq."${filters.team}",rival.eq."${filters.team}"`)
     .order('date', { ascending: false });
 
@@ -466,7 +467,7 @@ export async function getTopPlayerPerformances(filters: {
   let seriesIds: string[] | null = null;
 
   if (filters.bo && filters.bo !== 'all') {
-    let draftQuery = supabase.from('draft').select('series_id').eq('bo', parseInt(filters.bo));
+    let draftQuery = supabase.from('draft').select('series_id').not('tour_id', 'in', await getReducedTourList()).eq('bo', parseInt(filters.bo));
     if (filters.tour) draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
     if (filters.reg)  draftQuery = draftQuery.in('reg_id', filters.reg!);
     const draftData = await fetchAllPages<{ series_id: string }>((from, to) => draftQuery.range(from, to));
@@ -479,6 +480,7 @@ export async function getTopPlayerPerformances(filters: {
     let lastQuery = supabase
       .from('draft')
       .select('series_id, date')
+      .not('tour_id', 'in', await getReducedTourList())
       .or(`team.eq.${filters.team},rival.eq.${filters.team}`)
       .order('date', { ascending: false });
     if (filters.reg)  lastQuery = lastQuery.in('reg_id', filters.reg!);

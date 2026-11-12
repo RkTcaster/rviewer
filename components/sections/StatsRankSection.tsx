@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { Info } from 'lucide-react';
-import { TeamRankStats, TeamEconomyCompare, EconomyCategoryStats, EconomyMatchup, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { TeamRankStats, TeamEconomyCompare, EconomyCategoryStats, EconomyMatchup } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
-import { useUrlSet } from '@/hooks/useUrlSet';
-import { TeamChipsPanel } from '../TeamChipsPanel';
 import { Tooltip } from '../Tooltip';
+import { TeamChipsPanel } from '../TeamChipsPanel';
+import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 
 interface Props {
   rankings: Record<string, TeamRankStats>;
@@ -14,10 +14,8 @@ interface Props {
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
   hasTour?: boolean;
-  /** Stats Rank v2: the teams come from the main filter (relevant / all), so no chip panel */
-  fixedTeams?: string[];
-  /** Section id Reset goes back to */
-  section?: string;
+  /** Teams of the main filter (relevant / all) */
+  fixedTeams: string[];
 }
 
 const ECO_CATEGORIES: { key: keyof TeamEconomyCompare; label: string; range: string }[] = [
@@ -228,7 +226,7 @@ function getCellColor(value: number | null, allValues: (number | null)[], lowerI
   return 'text-gray-300';
 }
 
-export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamRegions = {}, hasTour = false, fixedTeams, section = 'stats-rank' }: Props) {
+export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamRegions = {}, hasTour = false, fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<number | string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -236,11 +234,11 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   const [showDetail, setShowDetail] = useState(false);
 
   const allTeams = Object.keys(rankings).sort();
-  // Selected teams: STATS_RANK_DEFAULT_TEAMS by default, mirrored in the URL (param `teams`) so the
-  // view can be shared and survives a reload — without a server round-trip (see useUrlSet).
-  const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
-
-  const baseTeams = fixedTeams ? allTeams.filter(t => fixedTeams.includes(t)) : allTeams.filter(t => selectedTeams.has(t));
+  // Chip list: the filter's teams (relevant / all) that played the selection, grouped by the
+  // region they played it in (teamRegions); all selected by default
+  const chipTeams = allTeams.filter(t => fixedTeams.includes(t));
+  const { selected: selectedTeams, setSelected: setSelectedTeams, reset: resetTeams } = useHiddenTeams(chipTeams);
+  const baseTeams = chipTeams.filter(t => selectedTeams.has(t));
 
   // Column-group visibility (chips). Default: Overall + First 3 visible, economy groups hidden.
   const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(
@@ -256,12 +254,12 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   }
 
   function resetFilters() {
-    // Back to the initial state: default tournaments (no params) and default teams
-    setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
+    // Back to the initial state: default tournaments and teams (no params)
+    resetTeams();
     setHiddenGroups(new Set(ECO_CATEGORIES.map(c => c.key)));
     setSortCol(null);
     setSortDir('desc');
-    navigate(`?section=${section}`);
+    navigate('?section=stats-rank');
   }
 
   // Sin datos de torneos no hay chips que mostrar: placeholder completo.
@@ -320,15 +318,13 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   return (
     <div className="flex flex-col gap-4">
 
-    {!fixedTeams && (
-      <TeamChipsPanel
-        allTeams={allTeams}
-        selectedTeams={selectedTeams}
-        setSelectedTeams={setSelectedTeams}
-        teamLogos={teamLogos}
-        teamRegions={teamRegions}
-      />
-    )}
+    <TeamChipsPanel
+      allTeams={chipTeams}
+      selectedTeams={selectedTeams}
+      setSelectedTeams={setSelectedTeams}
+      teamLogos={teamLogos}
+      teamRegions={teamRegions}
+    />
 
     {/* Table info subtitle + group filter chips */}
     <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Table info</span>
@@ -379,7 +375,7 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
 
     {baseTeams.length === 0 ? (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
-        {fixedTeams ? 'No relevant teams in this selection — switch Teams to All' : 'Select at least one team to see the ranking...'}
+        {chipTeams.length === 0 ? 'No relevant teams in this selection — switch Teams to All' : 'Select at least one team to see the ranking...'}
       </div>
     ) : (
     <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-auto max-h-[85vh]">

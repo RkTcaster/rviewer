@@ -1,5 +1,5 @@
 // lib/data-service.ts — barrel: la implementación vive en lib/data/* (split por dominio)
-export { getLastUpdateDate } from './data/helpers';
+export { getLastUpdateDate, getTeamSeriesIds } from './data/helpers';
 export * from './data/filters';
 export * from './data/rankings';
 export * from './data/draft';

@@ -5,18 +5,18 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ResponsiveContainer, LabelList,
 } from 'recharts';
-import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
-import { OverallMapFullStat } from '@/lib/types';
+import { ChevronUp, ChevronDown, ChevronsUpDown, Info } from 'lucide-react';
+import { MapInfoData } from '@/lib/types';
 
 interface Props {
-  stats: OverallMapFullStat[];
+  data: MapInfoData;
 }
 
 const PICKS_COLOR = '#4ade80';    // green-400
 const DECIDERS_COLOR = '#60a5fa'; // blue-400
 const BANS_COLOR = '#f87171';     // red-400
 
-type SortKey = 'mapName' | 'atkWr' | 'defWr' | 'roundsPlayed' | 'picks' | 'bans' | 'deciders';
+type SortKey = 'mapName' | 'atkWr' | 'defWr' | 'roundsPlayed' | 'played' | 'picks' | 'bans' | 'deciders';
 type SortDir = 'asc' | 'desc';
 
 function CustomTooltip({ active, payload, label }: any) {
@@ -43,7 +43,11 @@ function CustomTooltip({ active, payload, label }: any) {
   );
 }
 
-export function MapPicksSection({ stats }: Props) {
+export function MapPicksSection({ data }: Props) {
+  const { stats, series, draftSeries } = data;
+  // Qualifiers come without draft: picks / bans / deciders only count the series that have one,
+  // and with none of them the chart and those columns are hidden
+  const hasDraft = draftSeries > 0;
   const chartData = useMemo(() =>
     stats
       .slice()
@@ -120,9 +124,26 @@ export function MapPicksSection({ stats }: Props) {
     );
   }
 
+  // Shown on the picks / bans chart when some series lack a draft, or alone when none has one
+  const draftNotice = (
+    <div className="flex items-start gap-3 bg-amber-900/15 border border-amber-700/50 rounded-xl px-5 py-3 text-sm text-amber-200/90">
+      <Info size={16} className="shrink-0 mt-0.5 text-amber-400" />
+      <p>
+        <span className="font-bold text-amber-300">Picks, bans &amp; deciders: incomplete data.</span>{' '}
+        {hasDraft
+          ? <>Only <b>{draftSeries}</b> of the <b>{series}</b> series selected ({Math.round(draftSeries / series * 100)}%) have a draft, and these figures count just those. </>
+          : <>None of the <b>{series}</b> series selected has a draft, so they are hidden. </>}
+        Qualifiers come without draft; Atk / Def WR, rounds and maps played use all {series} series.
+      </p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 p-6">
+      {!hasDraft && draftNotice}
+
+      {hasDraft && <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 p-6">
+        {draftSeries < series && <div className="mb-6">{draftNotice}</div>}
         <div className="flex gap-6 mb-6 text-xs text-gray-400">
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-sm inline-block" style={{ background: PICKS_COLOR }} />
@@ -192,7 +213,7 @@ export function MapPicksSection({ stats }: Props) {
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </div>}
 
       <div className="bg-[#1a1d23] rounded-xl shadow-2xl overflow-hidden border border-gray-800">
         <div className="overflow-x-auto">
@@ -208,9 +229,12 @@ export function MapPicksSection({ stats }: Props) {
                 <SortableTh col="atkWr" className="bg-rose-900/80">Atk WR</SortableTh>
                 <SortableTh col="defWr" className="bg-green-800/80">Def WR</SortableTh>
                 <SortableTh col="roundsPlayed" className="bg-gray-900/80">Rounds played</SortableTh>
-                <SortableTh col="picks" className="bg-green-900/30 text-green-400">Picks</SortableTh>
-                <SortableTh col="bans" className="bg-red-900/30 text-red-400">Bans</SortableTh>
-                <SortableTh col="deciders" className="bg-blue-900/30 text-blue-400">Deciders</SortableTh>
+                <SortableTh col="played" className="bg-gray-900/80">Maps played</SortableTh>
+                {hasDraft && <>
+                  <SortableTh col="picks" className="bg-green-900/30 text-green-400">Picks</SortableTh>
+                  <SortableTh col="bans" className="bg-red-900/30 text-red-400">Bans</SortableTh>
+                  <SortableTh col="deciders" className="bg-blue-900/30 text-blue-400">Deciders</SortableTh>
+                </>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
@@ -230,9 +254,12 @@ export function MapPicksSection({ stats }: Props) {
                         : <span className="text-gray-500">-</span>}
                     </td>
                     <td className="p-4 text-center text-gray-300">{s.roundsPlayed}</td>
-                    <td className="p-4 text-center text-green-400 font-bold bg-green-900/10">{s.picks}</td>
-                    <td className="p-4 text-center text-red-400 font-bold bg-red-900/10">{s.bans}</td>
-                    <td className="p-4 text-center text-blue-400 font-bold bg-blue-900/10">{s.deciders}</td>
+                    <td className="p-4 text-center text-gray-300">{s.played}</td>
+                    {hasDraft && <>
+                      <td className="p-4 text-center text-green-400 font-bold bg-green-900/10">{s.picks}</td>
+                      <td className="p-4 text-center text-red-400 font-bold bg-red-900/10">{s.bans}</td>
+                      <td className="p-4 text-center text-blue-400 font-bold bg-blue-900/10">{s.deciders}</td>
+                    </>}
                   </tr>
                 );
               })}

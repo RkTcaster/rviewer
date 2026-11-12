@@ -2,17 +2,19 @@
 
 import { useState } from 'react';
 import { Info } from 'lucide-react';
-import { SeriesOutcomeStats, SeriesOutcomesData, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { SeriesOutcomeStats, SeriesOutcomesData } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { Tooltip } from '../Tooltip';
 import { KPICard } from '../KPICard';
-import { useUrlSet } from '@/hooks/useUrlSet';
+import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 import { TeamChipsPanel } from '../TeamChipsPanel';
 
 interface Props {
   data: SeriesOutcomesData;
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
+  // Teams of the main filter (relevant / all) that played the selection
+  fixedTeams: string[];
 }
 
 // color: dominant color of each logo in public/region (same as Post Pistol Force)
@@ -189,19 +191,21 @@ const LEGEND = (
   </dl>
 );
 
-export function SeriesOutcomesSection({ data, teamLogos = {}, teamRegions = {} }: Props) {
+export function SeriesOutcomesSection({ data, teamLogos = {}, teamRegions = {}, fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<SortCol>('wr');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
-  const allTeams = Object.keys(data.teams).sort();
-  const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
+  const allTeams = Object.keys(data.teams).filter(t => fixedTeams.includes(t)).sort();
+  const { selected: selectedTeams, setSelected: setSelectedTeams, reset: resetTeams } = useHiddenTeams(allTeams);
   const baseTeams = allTeams.filter(t => selectedTeams.has(t));
 
   if (allTeams.length === 0) {
     return (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
-        Select a region and tournament to see the data...
+        {data.selected > 0
+          ? `No data: none of the ${data.selected} series selected has draft data`
+          : 'No data for the selected filters'}
       </div>
     );
   }
@@ -209,7 +213,7 @@ export function SeriesOutcomesSection({ data, teamLogos = {}, teamRegions = {} }
   const teamStat = (team: string) => data.teams[team] ?? sumStats([]);
 
   function resetFilters() {
-    setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
+    resetTeams();
     setSortCol('wr');
     setSortDir('desc');
     navigate('?section=series-outcomes');
@@ -235,6 +239,11 @@ export function SeriesOutcomesSection({ data, teamLogos = {}, teamRegions = {} }
 
   return (
     <div className="flex flex-col gap-4">
+      {data.withDraft < data.selected && (
+        <p className="px-1 text-xs text-gray-400">
+          Only series with draft data are counted: {data.withDraft} of {data.selected} series selected
+        </p>
+      )}
 
       {/* Circuit-wide KPIs — every Bo3 series in the selection, independent of the team chips */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
