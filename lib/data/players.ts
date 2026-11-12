@@ -1,36 +1,27 @@
 // lib/data/players.ts — stats individuales de jugadores
 import { supabase } from '../supabase';
-import { fetchAllPages, getReducedTourList } from './helpers';
+import { versioned, fetchAllPages, fetchAllBySeries, getAllSeriesIds, getTeamSeriesIds, getReducedTourList } from './helpers';
 import { PlayerMatchPoint, PlayerStat, PlayerTimelineData, TopPlayerPerformance, TournamentPlayerAvg } from '../types';
 import { PlayerStatsCoreStats, PlayerStatsRow, RoundInfoRow } from './rows';
 
+// Player Stats on the new main filter (ROADMAP Phase 12). The team is a vlr id: its series come
+// from round_info (getTeamSeriesIds, so qualifiers count) and its rows from
+// player_stats.team_id_vlr, limited to the selected tournaments (rows with an empty tour_id
+// belong to maps that were never played). The table covers every series of the selection; only
+// the timeline below takes Last X.
 export async function getPlayerStats(
-  filters: { team: string; reg?: string[]; tour?: string; bo?: string; dateFrom?: string; dateTo?: string }
+  filters: { teamId: string; tour?: string; bo?: string; dateFrom?: string; dateTo?: string }
 ): Promise<PlayerStat[]> {
-  // Pre-fetch series_ids from draft when bo or date filters are active
-  let seriesIds: string[] | null = null;
-  if ((filters.bo && filters.bo !== 'all') || filters.dateFrom || filters.dateTo) {
-    let draftQuery = supabase.from('draft').select('series_id').not('tour_id', 'in', await getReducedTourList());
-    if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
-    if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
-    if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
-    if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
-    if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
-    const draftData = await fetchAllPages<{ series_id: string }>((from, to) => draftQuery.range(from, to));
-    if (!draftData.length) return [];
-    seriesIds = [...new Set(draftData.map(d => d.series_id))];
-  }
+  const { tours, seriesIds } = await getTeamSeriesIds(filters);
+  if (seriesIds.length === 0) return [];
 
-  let query = supabase
-    .from('player_stats')
-    .select('player, agent, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, assistsBoth, assistsT, assistsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT')
-    .eq('team', filters.team);
-
-  if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
-  if (filters.reg)  query = query.in('reg_id', filters.reg!);
-  if (seriesIds)    query = query.in('series_id', seriesIds);
-
-  const rows = await fetchAllPages<Pick<PlayerStatsRow, 'player' | 'agent' | 'assistsBoth' | 'assistsT' | 'assistsCT'> & PlayerStatsCoreStats>((from, to) => query.range(from, to));
+  const rows = await fetchAllBySeries<Pick<PlayerStatsRow, 'player' | 'agent' | 'assistsBoth' | 'assistsT' | 'assistsCT'> & PlayerStatsCoreStats>(seriesIds, (ids, from, to) =>
+    supabase
+      .from('player_stats')
+      .select('player, agent, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, assistsBoth, assistsT, assistsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT')
+      .in('series_id', ids).in('tour_id', tours).eq('team_id_vlr', filters.teamId)
+      .order('map_id').order('player_id_vlr').range(from, to)
+  );
   if (!rows || rows.length === 0) return [];
 
   type Acc = {
@@ -135,32 +126,28 @@ export async function getPlayerStats(
   }).sort((a, b) => b.kd - a.kd);
 }
 
-export async function getTournamentPlayerAvg(
-  filters: { reg?: string[]; tour?: string; bo?: string; dateFrom?: string; dateTo?: string }
+// The average the players are compared with. Series from round_info (getAllSeriesIds); `teams`
+// (Relevant, user's choice): only the players of those teams (by vlr id), in the series they
+// played; without it (All), every player of the selection. Cached: with qualifiers it reads tens
+// of thousands of rows for one small object.
+export const getTournamentPlayerAvg = versioned('tournament-player-avg-v2', getTournamentPlayerAvg_impl);
+async function getTournamentPlayerAvg_impl(
+  filters: { tour?: string; bo?: string; dateFrom?: string; dateTo?: string; teams?: string[] }
 ): Promise<TournamentPlayerAvg | null> {
-  let seriesIds: string[] | null = null;
-  if ((filters.bo && filters.bo !== 'all') || filters.dateFrom || filters.dateTo) {
-    let draftQuery = supabase.from('draft').select('series_id').not('tour_id', 'in', await getReducedTourList());
-    if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
-    if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
-    if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
-    if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
-    if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
-    const { data: draftData } = await draftQuery;
-    if (!draftData || draftData.length === 0) return null;
-    seriesIds = [...new Set(draftData.map((d: { series_id: string }) => d.series_id))];
-  }
+  const tours = filters.tour?.split(',').filter(Boolean) ?? [];
+  const seriesIds = await getAllSeriesIds(filters);
+  if (seriesIds.length === 0) return null;
 
-  let query = supabase
-    .from('player_stats')
-    .select('player_id_vlr, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT');
-
-  if (filters.tour) query = query.in('tour_id', filters.tour.split(','));
-  if (filters.reg)  query = query.in('reg_id', filters.reg!);
-  if (seriesIds)    query = query.in('series_id', seriesIds);
-
-  const rows = await fetchAllPages<Pick<PlayerStatsRow, 'player_id_vlr'> & PlayerStatsCoreStats>((from, to) => query.range(from, to));
-  if (!rows || rows.length === 0) return null;
+  const allRows = await fetchAllBySeries<Pick<PlayerStatsRow, 'player_id_vlr'> & PlayerStatsCoreStats & { team_id_vlr: string | null }>(seriesIds, (ids, from, to) =>
+    supabase
+      .from('player_stats')
+      .select('player_id_vlr, team_id_vlr, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT')
+      .in('series_id', ids).in('tour_id', tours)
+      .order('map_id').order('player_id_vlr').range(from, to)
+  );
+  const teams = filters.teams?.length ? new Set(filters.teams) : null;
+  const rows = teams ? allRows.filter(r => teams.has(r.team_id_vlr ?? '')) : allRows;
+  if (rows.length === 0) return null;
 
   type Acc2 = {
     kills: number; deaths: number; killsT: number; deadT: number; killsCT: number; deadCT: number;
@@ -252,74 +239,58 @@ export async function getTournamentPlayerAvg(
   };
 }
 
+// The team's last N series (Last X, 10 by default) inside the selection, one point per player
+// and series. Team by vlr id: series, dates and rival from round_info (getTeamSeriesIds), rows
+// from player_stats.team_id_vlr, and the series winner from the team's column in round_info.
 export async function getPlayerTimeline(
-  filters: { team: string; reg?: string[]; tour?: string; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
+  filters: { teamId: string; tour?: string; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
 ): Promise<PlayerTimelineData> {
   const limitN = filters.last && filters.last !== 'all' ? parseInt(filters.last) : 10;
+  const team = await getTeamSeriesIds({ ...filters, last: String(limitN) });
+  if (team.seriesIds.length === 0) return [];
 
-  let draftQuery = supabase
-    .from('draft')
-    .select('series_id, date, team, rival')
-    .not('tour_id', 'in', await getReducedTourList())
-    .or(`team.eq."${filters.team}",rival.eq."${filters.team}"`)
-    .order('date', { ascending: false });
-
-  if (filters.tour)     draftQuery = draftQuery.in('tour_id', filters.tour.split(','));
-  if (filters.reg)      draftQuery = draftQuery.in('reg_id', filters.reg!);
-  if (filters.bo && filters.bo !== 'all') draftQuery = draftQuery.eq('bo', parseInt(filters.bo));
-  if (filters.dateFrom) draftQuery = draftQuery.gte('date', filters.dateFrom);
-  if (filters.dateTo)   draftQuery = draftQuery.lte('date', filters.dateTo);
-
-  const { data: draftRows } = await draftQuery.limit(limitN * 10);
-  if (!draftRows?.length) return [];
-
+  // Newest first, keyed by series id as text (the rows below are grouped by it as an object key)
   const seriesMap = new Map<string, { date: string; rival: string }>();
-  for (const row of draftRows) {
-    if (!seriesMap.has(row.series_id)) {
-      const rival = row.team === filters.team ? row.rival : row.team;
-      seriesMap.set(row.series_id, { date: row.date, rival });
-    }
-    if (seriesMap.size >= limitN) break;
-  }
+  for (const id of team.seriesIds) seriesMap.set(String(id), { date: team.dateOf.get(id) ?? '', rival: team.rivalOf.get(id) ?? '' });
   const seriesIds = [...seriesMap.keys()];
-  if (seriesIds.length === 0) return [];
 
   const [psRows, riRows] = await Promise.all([
-    fetchAllPages<Pick<PlayerStatsRow, 'series_id' | 'player' | 'agent'> & PlayerStatsCoreStats>((from, to) =>
+    fetchAllBySeries<Pick<PlayerStatsRow, 'series_id' | 'player' | 'agent'> & PlayerStatsCoreStats>(team.seriesIds, (ids, from, to) =>
       supabase
         .from('player_stats')
         .select('series_id, player, agent, killsBoth, deadBoth, killsT, deadT, killsCT, deadCT, ratingBoth, ratingT, "rating-ct", acsBoth, acsT, acsCT, adrBoth, adrT, adrCT, hsBoth, hsT, hsCT, fkBoth, fkT, fkCT, fdBoth, fdT, fdCT, kastBoth, kastT, kastCT')
-        .eq('team', filters.team)
-        .in('series_id', seriesIds)
-        .range(from, to)
+        .in('series_id', ids).in('tour_id', team.tours).eq('team_id_vlr', filters.teamId)
+        .order('map_id').order('player_id_vlr').range(from, to)
     ),
-    fetchAllPages<Pick<RoundInfoRow, 'series_id' | 'map_id' | 'round' | 'teamA' | 'rndA'>>((from, to) =>
+    fetchAllBySeries<Pick<RoundInfoRow, 'series_id' | 'map_id' | 'round' | 'rndA'> & { team_a_id_vlr: string | null; team_b_id_vlr: string | null }>(team.seriesIds, (ids, from, to) =>
       supabase
         .from('round_info')
-        .select('series_id, map_id, round, teamA, rndA')
-        .in('series_id', seriesIds)
-        .range(from, to)
+        .select('series_id, map_id, round, rndA, team_a_id_vlr, team_b_id_vlr')
+        .in('series_id', ids)
+        .order('series_id').order('team_map_round_id').range(from, to)
     ),
   ]);
   if (!psRows?.length) return [];
 
-  // Determine series winner: for each map find max round → rndA=1 means teamA won
+  // Determine series winner: for each map find max round → rndA=1 means team A won.
+  // Rows without the team's id are skipped (a few maps are stored twice, once with null ids)
   const mapMaxRound: Record<string, Record<string, number>> = {};
-  const mapFinalRow: Record<string, Record<string, { teamA: string | undefined; rndA: number }>> = {};
+  const mapFinalRow: Record<string, Record<string, { isTeamA: boolean; rndA: number }>> = {};
   for (const r of riRows ?? []) {
+    const isTeamA = r.team_a_id_vlr === filters.teamId;
+    if (!isTeamA && r.team_b_id_vlr !== filters.teamId) continue;
     const sid = r.series_id; const mid = r.map_id; const rnd = Number(r.round);
     if (!mapMaxRound[sid]) { mapMaxRound[sid] = {}; mapFinalRow[sid] = {}; }
     if (mapMaxRound[sid][mid] == null || rnd > mapMaxRound[sid][mid]) {
       mapMaxRound[sid][mid] = rnd;
-      mapFinalRow[sid][mid] = { teamA: r.teamA?.trim(), rndA: Number(r.rndA) };
+      mapFinalRow[sid][mid] = { isTeamA, rndA: Number(r.rndA) };
     }
   }
   const seriesWon: Record<string, boolean> = {};
   for (const [sid, maps] of Object.entries(mapFinalRow)) {
     let teamWins = 0, rivalWins = 0;
-    for (const { teamA, rndA } of Object.values(maps)) {
+    for (const { isTeamA, rndA } of Object.values(maps)) {
       const teamAWon = rndA === 1;
-      const isTeamA = teamA === filters.team;
       if ((isTeamA && teamAWon) || (!isTeamA && !teamAWon)) teamWins++;
       else rivalWins++;
     }

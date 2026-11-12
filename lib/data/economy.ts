@@ -551,41 +551,40 @@ function wpRoundBin(round: number): WeaponPickRound {
 // v4: loadout value and bank (keys gain cost and bank bins)
 // v5: keys gain the round group
 // v6: rival's loadout value (enemyValued / enemyCostSum)
-export const getWeaponPickStats = versioned('weapon-pick-stats-v6', getWeaponPickStats_impl);
+// v7: new main filter (ROADMAP Phase 12): series from round_info (getAllSeriesIds), so qualifiers
+// count; `teams` (Relevant) keeps the series those teams played and `keepTags` only their
+// entries (see getOperatorUseStats); rows by series in chunks, strict. `series` / `buySeries`:
+// series selected and how many have round_buy rows. team_economy rows are matched in round_buy's
+// orientation, which is round_info's: of a round stored twice with the teams swapped only that
+// copy has each team's own bank (see getPostPistolForce).
+export const getWeaponPickStats = versioned('weapon-pick-stats-v7', getWeaponPickStats_impl);
 async function getWeaponPickStats_impl(
-  filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string }
+  filters: { tour?: string; bo?: string; dateFrom?: string; dateTo?: string; teams?: string[]; keepTags?: string[] }
 ): Promise<WeaponPickData> {
-  let idQuery = supabase.from('draft').select('series_id').not('tour_id', 'in', await getReducedTourList());
-  if (filters.tour) idQuery = idQuery.in('tour_id', filters.tour.split(','));
-  if (filters.reg && filters.reg.length > 0) idQuery = idQuery.in('reg_id', filters.reg);
-  if (filters.bo && filters.bo !== 'all') idQuery = idQuery.eq('bo', parseInt(filters.bo));
-  if (filters.dateFrom) idQuery = idQuery.gte('date', filters.dateFrom);
-  if (filters.dateTo)   idQuery = idQuery.lte('date', filters.dateTo);
-  if (filters.last && filters.last !== 'all') idQuery = idQuery.order('date', { ascending: false }).limit(parseInt(filters.last));
+  const seriesIds = await getAllSeriesIds(filters);
+  if (seriesIds.length === 0) return { stats: {}, maps: [], series: 0, buySeries: 0 };
 
-  const { data: idList } = await idQuery;
-  if (!idList || idList.length === 0) return { stats: {}, maps: [] };
-
-  const seriesIds = [...new Set(idList.map(x => x.series_id))];
   // Ordered by the PK so the pages never overlap or skip rows
   const [rows, ecoRows] = await Promise.all([
-    fetchAllPages<RoundBuyRow>((from, to) =>
+    fetchAllBySeries<RoundBuyRow>(seriesIds, (ids, from, to) =>
       supabase.from('round_buy')
         .select(`map_id, round, team_a, team_b, side_team_a, ${WP_PLAYER_COLS.join(', ')}`)
-        .in('series_id', seriesIds)
+        .in('series_id', ids)
         .order('team_map_round_id')
         .range(from, to) as unknown as PromiseLike<{ data: RoundBuyRow[] | null; error: unknown }>
     ),
-    fetchAllPages<WpEcoRow>((from, to) =>
+    fetchAllBySeries<WpEcoRow>(seriesIds, (ids, from, to) =>
       supabase.from('team_economy')
         .select('map_id, round, team_a, win_A, team_a_economy, team_b_economy, team_a_bank, team_b_bank')
-        .in('series_id', seriesIds)
+        .in('series_id', ids)
         .order('team_map_round_id')
         .range(from, to)
     ),
   ]);
+  const keep = filters.keepTags ? new Set(filters.keepTags) : null;
+  // Keyed with team_a too, so a round stored twice keeps the row in round_buy's orientation
   const eco: Record<string, WpEcoRow> = {};
-  for (const e of ecoRows) eco[`${e.map_id}|${Number(e.round)}`] = e;
+  for (const e of ecoRows) eco[`${e.map_id}|${Number(e.round)}|${e.team_a?.trim()}`] = e;
 
   const stats: WeaponPickData['stats'] = {};
   const maps = new Set<string>();
@@ -594,11 +593,11 @@ async function getWeaponPickStats_impl(
     const map = r.map_id?.slice(r.map_id.indexOf('-') + 1);
     if (!map) continue;
     maps.add(map);
-    const e = eco[`${r.map_id}|${Number(r.round)}`];
-    const ecoOk = !!e && e.team_a?.trim() === r.team_a?.trim();
+    const e = eco[`${r.map_id}|${Number(r.round)}|${r.team_a?.trim()}`];
+    const ecoOk = !!e;
     for (const s of ['a', 'b'] as const) {
       const team = (s === 'a' ? r.team_a : r.team_b)?.trim();
-      if (!team) continue;
+      if (!team || (keep && !keep.has(team))) continue;
       const atk = (r.side_team_a === 'atk') === (s === 'a');
       const weapons = [1, 2, 3, 4, 5].map(i => WP_CATEGORY[String(r[`player_${i}_team_${s}_weapon`])] ?? 'Other');
       const armor = [1, 2, 3, 4, 5].map(i => {
@@ -625,5 +624,7 @@ async function getWeaponPickStats_impl(
     }
   }
 
-  return { stats, maps: [...maps].sort() };
+  // map_id is "<series_id>-<Map>"
+  const buySeries = new Set(rows.map(r => r.map_id?.slice(0, r.map_id.indexOf('-')))).size;
+  return { stats, maps: [...maps].sort(), series: seriesIds.length, buySeries };
 }

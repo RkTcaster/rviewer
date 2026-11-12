@@ -797,6 +797,45 @@ Still open:
     identical to the old page leaf by leaf (Champions 54 912 values, Americas + EMEA Stage 2 Bo3
     128 197, Americas Kickoff 45 873; the only differences are the kill-derived fields, which
     also move Kept / Saved since those use the deaths). Not checked in a browser.
+  - **Weapon Pick** (`weapon-pick`, 2026-11-12): `getWeaponPickStats` v7 on the new filter,
+    same shape as Operator Use: **Relevant only** (user's choice, no Relevant / All chips; All
+    on 2027 was estimated at ~10 MB and uncacheable), `keepTags` inside the cached function,
+    "Buy data: X of Y series" line, team chips from the filter. `team_economy` rows are matched
+    in `round_buy`'s orientation (= `round_info`'s: 1716 / 1716 rows in the EMEA Kickoff, 1242 /
+    1242 in Masters Santiago), so a bank always belongs to its team. Those two tournaments no
+    longer have the duplicated `team_economy` rows (1716 and 1242 rows, one per round): the
+    scraper removed them. Verified: identical to the old page leaf by leaf for Champions 2026
+    (24 352 values), Americas + EMEA Stage 2 Bo3 (76 408) and Americas Kickoff (21 936); rounds
+    and bank bins per team against a hand count for the EMEA Kickoff and Masters Santiago
+    (72 cells each, 0 diffs). 2027 Relevant: 1.5 MB page, 0.5 s on reload. Not checked in a
+    browser.
+  - **Time & Site** (`time-site`, 2026-11-12): `getTimeSiteStats` v2 on the new filter, same
+    shape as Operator Use and Weapon Pick: **Relevant only** (user's choice, no Relevant / All
+    chips), `keepTags` inside the cached function, "Round data: X of Y series" line, team chips
+    from the filter. Verified: identical to the old page leaf by leaf for Champions 2026 (14 480
+    values), Americas + EMEA Stage 2 Bo3 (47 112) and Americas Kickoff (13 120); for 12 relevant
+    teams of 2027 the rounds on the page equal their rounds in `round_info` by vlr id, except
+    one that shows a limit of every page keyed by tricode: **a team that changed tricode
+    mid-tournament appears as two teams**. xXxMasterProMegaTeamxXx (23693, Europe qualifier)
+    played 6 series as `XXXM` (236 rounds) and the last one as `MPMT` (57), so it has two chips
+    and two rows. Fixed only by ids in the data tables (scraper phase 2). 2027 Relevant: 0.7 MB
+    page, 0.4 s on reload. Not checked in a browser.
+  - **Player Stats** (`player-stats`, 2026-11-12): team page like Team → Maps (team by vlr id,
+    `TeamTreeControls` + Last X, starts on the latest season). `getPlayerStats` and
+    `getPlayerTimeline` take the team's series from `getTeamSeriesIds` and its rows from
+    `player_stats.team_id_vlr`; the table covers the whole selection and only the timeline takes
+    Last X (10 series by default), as before. The timeline's rival and date come from
+    `round_info` and the series winner from the team's column by id. The average the players
+    are compared with (`getTournamentPlayerAvg` v2, now cached) follows Relevant / All (user's
+    choice): the players of the relevant teams by id, or every player of the selection.
+    Verified against the old page, by player and by series: G2 in Champions 2026 (1215 cells),
+    PRX over Stage 2 ×4 + Champions Bo3 Last 3 (655) and NRG from 2026-08-01 (1635), 0 diffs
+    except one "most played agent" that was a tie; the average is identical in the three
+    (all their teams are relevant). `seriesId` in the timeline is now a string, as its type
+    says (it was a number at runtime). Made in Brampton (`team=MIBR` on the NA open) shows its 5
+    players, 4 maps, 2 series. Not checked in a browser.
+  - **Relevant Info** hidden from the sidebar (2026-11-12, commented out like Veto Draft and
+    Economy; still at `?section=relevant-info`, on the old filter).
   - **Team chips** (Stats Rank, Neon + Phoenix; nov 2026): the `TeamChipsPanel` is back, listing
     the filter's teams (relevant / all) that played the selection, all on by default; what is
     stored is the teams turned off (`useHiddenTeams`, URL `hideTeams`), so a newly activated

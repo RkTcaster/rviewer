@@ -304,9 +304,12 @@ export type OperatorUseData = {
 // medians over any set of maps. The plant is always the attacker's: on a team's def rounds it is
 // the rival's plant against them. fbOwn = the team made the first kill (null without a first kill).
 export type TimeSiteRound = { plantT: number | null; site: string | null; fbT: number | null; fbOwn: boolean | null };
+// `series`: series of the filter; `dataSeries`: the ones with round_summary rows
 export type TimeSiteData = {
   stats: Record<string, Record<string, { atk: TimeSiteRound[]; def: TimeSiteRound[] }>>; // team -> map -> side
   maps: string[];
+  series: number;
+  dataSeries: number;
 };
 
 // Weapon Pick, from round_buy + team_economy. A loadout is what the 5 players hold at the start of
@@ -322,9 +325,12 @@ export type WeaponPickBank = 'b0' | 'b2' | 'b6' | 'b10' | 'na';
 export type WeaponPickRound = 'r1' | 'r3' | 'other';
 // Keyed by `${loadout}|${cost}|${bank}|${round}`
 export type WeaponPickStat = { atk: Record<string, WeaponPickLoadout>; def: Record<string, WeaponPickLoadout> };
+// `series`: series of the filter; `buySeries`: the ones with round_buy rows
 export type WeaponPickData = {
   stats: Record<string, Record<string, WeaponPickStat>>; // team -> map -> side -> loadout key
   maps: string[];
+  series: number;
+  buySeries: number;
 };
 
 export type PlayerMatchPoint = {

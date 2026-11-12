@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { Info } from 'lucide-react';
-import { TimeSiteData, TimeSiteRound, STATS_RANK_DEFAULT_TEAMS } from '@/lib/types';
+import { TimeSiteData, TimeSiteRound } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { useUrlSet } from '@/hooks/useUrlSet';
+import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 import { TeamChipsPanel } from '../TeamChipsPanel';
 import { Tooltip } from '../Tooltip';
 
@@ -16,6 +17,11 @@ interface Props {
   mapImages?: Record<string, string>;
   hasTour?: boolean;
   defaultHiddenMaps?: string[];
+  // Series of the filter and how many of them have round data (round_summary)
+  series: number;
+  dataSeries: number;
+  // Teams of the main filter (the relevant ones) that played the selection
+  fixedTeams: string[];
 }
 
 type Side = 'all' | 'atk' | 'def';
@@ -148,7 +154,7 @@ function legend() {
   );
 }
 
-export function TimeSiteSection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, hasTour = false, defaultHiddenMaps = [] }: Props) {
+export function TimeSiteSection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, hasTour = false, defaultHiddenMaps = [], series, dataSeries, fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [side, setSide] = useState<Side>('all');
   const [showDetail, setShowDetail] = useState(false);
@@ -156,8 +162,8 @@ export function TimeSiteSection({ stats, maps, teamLogos = {}, teamRegions = {},
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const data = stats ?? {};
-  const allTeams = Object.keys(data).sort();
-  const [selectedTeams, setSelectedTeams] = useUrlSet('teams', allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t)));
+  const allTeams = Object.keys(data).filter(t => fixedTeams.includes(t)).sort();
+  const { selected: selectedTeams, setSelected: setSelectedTeams, reset: resetTeams } = useHiddenTeams(allTeams);
   const baseTeams = allTeams.filter(t => selectedTeams.has(t));
 
   // Hidden maps: not columns, they filter which rounds are summed per team
@@ -174,7 +180,7 @@ export function TimeSiteSection({ stats, maps, teamLogos = {}, teamRegions = {},
   }
 
   function resetFilters() {
-    setSelectedTeams(new Set(allTeams.filter(t => STATS_RANK_DEFAULT_TEAMS.includes(t))));
+    resetTeams();
     setHiddenMaps(new Set(maps.filter(m => defaultHiddenMaps.includes(m.toLowerCase()))));
     setSide('all');
     setSortCol('plantRate');
@@ -296,6 +302,11 @@ export function TimeSiteSection({ stats, maps, teamLogos = {}, teamRegions = {},
 
   return (
     <div className="flex flex-col gap-4">
+      {dataSeries < series && (
+        <p className="px-1 text-xs text-gray-400">
+          Round data: {dataSeries} of {series} series selected (the rest have no round_summary rows)
+        </p>
+      )}
 
       {/* Filters: teams on the left + maps on the right */}
       <div className="flex flex-wrap gap-x-10 gap-y-4">

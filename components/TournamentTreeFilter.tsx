@@ -24,7 +24,7 @@ interface Props {
   topControls?: React.ReactNode;
   // Series Outcomes is Bo3 by definition: no Serie chips
   hideSerie?: boolean;
-  // Operator Use only works with the relevant teams: no Relevant / All chips
+  // Operator Use, Weapon Pick and Time & Site only work with the relevant teams: no Relevant / All chips
   hideTeams?: boolean;
   children?: React.ReactNode;
 }

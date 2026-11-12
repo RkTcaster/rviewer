@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, Trophy, ChevronLeft, ChevronRight, AlignCenterVertical, Sparkles, Swords, Crosshair, ShoppingCart, Timer } from 'lucide-react';
+import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, ChevronLeft, ChevronRight, AlignCenterVertical, Sparkles, Swords, Crosshair, ShoppingCart, Timer } from 'lucide-react';
 import { useNavigation, useFilterParams } from './NavigationContext';
 import { NewsButton } from './NewsButton';
 import type { NewsEntry } from '@/lib/news';
@@ -35,15 +35,15 @@ const NAV_SECTIONS = [
   {
     title: 'Advance',
     items: [
-      // Hidden (nov 2026), still reachable at ?section=veto / ?section=economy: uncomment to bring
-      // them back (re-add ListOrdered to the icon import for Veto Draft)
+      // Hidden (nov 2026), still reachable at ?section=veto / economy / relevant-info: uncomment
+      // to bring them back (re-add ListOrdered to the icon import for Veto Draft, Trophy for Relevant Info)
       // { id: 'veto', label: 'Veto Draft', icon: ListOrdered },
       { id: 'series-outcomes', label: 'Series Outcomes', icon: Swords },
       { id: 'operator-use', label: 'Operator Use', icon: Crosshair },
       { id: 'weapon-pick', label: 'Weapon Pick', icon: ShoppingCart },
       { id: 'time-site', label: 'Time & Site', icon: Timer },
       // { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Zap },
-      { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
+      // { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
       // { id: 'economy',       label: 'Economy',       icon: DollarSign },
       { id: 'player-stats',  label: 'Player Stats',  icon: UserRound },
       // { id: 'playoff-pct',        label: 'Playoff %',          icon: Trophy }, 
