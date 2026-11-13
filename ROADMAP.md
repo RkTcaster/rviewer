@@ -583,11 +583,11 @@ A main filter meant to replace the per-page one on almost every page, tried firs
   as the region chips listing its regions (logo + name), and the four region logos on the chip
   toned by selection like the Quick Tournament chips; the chip and each entry toggle every
   open of the year / of that region, like a region chip (`GROUPED_STAGES`, nov 2026). The menu
-  goes "Kickoff Open 1" (later "Cup 1 Open 2"…) → regions → each open, every level a checkbox plus
+  goes "Kickoff Open" (later "Cup 1 Open"…) → regions → each open, every level a checkbox plus
   an `a/b ▶` side panel (on hover or click), to pick a single open (e.g. only NA). The first level
   is the circuit stage the qualifier feeds, parsed from the event (`qualifierTarget`: "vct 2027
-  america kickoff - … open qualifier" → Kickoff), numbered in circuit order (Kickoff, Cup 1,
-  Cup 2…), no column needed. Every open loaded so far is Kickoff Open 1. Subregions carry a flag
+  america kickoff - … open qualifier" → Kickoff), sorted in circuit order (Kickoff, Cup 1,
+  Cup 2…), no column needed, and not numbered (2026-11-13: the scrape loads a stage's opens 1 and 2 as one event). Every open loaded so far is Kickoff Open. Subregions carry a flag
   in both menus (`public/flags/`, `SUBREGION_FLAGS` by subregion name without case or spaces). The region chips' subregion menu stays as is: the stage is picked
   from the Tournament row, the place from the Region row. Goal: Open /
   Closed / Kickoff; Closed joins the list when closed qualifiers arrive.
@@ -915,38 +915,53 @@ Still open:
   - With shared tricodes (100T, MIBR, FUR, NOVA, TS, ATL, VEIL, THE…) `relevant` marks both teams
     until `team_id_vlr` lands; once `teams` is keyed by it, the flag has to move to the new rows.
 
-## Phase 13 — Team Profiling (next session)
+## Phase 13 — Team Profiling (first version, 2026-11-13)
 
-New page in the Advance group of the sidebar (`team-profiling`): a diamond / radar chart with
-every axis from 0 to 1, to compare teams. Relevant teams only (plus the ones the visitor adds
-with "+ Add"). Asked by the user on 2026-11-12; nothing built yet.
+New page in the Advance group of the sidebar (`team-profiling`): a radar chart with every axis
+from 0 to 1, up to 3 teams overlaid. Relevant teams only (plus the ones the visitor adds with
+"+ Add"), on the new main filter. Asked by the user on 2026-11-12; built 2026-11-13.
+It replaces Backlog 3.4 (radar inside Compare Stats).
 
-Starting points (already in the code):
-- New main filter and Relevant: `TournamentTreeFilter`, `v2Teams` / `relevantTeamsP` in
-  `app/page.tsx`; team chips with `TeamChipsPanel` + `useHiddenTeams` (as in Time & Site).
-- Metrics: `getTournamentRankings({ allSeries: true, teams })` already returns
-  `TeamRankStats` per team (ATK / DEF WR, pistol, anti-eco, recovery, post-plant, retake,
-  trade rate, true FK / FD, save rate). Stats Rank computes the rates from it.
-- Chart: `recharts` is installed (it has `RadarChart`).
-- It replaces Backlog 3.4 (radar inside Compare Stats, 2 teams, 5 axes).
+Decided with the user (2026-11-13):
+- **Axes** (raw figure → source):
+  - ATK WR / DEF WR: rounds won / played per side (`getTournamentRankings`, every series).
+  - FK eff: first duels won, FK / (FK + FD) (`TeamRankStats.fk` / `fd`, series with round_events).
+  - Op use: Op pick rate, eligible rounds (not 1, 2, 13, 14) with an Operator held / eligible,
+    both sides, every map (`getOperatorUseStats`, Operator only, series with round_buy).
+  - Atk speed: median plant second of the team's ATK rounds with a plant (`getTimeSiteStats`);
+    lower = faster = outside.
+  - Off-meta ("Meta comps"): per map, ½ Σ |team agent pick rate − pick rate of the teams shown|
+    / 5 (0 = same picks, 1 = nothing in common), averaged over the team's maps weighted by maps
+    played (`getAgentCompMatches`, every series with player_stats).
+- **0 to 1**: min-max per axis over the teams shown (worst 0, best 1; all equal 0.5). A team
+  without data on an axis is left out of that axis and drawn at 0, "—" in the table.
+- Op use, Atk speed and Off-meta are style: outside = more Op, faster plants, more off-meta, so
+  the area is not "better team" (said under the chart).
+- **Teams**: 2-3 overlaid; logo chips pick them (max 3, the first 2 on by default, local state).
+  A team keeps its color while picked (dataviz categorical slots 1-3, dark steps, validated
+  all-pairs on `#0f1115`). Table next to the chart with the raw figures and the scaled value.
 
-To decide with the user before coding (page-by-page workflow, with mockups):
-- Which axes, and how many (4 for a literal diamond, or 5-8 for a radar).
-- What 0 to 1 means: the raw rate (a 55% WR is 0.55), or each metric scaled between the
-  worst and best team of the selection (min-max), or the team's percentile.
-  Raw rates bunch every team around the middle; scaled ones exaggerate small gaps.
-- "Lower is better" metrics (true FD rate): inverted so that outside is always better?
-- How many teams at once: 2-3 overlaid on one chart, or one small chart per team in a grid.
-- Metrics that need round_events (trade rate, true FK...) only exist for series with that
-  data: say how many series each axis is built from, as the other pages do.
+Code: `lib/data/teamProfiling.ts` (`getTeamProfiling`: reads the four cached functions with the
+same arguments as Stats Rank / Operator Use / Time & Site / Agent Picks, so the caches are
+shared, and reduces them to a few numbers per team; not cached itself),
+`components/sections/TeamProfilingSection.tsx`, wiring in `app/page.tsx` and
+`components/Sidebar.tsx` (same shape as Time & Site, `relevantOnly`).
 
-Closing: general criteria below; one team's axis values hand-checked against Stats Rank.
+Verified (2026-11-13): `tsc` + `next build` clean; the default selection (2027, 15 relevant
+teams, 91 series) renders in 5 s uncached. F9 by hand count from Supabase (`round_info`,
+`round_summary`, `round_events`, `round_buy` by vlr id 18494): ATK 131/226, DEF 107/187, FK 233
+of 413, Op 148/330, median plant 50 s over 168 plants, all equal to the page. Off-meta
+recomputed from `player_stats` by `team_id_vlr`: equal on all 15 teams (4 decimals, same map
+counts). Min-max values in the rendered table equal an independent computation (ARG. ATK 0.89,
+DEF 0.00, FK 0.72, Op 0.31, speed 0.78, meta 0.50). Champions 2026 shows "No data" today: no
+2026 league team is relevant right now (Relevant follows the circuit stage, see 12.6).
+Not checked in a browser (chart hover, chips).
 
 ## Backlog
 
 - **3.4 Team profile radar** in Compare Stats: a pentagon (pistol WR, ATK WR, DEF WR, retake eff,
   post-plant WR) overlaid for the 2 teams. Data: `TeamRankStats` is already computed.
-  → superseded by Phase 13 (Team Profiling).
+  → superseded by Phase 13 (Team Profiling, first version 2026-11-13).
 - **3.5 WR vs economy difference curve**: probability of winning the round given the credit gap,
   from `team_economy`. Complements Compare Economy.
 

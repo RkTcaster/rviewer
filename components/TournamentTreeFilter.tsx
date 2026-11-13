@@ -97,7 +97,7 @@ export function TournamentTreeFilter({ tree, regions, selected, suffix = '', tit
   // Chip whose ▾ menu is open (a region's subregions or a grouped stage's regions), one at a time;
   // closes on click outside or Esc
   const [openMenu, setOpenMenu] = useState<string | null>(null);
-  // Path of menu items whose side panels are open, one key per depth (Open 1 → Americas → its
+  // Path of menu items whose side panels are open, one key per depth (Kickoff Open → Americas → its
   // opens); set on hover or click on ▶
   const [flyout, setFlyout] = useState<string[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -179,7 +179,7 @@ export function TournamentTreeFilter({ tree, regions, selected, suffix = '', tit
 
   // Chip that toggles its whole group, plus a ▾ a/b menu with a checkbox per item (a region's
   // subregions, a grouped stage's regions). Without items it is a plain chip. An item with
-  // `children` gets an a/b ▶ and a side panel with them, nested as deep as the items go (Open 1 →
+  // `children` gets an a/b ▶ and a side panel with them, nested as deep as the items go (Kickoff Open →
   // a region → each of its opens), opened on hover or on click of the ▶; its own name still
   // toggles the whole item.
   type MenuItem = { key: string; label: string; logo?: React.ReactNode; group: TournamentNode[]; children?: MenuItem[] };
@@ -331,15 +331,16 @@ export function TournamentTreeFilter({ tree, regions, selected, suffix = '', tit
         const yearPrefix = multiYear && t.year ? `${t.year} ` : '';
         if (isGrouped(t)) {
           const stageLabel = STAGE_LABELS[t.stage!] ?? t.stage!;
-          // Menu: one entry per circuit stage the qualifiers feed, numbered in circuit order
-          // ("Kickoff Open 1", later "Cup 1 Open 2"…) → regions → each tournament
+          // Menu: one entry per circuit stage the qualifiers feed, in circuit order ("Kickoff
+          // Open", later "Cup 1 Open"…; no number: the scrape loads a stage's opens 1 and 2 as one
+          // event) → regions → each tournament
           const targets = [...new Set(group.map(qualifierTarget))]
             .sort((a, b) => targetOrder(a) - targetOrder(b) || a.localeCompare(b));
-          const numItems = targets.map((target, i) => {
+          const numItems = targets.map(target => {
             const numGroup = group.filter(g => qualifierTarget(g) === target);
             const regs = [...new Set(numGroup.map(g => g.reg_id))];
             return {
-              key: `target:${target}`, label: `${target ? `${target} ` : ''}${stageLabel} ${i + 1}`, group: numGroup,
+              key: `target:${target}`, label: `${target ? `${target} ` : ''}${stageLabel}`, group: numGroup,
               children: regs.map(r => {
                 const regGroup = numGroup.filter(g => g.reg_id === r);
                 return {

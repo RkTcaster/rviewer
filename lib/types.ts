@@ -312,6 +312,26 @@ export type TimeSiteData = {
   dataSeries: number;
 };
 
+// Team Profiling (radar): raw figure per axis; [n, d] pairs are rates. null = no data
+export type TeamProfile = {
+  atk: [number, number];     // ATK rounds won / played
+  def: [number, number];     // DEF rounds won / played
+  fk: [number, number];      // first duels won: FK / (FK + FD)
+  op: [number, number];      // eligible rounds with an Operator / eligible rounds (Operator Use)
+  plantMedian: number | null; // median plant second of the team's ATK rounds with a plant
+  plants: number;
+  meta: number | null;       // 0 = same agent picks as the teams shown, 1 = nothing in common
+  metaMaps: number;          // maps the meta distance is averaged over
+};
+// `series`: series of the filter; `buySeries` / `roundDataSeries`: the ones with round_buy /
+// round_summary rows (Op use / FK and Atk speed)
+export type TeamProfilingData = {
+  teams: Record<string, TeamProfile>;
+  series: number;
+  buySeries: number;
+  roundDataSeries: number;
+};
+
 // Weapon Pick, from round_buy + team_economy. A loadout is what the 5 players hold at the start of
 // the round (bought, kept or dropped), weapons grouped by category plus armor, e.g. "4 Rifle + Op · 4 Heavy + Light".
 // valued = rounds with a team_economy row; costSum / bankSum are the team's loadout value and bank

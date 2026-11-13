@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, ChevronLeft, ChevronRight, AlignCenterVertical, Sparkles, Swords, Crosshair, ShoppingCart, Timer } from 'lucide-react';
+import { LayoutGrid, GitCompareArrows, Scale, Map, Users, UserRound, TrendingUp, BarChart2, DollarSign, ChevronLeft, ChevronRight, AlignCenterVertical, Sparkles, Swords, Crosshair, ShoppingCart, Timer, Radar } from 'lucide-react';
 import { useNavigation, useFilterParams } from './NavigationContext';
 import { NewsButton } from './NewsButton';
 import type { NewsEntry } from '@/lib/news';
@@ -42,6 +42,7 @@ const NAV_SECTIONS = [
       { id: 'operator-use', label: 'Operator Use', icon: Crosshair },
       { id: 'weapon-pick', label: 'Weapon Pick', icon: ShoppingCart },
       { id: 'time-site', label: 'Time & Site', icon: Timer },
+      { id: 'team-profiling', label: 'Team Profiling', icon: Radar },
       // { id: 'skirmish-americas',  label: 'Skirmish Americas',  icon: Zap },
       // { id: 'relevant-info',      label: 'Relevant Info',      icon: Trophy },
       // { id: 'economy',       label: 'Economy',       icon: DollarSign },
@@ -82,7 +83,7 @@ export function Sidebar({ lastUpdateDate, news }: { lastUpdateDate?: string | nu
 
   function goToSection(section: string) {
     // Stats Rank and Maps Masters always start on their default setup (no inherited filters)
-    if (section === 'stats-rank' || section === 'maps-masters' || section === 'neon-dependency' || section === 'post-pistol-force' || section === 'series-outcomes' || section === 'operator-use' || section === 'weapon-pick' || section === 'time-site') {
+    if (section === 'stats-rank' || section === 'maps-masters' || section === 'neon-dependency' || section === 'post-pistol-force' || section === 'series-outcomes' || section === 'operator-use' || section === 'weapon-pick' || section === 'time-site' || section === 'team-profiling') {
       commitParams(new URLSearchParams({ section }), { immediate: true });
       return;
     }

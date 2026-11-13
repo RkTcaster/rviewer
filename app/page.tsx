@@ -1,6 +1,6 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getAgentPickStats, getAgentNonMirrorMatches, getAgentCompMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getMapInfo, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows, getSeriesOutcomes, emptySeriesOutcomes, getOperatorUseStats, getWeaponPickStats, getTimeSiteStats, getTournamentTree, getRelevantTeams, getRelevantTags, getPlayedTags, getTeamMaps, getTeamCompare, getTeamDashboard, getTeamSeriesIds, getTeamOptions, getAddableTeams } from '@/lib/data-service';
-import { DEFAULT_TOURS, MapInfoData, TeamRankStats, TeamMapsData, TeamCompareData } from '@/lib/types';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getAgentPickStats, getAgentNonMirrorMatches, getAgentCompMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getMapInfo, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows, getSeriesOutcomes, emptySeriesOutcomes, getOperatorUseStats, getWeaponPickStats, getTimeSiteStats, getTournamentTree, getRelevantTeams, getRelevantTags, getPlayedTags, getTeamMaps, getTeamCompare, getTeamDashboard, getTeamSeriesIds, getTeamOptions, getAddableTeams, getTeamProfiling } from '@/lib/data-service';
+import { DEFAULT_TOURS, MapInfoData, TeamRankStats, TeamMapsData, TeamCompareData, TeamProfilingData } from '@/lib/types';
 import { getLatestNews } from '@/lib/news';
 import { Filters } from '@/components/Filters';
 import { TournamentTreeFilter } from '@/components/TournamentTreeFilter';
@@ -35,6 +35,7 @@ import { SeriesOutcomesSection } from '@/components/sections/SeriesOutcomesSecti
 import { OperatorUseSection } from '@/components/sections/OperatorUseSection';
 import { WeaponPickSection } from '@/components/sections/WeaponPickSection';
 import { TimeSiteSection } from '@/components/sections/TimeSiteSection';
+import { TeamProfilingSection } from '@/components/sections/TeamProfilingSection';
 import type { Metadata } from 'next';
 
 export async function generateMetadata({
@@ -66,7 +67,7 @@ export default async function Page({
   // `tour` param they start on the latest season
   const isStatsRank = section === 'stats-rank';
   const isNeonDependency = section === 'neon-dependency';
-  const usesTreeFilter = isStatsRank || isNeonDependency || section === 'map-picks' || section === 'maps-masters' || section === 'agent-picks' || section === 'post-pistol-force' || section === 'meta-shift' || section === 'maps' || isCompare || section === 'series-outcomes' || section === 'operator-use' || section === 'weapon-pick' || section === 'time-site' || section === 'player-stats';
+  const usesTreeFilter = isStatsRank || isNeonDependency || section === 'map-picks' || section === 'maps-masters' || section === 'agent-picks' || section === 'post-pistol-force' || section === 'meta-shift' || section === 'maps' || isCompare || section === 'series-outcomes' || section === 'operator-use' || section === 'weapon-pick' || section === 'time-site' || section === 'player-stats' || section === 'team-profiling';
   const tourTree = usesTreeFilter ? await getTournamentTree() : [];
   const latestYear = Math.max(...tourTree.map(t => t.year ?? 0));
   const v2DefaultTours = tourTree.filter(t => t.year === latestYear).map(t => t.tour_id).join(',');
@@ -91,12 +92,13 @@ export default async function Page({
   const isOperatorUse = section === 'operator-use';
   const isWeaponPick = section === 'weapon-pick';
   const isTimeSite = section === 'time-site';
+  const isTeamProfiling = section === 'team-profiling';
 
   // Todas las consultas se construyen como promesas y se esperan juntas en un
   // solo Promise.all para evitar la cascada secuencial de awaits.
 
   // Team data (only for team sections)
-  const resultP = (!isOverall && !isMetaShift && !isTeamMaps && !isPlayerStats && !isCompare && !isEconomy && !isRelevantInfo && !isSkirmish && !isPlayoffPct && !isStatsRank && !isMapsMasters && !isOperatorUse && !isWeaponPick && !isTimeSite && team)
+  const resultP = (!isOverall && !isMetaShift && !isTeamMaps && !isPlayerStats && !isCompare && !isEconomy && !isRelevantInfo && !isSkirmish && !isPlayoffPct && !isStatsRank && !isMapsMasters && !isOperatorUse && !isWeaponPick && !isTimeSite && !isTeamProfiling && team)
     ? getMapStats({ team, tour, bo, reg: regArr, last, dateFrom, dateTo })
     : Promise.resolve(null);
 
@@ -107,8 +109,9 @@ export default async function Page({
   // relevantTeams: their tricodes among the teams of the selection, for the team lists (the stats
   // are keyed by tricode); v2Teams: their vlr ids, which pick the series. v2Teams waits for the
   // tricodes so the round 1 scan they share with the data functions runs once.
-  // Operator Use, Weapon Pick and Time & Site always work with the relevant teams (too heavy for All)
-  const relevantOnly = isOperatorUse || isWeaponPick || isTimeSite;
+  // Operator Use, Weapon Pick, Time & Site and Team Profiling always work with the relevant teams
+  // (too heavy for All)
+  const relevantOnly = isOperatorUse || isWeaponPick || isTimeSite || isTeamProfiling;
   // extraTeams: vlr ids the visitor added to Relevant from the filter (URL `addTeams`); they count
   // as relevant everywhere below. addable: the teams that control offers, per side.
   const extraTeams = [...new Set((addTeams ?? '').split(',').filter(id => /^\d+$/.test(id)))].sort();
@@ -210,7 +213,7 @@ export default async function Page({
     ? getAgentRoles()
     : Promise.resolve({});
 
-  const needsLogos = isStatsRank || isMapsMasters || isOperatorUse || isWeaponPick || isTimeSite || isNeonDependency || isPostPistolForce || isMetaShift || isVetoPredictor || isSeriesOutcomes || section === 'compare-maps' || section === 'compare-stats' || isCompareEconomy;
+  const needsLogos = isStatsRank || isMapsMasters || isOperatorUse || isWeaponPick || isTimeSite || isTeamProfiling || isNeonDependency || isPostPistolForce || isMetaShift || isVetoPredictor || isSeriesOutcomes || section === 'compare-maps' || section === 'compare-stats' || isCompareEconomy;
   // Every section that renders Filters gets logos for its team selects
   const showsFilters = !isSkirmish && !isPlayoffPct && !isVetoPredictor && !usesTreeFilter;
   const teamLogosP = (needsLogos || showsFilters || isTeamMaps || isPlayerStats) ? getTeamLogos() : Promise.resolve({});
@@ -236,6 +239,11 @@ export default async function Page({
     ? Promise.all([v2Teams, relevantTeamsP]).then(([teams, tags]) =>
         getTimeSiteStats({ tour, bo, dateFrom, dateTo, teams, keepTags: tags ?? [] }))
     : Promise.resolve({ stats: null, maps: [] as string[], series: 0, dataSeries: 0 });
+
+  const teamProfilingP = (isTeamProfiling && hasTour)
+    ? Promise.all([v2Teams, relevantTeamsP]).then(([teams, tags]) =>
+        getTeamProfiling({ tour, bo, dateFrom, dateTo, teams, keepTags: tags ?? [] }))
+    : Promise.resolve<TeamProfilingData>({ teams: {}, series: 0, buySeries: 0, roundDataSeries: 0 });
 
   // Series Outcomes is Bo3-only by definition, so it ignores the bo filter
   const seriesOutcomesP = (isSeriesOutcomes && hasTour)
@@ -327,7 +335,7 @@ export default async function Page({
     playerStats, tournamentPlayerAvg, playerTimeline, playerLastMatch,
     regions, teams, lastUpdateDate, news,
     econCompareA, econCompareB, economyBins, longestMaps, topPerformances,
-    skirmishStats, simulationScenarios, tours, vetoFlows, formTimeline, vetoModel, seriesOutcomes, operatorUse, weaponPick, timeSite, relevantTeams, metaTeams, addable, addable2, relTags, relTags2,
+    skirmishStats, simulationScenarios, tours, vetoFlows, formTimeline, vetoModel, seriesOutcomes, operatorUse, weaponPick, timeSite, teamProfiling, relevantTeams, metaTeams, addable, addable2, relTags, relTags2,
   ] = await Promise.all([
     resultP, compareAP, compareBP, statsAP, statsBP, lastMatchAP, lastMatchBP, teamOptions2P, rankingsP, economyP, mapInfoP,
     teamOptionsP, teamMapsP, agentPickStatsP, agentCompositionsP, agentMatchesP, agentCompMatchesP,
@@ -336,7 +344,7 @@ export default async function Page({
     playerStatsP, tournamentPlayerAvgP, playerTimelineP, playerLastMatchP,
     getRegions(), getTeams(regArr), getLastUpdateDate(), getLatestNews(),
     econCompareAP, econCompareBP, economyBinsP, longestMapsP, topPerformancesP,
-    skirmishStatsP, simulationScenariosP, toursP, vetoFlowsP, formTimelineP, vetoModelP, seriesOutcomesP, operatorUseP, weaponPickP, timeSiteP, relevantTeamsP, metaTeamsP, addableP, addable2P, relTagsP, relTags2P,
+    skirmishStatsP, simulationScenariosP, toursP, vetoFlowsP, formTimelineP, vetoModelP, seriesOutcomesP, operatorUseP, weaponPickP, timeSiteP, teamProfilingP, relevantTeamsP, metaTeamsP, addableP, addable2P, relTagsP, relTags2P,
   ]);
 
 
@@ -409,6 +417,8 @@ export default async function Page({
         return <WeaponPickSection stats={weaponPick.stats} maps={weaponPick.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} series={weaponPick.series} buySeries={weaponPick.buySeries} fixedTeams={relevantTeams ?? []} />;
       case 'time-site':
         return <TimeSiteSection stats={timeSite.stats} maps={timeSite.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} series={timeSite.series} dataSeries={timeSite.dataSeries} fixedTeams={relevantTeams ?? []} />;
+      case 'team-profiling':
+        return <TeamProfilingSection data={teamProfiling} teamLogos={teamLogos} hasTour={hasTour} fixedTeams={relevantTeams ?? []} />;
       case 'post-pistol-force':
         return <PostPistolForceSection stats={postPistolForce} teamLogos={teamLogos} teamRegions={teamRegions} fixedTeams={relevantTeams ?? Object.keys(postPistolForce)} />;
       case 'veto':
@@ -502,6 +512,7 @@ export default async function Page({
           'operator-use': 'Operator Use',
           'weapon-pick': 'Weapon Pick',
           'time-site': 'Time & Site',
+          'team-profiling': 'Team Profiling',
           }[section] ?? section}</h1>
           {regArr && regArr.length > 0 && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-900/30 text-blue-400 border border-blue-800 uppercase tracking-widest mt-1">
@@ -569,7 +580,7 @@ export default async function Page({
 
         <main className="relative p-8 pt-6">
           <ContentOverlay />
-          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isVetoPredictor || isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isSeriesOutcomes || isOperatorUse || isWeaponPick || isTimeSite) ? (
+          {(isOverall || isMetaShift || isEconomy || isRelevantInfo || isSkirmish || isPlayoffPct || isVetoPredictor || isStatsRank || isMapsMasters || isNeonDependency || isPostPistolForce || isSeriesOutcomes || isOperatorUse || isWeaponPick || isTimeSite || isTeamProfiling) ? (
             renderSection()
           ) : ((isTeamMaps || isPlayerStats || isCompare) ? !teamOptions.selected : !team) ? (
             <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
