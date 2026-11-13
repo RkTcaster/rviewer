@@ -6,7 +6,7 @@ import { Region, TeamOption, TournamentNode } from '@/lib/types';
 import { TournamentTreeFilter } from './TournamentTreeFilter';
 import { TeamTreeControls, LastXSelect } from './TeamTreeControls';
 
-interface Side { selected: string[]; options: TeamOption[]; team: TeamOption | null }
+interface Side { selected: string[]; options: TeamOption[]; team: TeamOption | null; add: TeamOption[]; relevant: string[] }
 interface Props {
   tree: TournamentNode[];
   regions: Region[];
@@ -21,10 +21,10 @@ export function CompareFilters({ tree, regions, left, right, teamLogos }: Props)
   );
   return (
     <div className="flex flex-col [&>div]:mb-3 mb-5">
-      <TournamentTreeFilter tree={tree} regions={regions} selected={left.selected} title={title('Team Left', 'text-blue-400')} topControls={<LastXSelect />}>
+      <TournamentTreeFilter tree={tree} regions={regions} selected={left.selected} addTeams={left.add} relevantTags={left.relevant} title={title('Team Left', 'text-blue-400')} topControls={<LastXSelect />}>
         <TeamTreeControls label="Team Left" options={left.options} selected={left.team} teamLogos={teamLogos} />
       </TournamentTreeFilter>
-      <TournamentTreeFilter tree={tree} regions={regions} selected={right.selected} suffix="2" title={title('Team Right', 'text-orange-400')} topControls={<LastXSelect />}>
+      <TournamentTreeFilter tree={tree} regions={regions} selected={right.selected} addTeams={right.add} relevantTags={right.relevant} suffix="2" title={title('Team Right', 'text-orange-400')} topControls={<LastXSelect />}>
         <TeamTreeControls label="Team Right" suffix="2" options={right.options} selected={right.team} teamLogos={teamLogos} />
       </TournamentTreeFilter>
     </div>

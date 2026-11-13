@@ -7,9 +7,10 @@
 // live in a menu opened from the ▾ of their region chip.
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { Region, TournamentNode } from '@/lib/types';
+import { Region, TeamOption, TournamentNode } from '@/lib/types';
 import { useNavigation, useFilterParams } from './NavigationContext';
 import { DateFilter } from './DateFilter';
+import { AddTeamsSelect } from './AddTeamsSelect';
 
 interface Props {
   tree: TournamentNode[];
@@ -26,6 +27,10 @@ interface Props {
   hideSerie?: boolean;
   // Operator Use, Weapon Pick and Time & Site only work with the relevant teams: no Relevant / All chips
   hideTeams?: boolean;
+  // Teams the visitor can add to Relevant (URL `addTeams`, shared by both sides like `allTeams`)
+  addTeams?: TeamOption[];
+  // Tricodes of the teams marked relevant that played the selected tournaments: tooltip of Relevant
+  relevantTags?: string[];
   children?: React.ReactNode;
 }
 
@@ -85,7 +90,7 @@ const TONE = {
   off: 'bg-transparent border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300',
 };
 
-export function TournamentTreeFilter({ tree, regions, selected, suffix = '', title, topControls, hideSerie, hideTeams, children }: Props) {
+export function TournamentTreeFilter({ tree, regions, selected, suffix = '', title, topControls, hideSerie, hideTeams, addTeams, relevantTags = [], children }: Props) {
   const { commitParams, hasPendingEdits } = useNavigation();
   const filterParams = useFilterParams();
   const sel = new Set(selected);
@@ -295,15 +300,18 @@ export function TournamentTreeFilter({ tree, regions, selected, suffix = '', tit
           </div>
         </div>}
 
-        {!hideTeams && <div className="flex items-center gap-2">
+        {(!hideTeams || addTeams) && <div className="flex items-center gap-2">
           <span className={LABEL}>Teams</span>
           <div className="flex gap-2">
-            <button onClick={() => setParam('allTeams', null)} className={pill(!allTeams)} title="Teams qualified to the Closed qualifiers, plus the league teams">
-              Relevant
-            </button>
-            <button onClick={() => setParam('allTeams', '1')} className={pill(allTeams)}>
-              All
-            </button>
+            {!hideTeams && <>
+              <button onClick={() => setParam('allTeams', null)} className={pill(!allTeams)} title={`Teams: ${relevantTags.join(', ') || 'none in this selection'}`}>
+                Relevant
+              </button>
+              <button onClick={() => setParam('allTeams', '1')} className={pill(allTeams)}>
+                All
+              </button>
+            </>}
+            {addTeams && (hideTeams || !allTeams) && <AddTeamsSelect options={addTeams} chipClass={pill} />}
           </div>
         </div>}
 

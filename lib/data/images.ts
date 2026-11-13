@@ -53,17 +53,21 @@ async function getTeamRegions_impl(tours?: string): Promise<Record<string, strin
   return result;
 }
 
-export const getTeamLogos = versioned('team-logos', getTeamLogos_impl);
+// v2: sin archivo en public/ (equipos de qualifiers sin logo) → logo default. Un tag que no
+// está en `teams` sigue sin entrada (el <img> no se renderiza).
+const DEFAULT_TEAM_LOGO = '/teams/default.png';
+export const getTeamLogos = versioned('team-logos-v2', getTeamLogos_impl);
 async function getTeamLogos_impl(): Promise<Record<string, string>> {
   const { data } = await supabase.from('teams').select('team_id, team_path');
   if (!data) return {};
-  return Object.fromEntries(
-    data
-      // Sin archivo en public/ (equipos de qualifiers sin logo) → sin entrada, el <img> no se renderiza
-      .filter((r: { team_id: string; team_path: string | null }) =>
-        r.team_path && fs.existsSync(path.join(process.cwd(), 'public', r.team_path)))
-      .map((r: { team_id: string; team_path: string }) => [r.team_id, `/${r.team_path}`])
-  );
+  const logos: Record<string, string> = {};
+  for (const r of data as { team_id: string; team_path: string | null }[]) {
+    const found = !!r.team_path && fs.existsSync(path.join(process.cwd(), 'public', r.team_path));
+    // Tags compartidos por varios equipos: el default no pisa un logo real
+    if (found) logos[r.team_id] = `/${r.team_path}`;
+    else logos[r.team_id] ??= DEFAULT_TEAM_LOGO;
+  }
+  return logos;
 }
 
 // Mapas fuera de rotación (in_rotation = false en maps_name_ids): defaults de los

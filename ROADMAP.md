@@ -836,6 +836,20 @@ Still open:
     players, 4 maps, 2 series. Not checked in a browser.
   - **Relevant Info** hidden from the sidebar (2026-11-12, commented out like Veto Draft and
     Economy; still at `?section=relevant-info`, on the old filter).
+  - **Add teams to Relevant** (2026-11-13): "+ Add" chip next to Relevant / All on every page of
+    the new filter (`AddTeamsSelect`): a searchable list of the non-relevant teams that played
+    the selected tournaments (`getAddableTeams`). The choice is per visitor and lives in the URL
+    (`addTeams`, vlr ids; user approved), not in Supabase: `teams.relevant` stays the owner's
+    list. `app/page.tsx` adds those ids to `v2Teams` and to `getRelevantTags` / `getTeamOptions`,
+    so every data function takes them as relevant with no change. Hidden on All; shown on the
+    Relevant-only pages too; one shared param on the two-sided filters; Meta Shift's Reset
+    clears it. Verified on the Europe qualifier: without the param Stats Rank and Time & Site
+    are identical to before; with `addTeams=24057` (KRY) it gets its chip, its Stats Rank
+    figures equal the ones on All, its 29 rounds on Time & Site equal `round_info`, and the
+    other teams don't change; the 14 pages answer 200 with the chip. Known limit: on Operator
+    Use / Weapon Pick / Time & Site every added team adds heavy reads. Not checked in a browser.
+  - **Default logo** (2026-11-12): a team of `teams` without its file in `public/` gets
+    `/teams/default.png` (`getTeamLogos` v2).
   - **Team chips** (Stats Rank, Neon + Phoenix; nov 2026): the `TeamChipsPanel` is back, listing
     the filter's teams (relevant / all) that played the selection, all on by default; what is
     stored is the teams turned off (`useHiddenTeams`, URL `hideTeams`), so a newly activated

@@ -2,7 +2,7 @@
 // Meta Shift on the new main filter (ROADMAP Phase 12): one tournament cascade per side (A writes
 // tour / dateFrom / dateTo, B the same with the 2 suffix), each with its Team and Exclude Teams.
 // Serie and Relevant / All show on both sides and are the same control (`bo` / `allTeams`).
-import { Region, TournamentNode } from '@/lib/types';
+import { Region, TeamOption, TournamentNode } from '@/lib/types';
 import { useNavigation, useFilterParams } from './NavigationContext';
 import { TournamentTreeFilter } from './TournamentTreeFilter';
 import { SearchableSelect } from './SearchableSelect';
@@ -15,12 +15,18 @@ interface Props {
   selectedB: string[];
   teamsA: string[];
   teamsB: string[];
+  // Teams each side offers to add to Relevant (see AddTeamsSelect)
+  addA: TeamOption[];
+  addB: TeamOption[];
+  // Relevant teams of each side's tournaments (tooltip of the Relevant chip)
+  relevantA: string[];
+  relevantB: string[];
   teamLogos: Record<string, string>;
 }
 
-const RESET_KEYS = ['team', 'tour', 'excA', 'dateFrom', 'dateTo', 'team2', 'tour2', 'excB', 'dateFrom2', 'dateTo2', 'bo', 'allTeams'];
+const RESET_KEYS = ['team', 'tour', 'excA', 'dateFrom', 'dateTo', 'team2', 'tour2', 'excB', 'dateFrom2', 'dateTo2', 'bo', 'allTeams', 'addTeams'];
 
-export function MetaShiftFilters({ tree, regions, selectedA, selectedB, teamsA, teamsB, teamLogos }: Props) {
+export function MetaShiftFilters({ tree, regions, selectedA, selectedB, teamsA, teamsB, addA, addB, relevantA, relevantB, teamLogos }: Props) {
   const { commitParams, flush } = useNavigation();
   const filterParams = useFilterParams();
 
@@ -74,7 +80,7 @@ export function MetaShiftFilters({ tree, regions, selectedA, selectedB, teamsA, 
 
   return (
     <div className="flex flex-col [&>div]:mb-3 mb-5">
-      <TournamentTreeFilter tree={tree} regions={regions} selected={selectedA}
+      <TournamentTreeFilter tree={tree} regions={regions} selected={selectedA} addTeams={addA} relevantTags={relevantA}
         title={title('A', 'text-blue-400', (
           <button onClick={reset} className="mr-24 text-[10px] font-bold text-red-500 hover:text-red-400 hover:underline uppercase tracking-wider">
             Reset filters
@@ -83,7 +89,7 @@ export function MetaShiftFilters({ tree, regions, selectedA, selectedB, teamsA, 
       >
         {side('A', 'team', 'excA', teamsA, 'text-blue-400')}
       </TournamentTreeFilter>
-      <TournamentTreeFilter tree={tree} regions={regions} selected={selectedB} suffix="2" title={title('B', 'text-orange-400')}>
+      <TournamentTreeFilter tree={tree} regions={regions} selected={selectedB} addTeams={addB} relevantTags={relevantB} suffix="2" title={title('B', 'text-orange-400')}>
         {side('B', 'team2', 'excB', teamsB, 'text-orange-400')}
       </TournamentTreeFilter>
     </div>

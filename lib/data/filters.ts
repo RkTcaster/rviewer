@@ -46,11 +46,12 @@ async function getRelevantTeams_impl(): Promise<string[]> {
 // Tricodes of the relevant teams that played the given tournaments, for the team lists: the stats
 // tables only carry the tricode, so this is what a section can match. Taken from round_info by
 // vlr id, so a tricode only shows up when the relevant team itself played the selection.
-export async function getRelevantTags(tour?: string): Promise<string[]> {
+// `extra`: vlr ids the visitor added to Relevant from the filter (URL `addTeams`).
+export async function getRelevantTags(tour?: string, extra: string[] = []): Promise<string[]> {
   const tours = tour?.split(',').filter(Boolean) ?? [];
   if (tours.length === 0) return [];
   const [ids, rounds] = await Promise.all([getRelevantTeams(), getFirstRounds(tours.sort().join(','))]);
-  const relevant = new Set(ids);
+  const relevant = new Set([...ids, ...extra]);
   const tags = new Set<string>();
   for (const r of rounds) {
     if (r.teamA && relevant.has(r.team_a_id_vlr ?? '')) tags.add(r.teamA.trim());
@@ -69,7 +70,7 @@ const getTeamNames = unstable_cache(async () => {
   if (error) throw error;
   return (data ?? []) as { team_id_vlr: string; team_id: string; name: string | null; relevant: boolean | null }[];
 }, ['team-names-v2'], { revalidate: 300 });
-export async function getTeamOptions(tour: string | undefined, all: boolean, tag?: string, teamId?: string): Promise<{ options: TeamOption[]; selected: TeamOption | null }> {
+export async function getTeamOptions(tour: string | undefined, all: boolean, tag?: string, teamId?: string, extra: string[] = []): Promise<{ options: TeamOption[]; selected: TeamOption | null }> {
   const tours = tour?.split(',').filter(Boolean) ?? [];
   const [teams, rounds] = await Promise.all([getTeamNames(), tours.length ? getFirstRounds(tours.sort().join(',')) : []]);
   const byId = new Map(teams.map(t => [t.team_id_vlr, t]));
@@ -85,7 +86,7 @@ export async function getTeamOptions(tour: string | undefined, all: boolean, tag
       ?? relevantFirst(teams.filter(t => t.team_id === tag).map(t => t.team_id_vlr))
     : undefined;
 
-  const ids = [...played.keys()].filter(id => all || byId.get(id)?.relevant);
+  const ids = [...played.keys()].filter(id => all || byId.get(id)?.relevant || extra.includes(id));
   if (selectedId && !ids.includes(selectedId)) ids.push(selectedId);
   const count: Record<string, number> = {};
   for (const id of ids) count[tagOf(id)] = (count[tagOf(id)] ?? 0) + 1;
@@ -93,6 +94,24 @@ export async function getTeamOptions(tour: string | undefined, all: boolean, tag
     .map(id => ({ id, tag: tagOf(id), label: count[tagOf(id)] > 1 ? `${tagOf(id)} · ${byId.get(id)?.name ?? id}` : tagOf(id) }))
     .sort((a, b) => a.label.localeCompare(b.label));
   return { options, selected: options.find(o => o.id === selectedId) ?? null };
+}
+
+// Teams a visitor can add to Relevant from the filter: the ones that played the given tournaments
+// and are not marked relevant, labeled "TAG · name" so the search finds either
+export async function getAddableTeams(tour?: string): Promise<TeamOption[]> {
+  const tours = tour?.split(',').filter(Boolean) ?? [];
+  if (tours.length === 0) return [];
+  const [teams, rounds] = await Promise.all([getTeamNames(), getFirstRounds(tours.sort().join(','))]);
+  const byId = new Map(teams.map(t => [t.team_id_vlr, t]));
+  const played = new Map<string, string>();
+  for (const r of rounds) {
+    if (r.team_a_id_vlr && r.teamA) played.set(r.team_a_id_vlr, r.teamA.trim());
+    if (r.team_b_id_vlr && r.teamB) played.set(r.team_b_id_vlr, r.teamB.trim());
+  }
+  return [...played]
+    .filter(([id]) => !byId.get(id)?.relevant)
+    .map(([id, tag]) => ({ id, tag, label: byId.get(id)?.name ? `${tag} · ${byId.get(id)!.name}` : tag }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 // Tricodes of every team that played the given tournaments (Meta Shift team lists on All teams)
