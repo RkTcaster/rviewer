@@ -393,11 +393,12 @@ URL, no map / side filters, a dead header branch for `'Bonus Conversion (PAB)'` 
   is the extra data: `round_summary.plant_site` / `round_events.site` (A / B / C) and `plant_t`
   (second of the round), e.g. plant rate per site or average plant time. Caveat: the new tables
   only cover Champions 2026, `player_performance` covers every tournament.
-- **Still open, to decide with the user**: gradient colors (ex 3.1: today only best/worst are
-  painted green/red; move to a continuous percentile scale to read the middle of the pack at a
-  glance — pure color gradient, no bars), column-group chips in the URL,
-  map / side filters, removing the dead `'Bonus Conversion (PAB)'` branch, more metrics from
-  `round_events` / `round_summary` (first blood, plant site / time — see 8.3).
+- **Colors** ✅ (2026-11-13): the user is happy with the current Stats Rank colors; the gradient
+  (ex 3.1) is closed.
+- **Dead `'Bonus Conversion (PAB)'` header branch** removed (2026-11-13); the column is
+  `'Bonus Conversion (W-W-W)'`, so the header renders the same.
+- **Still open, to decide with the user**: column-group chips in the URL, map / side filters,
+  more metrics from `round_events` / `round_summary` (first blood, plant site / time — see 8.3).
 
 ---
 
@@ -486,8 +487,7 @@ fast / mid / slow, FB 28.4 / 22 s, FK 28.3 s, FD 28.6 s, FB → plant 32.9 s; PR
 46 s, 14 / 47 / 31, FB 22.5 / 18 s, FK 23.9 s, FD 20.9 s, FB → plant 29.4 s. Lotus only: T1 39/48,
 sites A 11 / B 13 / C 15. Still open:
 
-- **10.1 Check ATK / DEF in the browser**: the side chips are client state and only Both was
-  checked against the rendered page (the script's ATK / DEF figures are ready to compare).
+- **10.1 Check ATK / DEF in the browser** ✅ (2026-11-13): checked by the user, works.
 - **10.2 Only Champions 2026 in `round_summary`**: other tournaments show up once loaded.
 
 ## Phase 11 — Qualifier data and DB-driven defaults
@@ -515,7 +515,9 @@ the default view has to keep showing the league teams, with the rest behind a fi
     Asked vlr-scraper what the rule is (`handoff/VLR_SCRAPER_TEAM_ID_Y_DATOS.md`).
 - **11.0 Data audit after each upload**: `node scripts/data-audit.mjs` (read-only, anon key, ~20 s).
   Per tournament: series / drafts / maps / rounds / economy / buy / stats / perf against
-  `round_info`; tournament metadata (year / stage / subregion); cache version; tricodes shared
+  `round_info` (2026-11-13: it died with `round_buy: timeout` on a cold database, as the first
+  count on each big table takes ~3 s and the 8 per-tournament counts ran in parallel; the big
+  tables are now warmed one at a time first); tournament metadata (year / stage / subregion); cache version; tricodes shared
   by different teams (no players in common between a league and a qualifier team); rows without
   `player_id_vlr`; agent images. Lines with ⚠ are what to check or report to vlr-scraper.
 - **11.2 Default tournaments from the DB** (ex 5.1): evaluate a boolean `default` column in
@@ -606,8 +608,9 @@ Verified (nov 2026): `tsc` + `next build` clean; NA open qualifier map WR matche
 and played each other, so `FAKE` shows 16/19 maps. Old Stats Rank unchanged (T1 25/43 = 58%).
 Still open:
 
-- **12.1 Check the cascade in the browser**: the SQL is applied (nov 2026: 21 tournaments with
-  year / stage, 96 relevant teams); only the data path was verified so far.
+- **12.1 Check the cascade in the browser** ✅ (2026-11-13): the user checked the new-filter pages
+  in the browser, Türkiye in the Open menu included. The "Not checked in a browser" notes below
+  predate that check.
 - **12.2 Roll the filter out** to the other pages. Done so far:
   - **Map Info** (`map-picks`, nov 2026): `usesTreeFilter` in `app/page.tsx` (tree, latest-season
     default, Relevant / All) and `getMapInfo` (`lib/data/draft.ts`): series from `getAllSeriesIds`,
@@ -892,10 +895,14 @@ Still open:
   and none of MIBR / 100T / FUR / NOVA / TS.
   Still by tricode (needs phase 2, asked in `handoff/VLR_SCRAPER_TEAM_ID_FASE_2.md`): the stats
   themselves, so two teams with the same tricode inside one selection (All teams with
-  qualifiers) add up in one row; region, logo. Also found: `round_info` has 5 maps of
+  qualifiers) add up in one row; region, logo. Also found: `round_info` had 5 maps of
   `vct_2026_pacific_stage_1` twice (series 644656 and 644659, the copy with null ids), which
-  count double for TS, NS and DRX.
-- **12.6 Relevant teams wiped — the user reloads them (next session)**: on 2026-11-11 every row of
+  counted double for TS, NS and DRX. Fixed by the scraper (checked 2026-11-13: no `round_info`
+  row with a null id left; Pacific Stage 1 has 2289 rounds in `round_info` and `round_buy`).
+- **12.6 Relevant teams wiped** ✅ (reloaded, 2026-11-13): the list now follows the circuit stage
+  (opens → closed → Kickoff → Cups), about 48–60 teams once complete. 15 relevant on 2026-11-13 is
+  expected: two EMEA / Americas opens are still to come and nothing of China / Pacific is loaded.
+  History: on 2026-11-11 every row of
   `teams` had `relevant = false` (972 teams, was 96 true / 921), most likely a vlr-scraper upload
   of `teams` during the `team_id_vlr` work (item 5 of `handoff/VLR_SCRAPER_TEAM_ID_Y_DATOS.md`).
   The user is reloading the list by hand, better curated (tooltip: teams qualified to the Closed
@@ -908,10 +915,38 @@ Still open:
   - With shared tricodes (100T, MIBR, FUR, NOVA, TS, ATL, VEIL, THE…) `relevant` marks both teams
     until `team_id_vlr` lands; once `teams` is keyed by it, the flag has to move to the new rows.
 
+## Phase 13 — Team Profiling (next session)
+
+New page in the Advance group of the sidebar (`team-profiling`): a diamond / radar chart with
+every axis from 0 to 1, to compare teams. Relevant teams only (plus the ones the visitor adds
+with "+ Add"). Asked by the user on 2026-11-12; nothing built yet.
+
+Starting points (already in the code):
+- New main filter and Relevant: `TournamentTreeFilter`, `v2Teams` / `relevantTeamsP` in
+  `app/page.tsx`; team chips with `TeamChipsPanel` + `useHiddenTeams` (as in Time & Site).
+- Metrics: `getTournamentRankings({ allSeries: true, teams })` already returns
+  `TeamRankStats` per team (ATK / DEF WR, pistol, anti-eco, recovery, post-plant, retake,
+  trade rate, true FK / FD, save rate). Stats Rank computes the rates from it.
+- Chart: `recharts` is installed (it has `RadarChart`).
+- It replaces Backlog 3.4 (radar inside Compare Stats, 2 teams, 5 axes).
+
+To decide with the user before coding (page-by-page workflow, with mockups):
+- Which axes, and how many (4 for a literal diamond, or 5-8 for a radar).
+- What 0 to 1 means: the raw rate (a 55% WR is 0.55), or each metric scaled between the
+  worst and best team of the selection (min-max), or the team's percentile.
+  Raw rates bunch every team around the middle; scaled ones exaggerate small gaps.
+- "Lower is better" metrics (true FD rate): inverted so that outside is always better?
+- How many teams at once: 2-3 overlaid on one chart, or one small chart per team in a grid.
+- Metrics that need round_events (trade rate, true FK...) only exist for series with that
+  data: say how many series each axis is built from, as the other pages do.
+
+Closing: general criteria below; one team's axis values hand-checked against Stats Rank.
+
 ## Backlog
 
 - **3.4 Team profile radar** in Compare Stats: a pentagon (pistol WR, ATK WR, DEF WR, retake eff,
   post-plant WR) overlaid for the 2 teams. Data: `TeamRankStats` is already computed.
+  → superseded by Phase 13 (Team Profiling).
 - **3.5 WR vs economy difference curve**: probability of winning the round given the credit gap,
   from `team_economy`. Complements Compare Economy.
 

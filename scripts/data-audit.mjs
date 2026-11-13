@@ -48,6 +48,11 @@ console.log(`${tours.length} tournaments; reduced: ${tours.filter(t => t.match_f
 // --- Rows per tournament. round_info is the reference: one row per round
 section('Rows per tournament');
 console.log('tour | format | series | drafts | maps | rounds | economy | buy | stats | perf');
+// The first count on a big table reads it cold (~3 s, at the anon timeout; ~0.3 s after), and the
+// 8 counts in parallel below timed out together on the first tournament: warm them one at a time
+for (const table of ['round_info', 'team_economy', 'round_buy', 'player_stats', 'player_performance']) {
+  await count(table, q => q.eq('tour_id', tours[0].tour_id));
+}
 for (const t of tours) {
   const byTour = q => q.eq('tour_id', t.tour_id);
   const [series, drafts, maps, rounds, economy, buy, stats, perf] = await Promise.all([

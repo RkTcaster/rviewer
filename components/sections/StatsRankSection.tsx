@@ -439,7 +439,6 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
                     >
                       {(() => {
                         const w = m.label.split(' ');
-                        if (m.label === 'Bonus Conversion (PAB)') return 'Bonus\nConversion\n(PAB)';
                         if (w.length === 2) return w.join('\n');
                         if (w.length === 3 || w.length === 4) return `${w[0]} ${w[1]}\n${w.slice(2).join(' ')}`;
                         if (w.length >= 5) return `${w[0]} ${w[1]}\n${w[2]}\n${w.slice(3).join(' ')}`;
