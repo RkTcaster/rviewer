@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Tooltip as ChartTooltip, ResponsiveContainer } from 'recharts';
+import { Info } from 'lucide-react';
 import { TeamProfile, TeamProfilingData } from '@/lib/types';
+import { Tooltip } from '../Tooltip';
 
 interface Props {
   data: TeamProfilingData;
@@ -18,20 +20,69 @@ const SLOT_COLORS = ['#3987e5', '#d95926', '#199e70'];
 const MAX_TEAMS = SLOT_COLORS.length;
 
 const rate = ([n, d]: [number, number]) => d === 0 ? null : n / d;
-const pctLabel = ([n, d]: [number, number]) => d === 0 ? '—' : `${Math.round((n / d) * 100)}% (${n}/${d})`;
+const pctLabel = ([n, d]: [number, number]) => d === 0 ? '—' : `${Math.round((n / d) * 100)}%`;
+const countLabel = ([n, d]: [number, number]) => d === 0 ? '' : `${n}/${d}`;
 
-// raw: the figure scaled min-max; higherOut: whether a higher raw value goes outside
-type Axis = { key: string; label: string; raw: (p: TeamProfile) => number | null; higherOut: boolean; show: (p: TeamProfile) => string };
+// raw: the figure scaled min-max; higherOut: whether a higher raw value goes outside;
+// show: the value always shown; detail: its counts, only with Detail info
+type Axis = {
+  key: string; label: string; raw: (p: TeamProfile) => number | null; higherOut: boolean;
+  show: (p: TeamProfile) => string; detail: (p: TeamProfile) => string;
+};
 const AXES: Axis[] = [
-  { key: 'atk', label: 'ATK WR', raw: p => rate(p.atk), higherOut: true, show: p => pctLabel(p.atk) },
-  { key: 'def', label: 'DEF WR', raw: p => rate(p.def), higherOut: true, show: p => pctLabel(p.def) },
-  { key: 'fk', label: 'FK eff', raw: p => rate(p.fk), higherOut: true, show: p => pctLabel(p.fk) },
-  { key: 'op', label: 'Op use', raw: p => rate(p.op), higherOut: true, show: p => pctLabel(p.op) },
-  { key: 'speed', label: 'Atk speed', raw: p => p.plantMedian, higherOut: false,
-    show: p => p.plantMedian === null ? '—' : `${Math.round(p.plantMedian)} s median plant (${p.plants} plants)` },
-  { key: 'meta', label: 'Off-meta', raw: p => p.meta, higherOut: true,
-    show: p => p.meta === null ? '—' : `${p.meta.toFixed(2)} (${p.metaMaps} maps)` },
+  { key: 'atk', label: 'ATK WR', raw: p => rate(p.atk), higherOut: true, show: p => pctLabel(p.atk), detail: p => countLabel(p.atk) },
+  { key: 'def', label: 'DEF WR', raw: p => rate(p.def), higherOut: true, show: p => pctLabel(p.def), detail: p => countLabel(p.def) },
+  { key: 'fk', label: 'FK EFF', raw: p => rate(p.fk), higherOut: true, show: p => pctLabel(p.fk), detail: p => countLabel(p.fk) },
+  { key: 'op', label: 'OP USE', raw: p => rate(p.op), higherOut: true, show: p => pctLabel(p.op), detail: p => countLabel(p.op) },
+  { key: 'speed', label: 'ATK SPD', raw: p => p.plantMedian, higherOut: false,
+    show: p => p.plantMedian === null ? '—' : `${Math.round(p.plantMedian)} s`,
+    detail: p => p.plantMedian === null ? '' : `median plant, ${p.plants} plants` },
+  { key: 'meta', label: 'OFFMETA', raw: p => p.meta, higherOut: true,
+    show: p => p.meta === null ? '—' : p.meta.toFixed(2),
+    detail: p => p.meta === null ? '' : `${p.metaMaps} maps` },
 ];
+
+const LEGEND = (
+  <dl className="w-[380px] flex flex-col gap-2 text-[11px] leading-snug text-gray-300">
+    <div>
+      <dt className="font-bold text-gray-100">Scale</dt>
+      <dd className="text-gray-400">
+        Each axis is scaled over the teams shown: worst 0, best 1 (last number with Detail info). The
+        highest of the compared teams is green.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">ATK WR / DEF WR</dt>
+      <dd className="text-gray-400">Rounds won over rounds played on each side.</dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">FK EFF</dt>
+      <dd className="text-gray-400">First duels won: first kills over first kills + first deaths.</dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">OP USE</dt>
+      <dd className="text-gray-400">Rounds with at least one Operator over eligible rounds (not 1, 2, 13, 14), both sides.</dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">ATK SPD</dt>
+      <dd className="text-gray-400">Median plant time of the attack rounds with a plant; faster is further out.</dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">OFFMETA</dt>
+      <dd className="text-gray-400">
+        Per map, half the summed gap between the team&apos;s and the teams shown&apos; agent pick rates,
+        over 5 agents (0 = same picks, 1 = nothing in common), averaged over the team&apos;s maps.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Style axes</dt>
+      <dd className="text-gray-400">
+        OP USE, ATK SPD and OFFMETA describe style, not quality: outside = more Operator, faster
+        plants, picks further from the meta. A bigger area is not a better team.
+      </dd>
+    </div>
+  </dl>
+);
 
 // Min-max per axis over the teams shown: worst 0, best (or "most") 1; all equal → 0.5; no data → null
 function scaleAxes(profiles: Record<string, TeamProfile>, teams: string[]) {
@@ -54,6 +105,7 @@ export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fi
   const teams = fixedTeams.filter(t => data.teams[t]);
   // slots[i] = team drawn in color i (null = free slot)
   const [slots, setSlots] = useState<(string | null)[]>(() => [teams[0] ?? null, teams[1] ?? null, null]);
+  const [showDetail, setShowDetail] = useState(false);
   // Teams that left the selection (filter change) drop out of their slot
   const picked = slots.map(t => (t && data.teams[t] ? t : null));
 
@@ -96,8 +148,8 @@ export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fi
 
   return (
     <div className="flex flex-col gap-4">
-      {missing(data.buySeries, 'Buy data (Op use)', 'round_buy')}
-      {missing(data.roundDataSeries, 'Round data (FK eff, Atk speed)', 'round_summary / round_events')}
+      {missing(data.buySeries, 'Buy data (OP USE)', 'round_buy')}
+      {missing(data.roundDataSeries, 'Round data (FK EFF, ATK SPD)', 'round_summary / round_events')}
 
       {/* Team picker: up to 3 */}
       <div className="flex flex-col gap-2">
@@ -136,7 +188,7 @@ export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fi
                 <PolarGrid stroke="#2d3139" />
                 <PolarAngleAxis dataKey="label" tick={{ fill: '#d1d5db', fontSize: 12, fontWeight: 700 }} />
                 <PolarRadiusAxis domain={[0, 1]} tick={false} axisLine={false} />
-                <ChartTooltip content={<RadarTooltip profiles={data.teams} shown={shown} scaled={scaled} />} />
+                <ChartTooltip content={<RadarTooltip profiles={data.teams} shown={shown} scaled={scaled} showDetail={showDetail} />} />
                 {shown.map(({ team, slot }) => (
                   <Radar
                     key={team}
@@ -156,6 +208,24 @@ export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fi
 
           {/* Legend + raw figures (identity is never color alone) */}
           <div className="flex flex-col gap-3 min-w-[320px]">
+            <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowDetail(d => !d)}
+              className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+                showDetail
+                  ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                  : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+              }`}
+            >
+              Detail info
+            </button>
+            <Tooltip content={LEGEND} className="items-center">
+              <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-gray-200 hover:text-white transition-colors cursor-help">
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                Legend
+              </span>
+            </Tooltip>
+            </div>
             <table className="text-xs">
               <thead>
                 <tr>
@@ -172,28 +242,32 @@ export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fi
                 </tr>
               </thead>
               <tbody>
-                {AXES.map(axis => (
+                {AXES.map(axis => {
+                  // Highest of the compared teams in green, like the best value in Stats Rank
+                  // (the scaled value, so on ATK SPD the fastest); only with 2+ teams
+                  const values = shown.map(({ team }) => scaled[team][axis.key]).filter((v): v is number => v !== null);
+                  const top = shown.length >= 2 && values.length ? Math.max(...values) : null;
+                  return (
                   <tr key={axis.key} className="border-t border-gray-800">
                     <td className="py-1.5 pr-4 font-bold text-gray-300 whitespace-nowrap">{axis.label}</td>
                     {shown.map(({ team }) => {
                       const s = scaled[team][axis.key];
                       return (
-                        <td key={team} className="py-1.5 pr-4 text-gray-200 whitespace-nowrap">
-                          {axis.show(data.teams[team])}
-                          <span className="ml-1.5 text-gray-500">{s === null ? '' : s.toFixed(2)}</span>
+                        <td key={team} className={`py-1.5 pr-4 whitespace-nowrap ${s !== null && s === top ? 'text-green-400 font-black' : 'text-gray-200'}`}>
+                          <div>{axis.show(data.teams[team])}</div>
+                          {showDetail && (
+                            <div className="text-[11px] font-normal text-gray-500">
+                              {[axis.detail(data.teams[team]), s === null ? '' : s.toFixed(2)].filter(Boolean).join(' · ')}
+                            </div>
+                          )}
                         </td>
                       );
                     })}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
-            <p className="text-[11px] leading-relaxed text-gray-500 max-w-[420px]">
-              Each axis is scaled over the {teams.length} teams shown: worst 0, best 1 (grey number).
-              Op use, Atk speed and Off-meta describe style, not quality: outside = more Operator, faster
-              plants (lower median plant time), agent picks further from the teams shown. Off-meta: per map,
-              half the summed gap between the team&apos;s and the selection&apos;s agent pick rates, over 5 agents.
-            </p>
           </div>
         </div>
       )}
@@ -201,12 +275,13 @@ export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fi
   );
 }
 
-function RadarTooltip({ active, payload, profiles, shown, scaled }: {
+function RadarTooltip({ active, payload, profiles, shown, scaled, showDetail }: {
   active?: boolean;
   payload?: { payload: ChartRow }[];
   profiles: Record<string, TeamProfile>;
   shown: { team: string; slot: number }[];
   scaled: Record<string, Record<string, number | null>>;
+  showDetail: boolean;
 }) {
   if (!active || !payload?.length) return null;
   const axis = AXES.find(a => a.key === payload[0].payload.axis);
@@ -221,7 +296,11 @@ function RadarTooltip({ active, payload, profiles, shown, scaled }: {
             <span className="w-2.5 h-2.5 rounded-sm" style={{ background: SLOT_COLORS[slot] }} />
             <span className="font-bold text-gray-100">{team}</span>
             {axis.show(profiles[team])}
-            <span className="text-gray-500">{s === null ? '' : s.toFixed(2)}</span>
+            {showDetail && (
+              <span className="text-gray-500">
+                {[axis.detail(profiles[team]), s === null ? '' : s.toFixed(2)].filter(Boolean).join(' · ')}
+              </span>
+            )}
           </p>
         );
       })}

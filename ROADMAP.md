@@ -939,7 +939,14 @@ Decided with the user (2026-11-13):
   the area is not "better team" (said under the chart).
 - **Teams**: 2-3 overlaid; logo chips pick them (max 3, the first 2 on by default, local state).
   A team keeps its color while picked (dataviz categorical slots 1-3, dark steps, validated
-  all-pairs on `#0f1115`). Table next to the chart with the raw figures and the scaled value.
+  all-pairs on `#0f1115`). Table next to the chart with the raw figures and the scaled value;
+  with 2+ teams the highest scaled value of each axis is green (`text-green-400 font-black`, as
+  the best value in Stats Rank; on Atk speed that is the fastest). "Detail info" button, off by
+  default: the cell shows only the value (73%); with it on, a second line adds the counts and the
+  scaled value (`97/132 · 0.89`), in the table and in the chart tooltip. A "Legend" tooltip to
+  its right (as in Stats Rank) explains the scale, each axis and the style axes; the note that
+  was under the table moved there. Axis labels standardized in caps: ATK WR, DEF WR, FK EFF,
+  OP USE, ATK SPD, OFFMETA.
 
 Code: `lib/data/teamProfiling.ts` (`getTeamProfiling`: reads the four cached functions with the
 same arguments as Stats Rank / Operator Use / Time & Site / Agent Picks, so the caches are
