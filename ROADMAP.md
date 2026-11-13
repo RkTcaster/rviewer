@@ -836,7 +836,7 @@ Still open:
     players, 4 maps, 2 series. Not checked in a browser.
   - **Relevant Info** hidden from the sidebar (2026-11-12, commented out like Veto Draft and
     Economy; still at `?section=relevant-info`, on the old filter).
-  - **Add teams to Relevant** (2026-11-13): "+ Add" chip next to Relevant / All on every page of
+  - **Add teams to Relevant** (2026-11-12): "+ Add" chip next to Relevant / All on every page of
     the new filter (`AddTeamsSelect`): a searchable list of the non-relevant teams that played
     the selected tournaments (`getAddableTeams`). The choice is per visitor and lives in the URL
     (`addTeams`, vlr ids; user approved), not in Supabase: `teams.relevant` stays the owner's

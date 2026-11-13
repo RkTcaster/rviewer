@@ -4,6 +4,21 @@ Shown by the "News" button in the sidebar. Only the topmost entry is displayed.
 Format: a `## date` heading (YYYY-MM-DD) followed by one `- ` bullet per change.
 Adding a new date brings back the unread dot.
 
+## 2026-11-12
+- New main filter on every page: Year, Region and Tournament chips in cascade (each row only shows what hangs from the chips above; subregions open from the arrow on a region chip), plus Serie (BO3 / BO5) and a date range with Last month / 3 months / 6 months presets.
+- 2027 season: the Open and Closed qualifiers of every region are in. Pages now open on the latest season.
+- New Teams toggle: Relevant shows the league teams plus the ones that reached the Closed qualifiers (hover it to see the list for your selection); All shows every team that played.
+- New "+ Add" next to Relevant: search any other team of the selected tournaments and add it to Relevant for yourself. It is saved in the link, so it stays while you move between pages and you can share it.
+- Meta Shift: one full filter per side (tournaments, dates, Team and Exclude Teams).
+- Compare Maps / Stats / Economy: one full filter per team. Compare Stats ranks each team against the teams of its own selection.
+- Team Maps, Player Stats and Compare: teams that share a tricode are now separate teams in the Team selector (shown as "TAG · name").
+- Player Stats: the tournament average follows the Teams toggle (relevant teams or everyone).
+- Operator Use, Weapon Pick and Time & Site: no longer limited to Champions 2026; they work on any tournament with round data, for the relevant teams. A line tells how many of the selected series have that data.
+- Operator Use: Op kills were undercounted on large selections; fixed.
+- Series Outcomes: only series with veto data count, and the page says how many of the selection those are.
+- Teams without a logo show a default one.
+- Sidebar: Testing is now Advance. Veto Draft, Economy and Relevant Info are hidden for now.
+
 ## 2026-10-16
 - Series Outcomes: three new columns after WR as B: Own pick (map WR on the map the team picked: map 1 as team A, map 2 as team B), Rival pick (map WR on the rival's pick) and Decider (map WR on map 3, so only 2-1 series). Bo3 only, like the other series columns.
 
