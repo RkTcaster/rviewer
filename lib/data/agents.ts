@@ -4,9 +4,11 @@ import { versioned, fetchAllPages, fetchAllBySeries, getAllSeriesIds, getFirstRo
 import { AgentMatchDetail, AgentPickStat, CompMatch, CompositionStat, DuoMapStat, DuoStatsData, MapsMastersData, MapWL } from '../types';
 import type { PostgrestFilterBuilder } from '@supabase/postgrest-js';
 import { PlayerStatsRow, RoundInfoRow } from './rows';
+import { getTeamKeys, keyOf, idOf, keyTeamRows, keyRoundRows } from './teamKeys';
 
-// Subconjunto de round_info usado para determinar el ganador de cada mapa
-type RoundWinnerRow = Pick<RoundInfoRow, 'series_id' | 'map_id' | 'round' | 'teamA' | 'teamB' | 'rndA' | 'rndB'>;
+// Subconjunto de round_info usado para determinar el ganador de cada mapa. teamA / teamB end up
+// holding the team keys (keyRoundRows), read from the ids.
+type RoundWinnerRow = Pick<RoundInfoRow, 'series_id' | 'map_id' | 'round' | 'teamA' | 'teamB' | 'team_a_id_vlr' | 'team_b_id_vlr' | 'rndA' | 'rndB'>;
 
 // New main filter (ROADMAP Phase 12, `allSeries`): the rows of the selected series, read in
 // chunks (fetchAllBySeries) and in a stable order so the pages don't overlap
@@ -21,28 +23,30 @@ const bySeries = <T,>(seriesIds: (string | number)[], build: () => PostgrestFilt
 // v3: new main filter (ROADMAP Phase 12): series from round_info (getAllSeriesIds), so qualifiers
 // count; `teams` (Relevant) keeps only series those teams played. Queries by series in chunks.
 // v4: getAllSeriesIds strict (v3 could cache an empty result after a timeout)
-export const getNeonDependencyStats = versioned('neon-phoenix-duo-stats-v4', getNeonDependencyStats_impl);
+// v5: teams by vlr id, keyed by getTeamKeys
+export const getNeonDependencyStats = versioned('neon-phoenix-duo-stats-v5', getNeonDependencyStats_impl);
 async function getNeonDependencyStats_impl(
   filters: { tour?: string; bo?: string; dateFrom?: string; dateTo?: string; teams?: string[] }
 ): Promise<DuoStatsData> {
   const seriesIds = await getAllSeriesIds(filters);
   if (seriesIds.length === 0) return { stats: {}, maps: [] };
 
-  const rows = await fetchAllBySeries<{ team: string; map: string; map_id: string; agent: string }>(seriesIds, (ids, from, to) =>
-    supabase.from('player_stats').select('team, map, map_id, agent').in('series_id', ids)
+  const keys = await getTeamKeys();
+  const rows = keyTeamRows(await fetchAllBySeries<{ team: string | null; team_id_vlr: string | null; map: string; map_id: string; agent: string }>(seriesIds, (ids, from, to) =>
+    supabase.from('player_stats').select('team, team_id_vlr, map, map_id, agent').in('series_id', ids)
       .order('map_id').order('player_id_vlr').range(from, to)
-  );
+  ), keys);
   if (!rows || rows.length === 0) return { stats: {}, maps: [] };
 
   // Winner per map_id from round_info (same pattern as getAgentPickStats)
   const winnerByMapId: Record<string, string | undefined> = {};
-  const roundRows = await fetchAllBySeries<RoundWinnerRow>(seriesIds, (ids, from, to) =>
+  const roundRows = keyRoundRows(await fetchAllBySeries<RoundWinnerRow>(seriesIds, (ids, from, to) =>
     supabase.from('round_info')
-      .select('series_id, map_id, round, teamA, teamB, rndA, rndB')
+      .select('series_id, map_id, round, teamA, teamB, team_a_id_vlr, team_b_id_vlr, rndA, rndB')
       .in('series_id', ids)
       .order('team_map_round_id')
       .range(from, to)
-  );
+  ), keys);
   const finalRoundByMapId: Record<string, RoundWinnerRow> = {};
   for (const r of roundRows) {
     const prev = finalRoundByMapId[r.map_id];
@@ -101,12 +105,13 @@ async function getNeonDependencyStats_impl(
 // allSeries (Agent Picks on the new main filter): series from round_info (getAllSeriesIds), so
 // qualifiers without draft count; `teams` (Relevant) keeps the series one of them played, and
 // both teams of those series count. Without it, the old draft-based filter.
-// Meta Shift (allSeries too) adds `team` (only that tricode's comps, from the series it played)
-// or `excludeTeams` (their comps leave both the picks and the comps count).
+// Meta Shift (allSeries too) adds `team` (only that team's comps, from the series it played)
+// or `excludeTeams` (their comps leave both the picks and the comps count); both are team keys.
 // v3: allSeries reads player_stats of the selected tournaments only. The scraper left rows with an
 // empty tour_id for maps that were never played (80 rows, e.g. map 3 of a 2-0), which a query by
 // series alone picked up.
-export const getAgentPickStats = versioned('agent-pick-stats-v3', getAgentPickStats_impl);
+// v4: allSeries by vlr id, keyed by getTeamKeys
+export const getAgentPickStats = versioned('agent-pick-stats-v4', getAgentPickStats_impl);
 async function getAgentPickStats_impl(
   filters: { reg?: string[]; tour?: string; team?: string; bo?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[]; allSeries?: boolean; teams?: string[] }
 ): Promise<AgentPickStat[]> {
@@ -114,11 +119,12 @@ async function getAgentPickStats_impl(
   const bo = filters.bo && filters.bo !== 'all' ? parseInt(filters.bo) : null;
   const tours = filters.tour?.split(',').filter(Boolean) ?? [];
   let seriesIds: (string | number)[] | null = null;
+  const keys = await getTeamKeys();
   if (filters.allSeries) {
     seriesIds = await getAllSeriesIds(filters);
     if (filters.team) {
       const rounds = await getFirstRounds([...tours].sort().join(','));
-      const played = new Set(rounds.filter(r => r.teamA?.trim() === filters.team || r.teamB?.trim() === filters.team).map(r => Number(r.series_id)));
+      const played = new Set(rounds.filter(r => keyOf(keys, r.team_a_id_vlr) === filters.team || keyOf(keys, r.team_b_id_vlr) === filters.team).map(r => Number(r.series_id)));
       seriesIds = seriesIds.filter(id => played.has(Number(id)));
     }
     if (seriesIds.length === 0) return [];
@@ -144,7 +150,7 @@ async function getAgentPickStats_impl(
   // Team branch: single query from player_stats, totalMaps from map_id (denominator = totalMaps, not *2)
   if (filters.team) {
     const rows = filters.allSeries
-      ? await bySeries<{ map: string; map_id: string; agent: string }>(seriesIds!, () => supabase.from('player_stats').select('map, map_id, agent').in('tour_id', tours).eq('team', filters.team!), 'map_id', 'player_id_vlr')
+      ? await bySeries<{ map: string; map_id: string; agent: string }>(seriesIds!, () => supabase.from('player_stats').select('map, map_id, agent').in('tour_id', tours).eq('team_id_vlr', idOf(keys, filters.team!)), 'map_id', 'player_id_vlr')
       : await fetchAllPages<{ map: string; map_id: string; agent: string }>((from, to) =>
       applyFilters(supabase.from('player_stats').select('map, map_id, agent')).eq('team', filters.team!).range(from, to)
     );
@@ -178,10 +184,11 @@ async function getAgentPickStats_impl(
   }
 
   // Two parallel queries: map counts from maps_id table + agent picks
-  type PickRow = { team: string; map: string; series_id: string; map_id: string; agent: string };
+  type PickRow = { team: string; team_id_vlr?: string | null; map: string; series_id: string; map_id: string; agent: string };
   const [mapRows, allAgentRows] = await Promise.all(filters.allSeries ? [
     bySeries<{ map_id: string; map: string }>(seriesIds!, () => supabase.from('maps_id').select('map_id, map'), 'map_id'),
-    bySeries<PickRow>(seriesIds!, () => supabase.from('player_stats').select('team, map, series_id, map_id, agent').in('tour_id', tours), 'map_id', 'player_id_vlr'),
+    bySeries<PickRow>(seriesIds!, () => supabase.from('player_stats').select('team, team_id_vlr, map, series_id, map_id, agent').in('tour_id', tours), 'map_id', 'player_id_vlr')
+      .then(rows => keyTeamRows(rows, keys)),
   ] as const : [
     fetchAllPages<{ map_id: string; map: string }>((from, to) =>
       applyFilters(supabase.from('maps_id').select('map_id, map')).range(from, to)
@@ -232,10 +239,10 @@ async function getAgentPickStats_impl(
   const winnerByMapId: Record<string, string | undefined> = {};
   if (allSeriesIds.length > 0) {
     const roundRows = filters.allSeries
-      ? await bySeries<RoundWinnerRow>(allSeriesIds, () => supabase.from('round_info').select('series_id, map_id, round, teamA, teamB, rndA, rndB'), 'team_map_round_id')
+      ? keyRoundRows(await bySeries<RoundWinnerRow>(allSeriesIds, () => supabase.from('round_info').select('series_id, map_id, round, teamA, teamB, team_a_id_vlr, team_b_id_vlr, rndA, rndB'), 'team_map_round_id'), keys)
       : await fetchAllPages<RoundWinnerRow>((from, to) =>
       supabase.from('round_info')
-        .select('series_id, map_id, round, teamA, teamB, rndA, rndB')
+        .select('series_id, map_id, round, teamA, teamB, team_a_id_vlr, team_b_id_vlr, rndA, rndB')
         .in('series_id', allSeriesIds)
         .range(from, to)
     );
@@ -294,7 +301,8 @@ async function getAgentPickStats_impl(
 // composition/oppComposition/url se repetía por cada agente y superaba el límite de 2MB
 // de unstable_cache. Los agentes no-mirror se derivan de composition menos oppComposition.
 // v4: new main filter (series from getAllSeriesIds, rows by series in chunks; date = first map's)
-const getNonMirrorInstances = versioned('agent-nonmirror-instances-v4', getNonMirrorInstances_impl);
+// v5: teams by vlr id, keyed by getTeamKeys
+const getNonMirrorInstances = versioned('agent-nonmirror-instances-v5', getNonMirrorInstances_impl);
 
 // Las instancias tal cual, para el filtro de comp rival (que necesita también las comps espejo)
 export const getAgentCompMatches = getNonMirrorInstances;
@@ -321,11 +329,14 @@ async function getNonMirrorInstances_impl(
 
   type NMRound = RoundWinnerRow & Pick<RoundInfoRow, 'side'> & { date: string | null };
   const [agentRows, roundRows] = await Promise.all([
-    bySeries<{ team: string; map: string; series_id: string; map_id: string; agent: string; source_url: string }>(seriesIds, () =>
-      supabase.from('player_stats').select('team, map, series_id, map_id, agent, source_url'), 'map_id', 'player_id_vlr'),
+    bySeries<{ team: string; team_id_vlr: string | null; map: string; series_id: string; map_id: string; agent: string; source_url: string }>(seriesIds, () =>
+      supabase.from('player_stats').select('team, team_id_vlr, map, series_id, map_id, agent, source_url'), 'map_id', 'player_id_vlr'),
     bySeries<NMRound>(seriesIds, () =>
-      supabase.from('round_info').select('series_id, map_id, round, side, date, teamA, teamB, rndA, rndB'), 'team_map_round_id'),
+      supabase.from('round_info').select('series_id, map_id, round, side, date, teamA, teamB, team_a_id_vlr, team_b_id_vlr, rndA, rndB'), 'team_map_round_id'),
   ]);
+  const keys = await getTeamKeys();
+  keyTeamRows(agentRows, keys);
+  keyRoundRows(roundRows, keys);
   if (agentRows.length === 0) return [];
 
   // Series date = its first map's (qualifiers have no draft to take it from)
@@ -419,7 +430,8 @@ async function getNonMirrorInstances_impl(
 }
 
 // allSeries / teams: Agent Picks on the new main filter, see getAgentPickStats
-export const getOverallCompositions = versioned('overall-compositions-v2', getOverallCompositions_impl);
+// v3: allSeries by vlr id, keyed by getTeamKeys
+export const getOverallCompositions = versioned('overall-compositions-v3', getOverallCompositions_impl);
 async function getOverallCompositions_impl(
   filters: { team?: string; reg?: string[]; tour?: string; bo?: string; last?: string; dateFrom?: string; dateTo?: string; excludeTeams?: string[]; allSeries?: boolean; teams?: string[] }
 ): Promise<CompositionStat[]> {
@@ -441,13 +453,14 @@ async function getOverallCompositions_impl(
     seriesIds = [...new Set(draftData.map((d: { series_id: string }) => d.series_id))];
   }
 
-  type CompRow = Pick<PlayerStatsRow, 'team' | 'map' | 'series_id' | 'map_id' | 'agent' | 'reg_id' | 'tour_id'>;
+  type CompRow = Pick<PlayerStatsRow, 'team' | 'team_id_vlr' | 'map' | 'series_id' | 'map_id' | 'agent' | 'reg_id' | 'tour_id'>;
+  const keys = filters.allSeries ? await getTeamKeys() : {};
   const rows = filters.allSeries
-    ? await bySeries<CompRow>(seriesIds!, () => supabase.from('player_stats').select('team, map, series_id, map_id, agent, reg_id, tour_id'), 'map_id', 'player_id_vlr')
+    ? keyTeamRows(await bySeries<CompRow>(seriesIds!, () => supabase.from('player_stats').select('team, team_id_vlr, map, series_id, map_id, agent, reg_id, tour_id'), 'map_id', 'player_id_vlr'), keys)
     : await fetchAllPages<CompRow>((from, to) => {
     let q = supabase
       .from('player_stats')
-      .select('team, map, series_id, map_id, agent, reg_id, tour_id');
+      .select('team, team_id_vlr, map, series_id, map_id, agent, reg_id, tour_id');
     if (filters.team) q = q.eq('team', filters.team);
     if (filters.tour) q = q.in('tour_id', filters.tour.split(','));
     if (filters.reg)  q = q.in('reg_id', filters.reg!);
@@ -485,10 +498,10 @@ async function getOverallCompositions_impl(
   // Fetch round_info to determine map winners
   const allSeriesIds = [...new Set(Object.keys(grouped).map(k => k.split('__')[2]))];
   const roundRows = filters.allSeries
-    ? await bySeries<RoundWinnerRow & Pick<RoundInfoRow, 'side'>>(allSeriesIds, () => supabase.from('round_info').select('series_id, map_id, round, side, teamA, teamB, rndA, rndB'), 'team_map_round_id')
+    ? keyRoundRows(await bySeries<RoundWinnerRow & Pick<RoundInfoRow, 'side'>>(allSeriesIds, () => supabase.from('round_info').select('series_id, map_id, round, side, teamA, teamB, team_a_id_vlr, team_b_id_vlr, rndA, rndB'), 'team_map_round_id'), keys)
     : await fetchAllPages<RoundWinnerRow & Pick<RoundInfoRow, 'side'>>((from, to) =>
     supabase.from('round_info')
-      .select('series_id, map_id, round, side, teamA, teamB, rndA, rndB')
+      .select('series_id, map_id, round, side, teamA, teamB, team_a_id_vlr, team_b_id_vlr, rndA, rndB')
       .in('series_id', allSeriesIds)
       .range(from, to)
   );

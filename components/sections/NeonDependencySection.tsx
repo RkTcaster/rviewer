@@ -9,12 +9,14 @@ import { useUrlSet } from '@/hooks/useUrlSet';
 import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 import { TeamChipsPanel } from '../TeamChipsPanel';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer } from 'recharts';
+import { teamLabel } from '@/lib/teamKey';
 
 interface Props {
   stats: Record<string, Record<string, DuoMapStat>>;
   maps: string[];
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
+  teamSubregions?: Record<string, string>;
   mapImages?: Record<string, string>;
   defaultHiddenMaps?: string[];
   /** Teams of the main filter (relevant / all) */
@@ -199,7 +201,7 @@ function getCellRank(value: number | null, allValues: (number | null)[]): 'best'
   return null;
 }
 
-export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, defaultHiddenMaps = [], fixedTeams }: Props) {
+export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions = {}, teamSubregions = {}, mapImages = {}, defaultHiddenMaps = [], fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<number | 'overall' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -312,6 +314,7 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
               setSelectedTeams={setSelectedTeams}
               teamLogos={teamLogos}
               teamRegions={teamRegions}
+              teamSubregions={teamSubregions}
             />
 
             {/* Maps */}
@@ -470,9 +473,9 @@ export function NeonDependencySection({ stats, maps, teamLogos = {}, teamRegions
                 <td className="sticky left-8 z-10 bg-[#1a1d23] px-5 py-3 text-[11px] font-bold text-gray-300 border-r border-gray-800 whitespace-nowrap" style={{ width: '1%' }}>
                   <div className="flex items-center gap-2">
                     {teamLogos[team] && (
-                      <img src={teamLogos[team]} alt={team} className="w-5 h-5 object-contain shrink-0" />
+                      <img src={teamLogos[team]} alt={teamLabel(team)} className="w-5 h-5 object-contain shrink-0" />
                     )}
-                    {team}
+                    {teamLabel(team)}
                   </div>
                 </td>
                 {(() => {

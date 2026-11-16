@@ -3,7 +3,8 @@ import { unstable_cache } from 'next/cache';
 import { supabase } from '../supabase';
 import fs from 'fs';
 import path from 'path';
-import { versioned } from './helpers';
+import { versioned, fetchAllPages } from './helpers';
+import { getTeamKeys, keyOf } from './teamKeys';
 
 export const getAgentImages = versioned('agent-images', getAgentImages_impl);
 async function getAgentImages_impl(): Promise<Record<string, string>> {
@@ -27,24 +28,23 @@ async function getAgentRoles_impl(): Promise<Record<string, string>> {
   );
 }
 
-// v2: qualifiers count too, so teams that only played one get a region. No league team changes
-// region: a tricode shared with a qualifier team keeps its league region, where it played more.
-// `tours` (new filter): the regional tournaments of the selection decide first, so a tricode two
-// teams share (MENA vs Americas qualifiers: ATL, VEIL, THE…) takes the region of the one that
-// played the selection; teams with only international events in it fall back to the overall count.
-export const getTeamRegions = versioned('team-regions-v2', getTeamRegions_impl);
+// v3: by vlr team id, keyed like the stats (getTeamKeys). Home region = the regional tournaments
+// of the selection (`tours`) first, else the region it played most (reg_4, international, ignored).
+export const getTeamRegions = versioned('team-regions-v3', getTeamRegions_impl);
 async function getTeamRegions_impl(tours?: string): Promise<Record<string, string>> {
-  // Map each team to its home region (reg_0..reg_3), ignoring reg_4 (international events).
-  // If a team appears in multiple regions, the most frequent one wins.
-  const { data } = await supabase.from('tournament_played').select('teamA, reg_id, tour_id');
+  const [{ data }, keys] = await Promise.all([
+    supabase.from('tournament_played').select('team_id_vlr, reg_id, tour_id'),
+    getTeamKeys(),
+  ]);
   if (!data) return {};
   const selected = tours ? new Set(tours.split(',')) : null;
   const counts: Record<string, Record<string, number>> = {};
   const inSelection: Record<string, Record<string, number>> = {};
-  for (const r of data as { teamA: string; reg_id: string; tour_id: string }[]) {
-    if (!r.teamA || r.reg_id === 'reg_4') continue;
-    (counts[r.teamA] ??= {})[r.reg_id] = (counts[r.teamA]?.[r.reg_id] ?? 0) + 1;
-    if (selected?.has(r.tour_id)) (inSelection[r.teamA] ??= {})[r.reg_id] = (inSelection[r.teamA]?.[r.reg_id] ?? 0) + 1;
+  for (const r of data as { team_id_vlr: string; reg_id: string; tour_id: string }[]) {
+    const team = keyOf(keys, r.team_id_vlr);
+    if (!team || r.reg_id === 'reg_4') continue;
+    (counts[team] ??= {})[r.reg_id] = (counts[team]?.[r.reg_id] ?? 0) + 1;
+    if (selected?.has(r.tour_id)) (inSelection[team] ??= {})[r.reg_id] = (inSelection[team]?.[r.reg_id] ?? 0) + 1;
   }
   const result: Record<string, string> = {};
   for (const [team, regs] of [...Object.entries(counts), ...Object.entries(inSelection)]) {
@@ -53,19 +53,57 @@ async function getTeamRegions_impl(tours?: string): Promise<Record<string, strin
   return result;
 }
 
-// v2: sin archivo en public/ (equipos de qualifiers sin logo) → logo default. Un tag que no
-// está en `teams` sigue sin entrada (el <img> no se renderiza).
+// Subregion per team key, for the rows of the team chips (TeamChipsPanel). `teams.subregion`
+// (filled by hand: league, Pacific and China teams play no qualifier) wins; otherwise the subregion
+// of the qualifiers the team played, those of the selection (`tours`) first. A missing column (before
+// the SQL of handoff/RVIEWER_TEAMS_SUBREGION.md runs) reads as empty. `teams` is edited by hand, so
+// 5-minute cache like getTeamKeys; errors other than the missing column throw (not cached).
+const getTeamSubregionsCached = unstable_cache(getTeamSubregions_impl, ['team-subregions-v1'], { revalidate: 300 });
+export async function getTeamSubregions(tours?: string): Promise<Record<string, string>> {
+  return getTeamSubregionsCached(tours);
+}
+async function getTeamSubregions_impl(tours?: string): Promise<Record<string, string>> {
+  const [manual, played, tourRows, keys] = await Promise.all([
+    supabase.from('teams').select('team_id_vlr, subregion'),
+    fetchAllPages<{ team_id_vlr: string; tour_id: string }>((from, to) =>
+      supabase.from('tournament_played').select('team_id_vlr, tour_id').order('tour_id').order('team_id_vlr').range(from, to), 1000, true),
+    supabase.from('tournament').select('tour_id, subregion'),
+    getTeamKeys(),
+  ]);
+  if (tourRows.error) throw tourRows.error;
+  const tourSub = Object.fromEntries((tourRows.data as { tour_id: string; subregion: string | null }[]).map(t => [t.tour_id, t.subregion]));
+  const selected = tours ? new Set(tours.split(',')) : null;
+  const counts: Record<string, Record<string, number>> = {};
+  const inSelection: Record<string, Record<string, number>> = {};
+  for (const r of played) {
+    const sub = tourSub[r.tour_id];
+    const team = keyOf(keys, r.team_id_vlr);
+    if (!sub || !team) continue;
+    (counts[team] ??= {})[sub] = (counts[team]?.[sub] ?? 0) + 1;
+    if (selected?.has(r.tour_id)) (inSelection[team] ??= {})[sub] = (inSelection[team]?.[sub] ?? 0) + 1;
+  }
+  const result: Record<string, string> = {};
+  for (const [team, subs] of [...Object.entries(counts), ...Object.entries(inSelection)]) {
+    result[team] = Object.entries(subs).sort((a, b) => b[1] - a[1])[0][0];
+  }
+  if (manual.error && manual.error.code !== '42703') throw manual.error;
+  for (const r of (manual.error ? [] : manual.data) as { team_id_vlr: string; subregion: string | null }[]) {
+    if (r.subregion?.trim()) result[keyOf(keys, r.team_id_vlr)!] = r.subregion.trim();
+  }
+  return result;
+}
+
+// v3: keyed like the stats (getTeamKeys). No file in public/ (qualifier teams without a logo) →
+// default logo.
 const DEFAULT_TEAM_LOGO = '/teams/default.png';
-export const getTeamLogos = versioned('team-logos-v2', getTeamLogos_impl);
+export const getTeamLogos = versioned('team-logos-v3', getTeamLogos_impl);
 async function getTeamLogos_impl(): Promise<Record<string, string>> {
-  const { data } = await supabase.from('teams').select('team_id, team_path');
+  const [{ data }, keys] = await Promise.all([supabase.from('teams').select('team_id_vlr, team_path'), getTeamKeys()]);
   if (!data) return {};
   const logos: Record<string, string> = {};
-  for (const r of data as { team_id: string; team_path: string | null }[]) {
+  for (const r of data as { team_id_vlr: string; team_path: string | null }[]) {
     const found = !!r.team_path && fs.existsSync(path.join(process.cwd(), 'public', r.team_path));
-    // Tags compartidos por varios equipos: el default no pisa un logo real
-    if (found) logos[r.team_id] = `/${r.team_path}`;
-    else logos[r.team_id] ??= DEFAULT_TEAM_LOGO;
+    logos[keyOf(keys, r.team_id_vlr)!] = found ? `/${r.team_path}` : DEFAULT_TEAM_LOGO;
   }
   return logos;
 }

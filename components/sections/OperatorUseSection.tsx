@@ -8,12 +8,14 @@ import { useUrlSet } from '@/hooks/useUrlSet';
 import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 import { TeamChipsPanel } from '../TeamChipsPanel';
 import { Tooltip } from '../Tooltip';
+import { teamLabel } from '@/lib/teamKey';
 
 interface Props {
   byWeapon: OperatorUseData['byWeapon'] | null;
   maps: string[];
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
+  teamSubregions?: Record<string, string>;
   mapImages?: Record<string, string>;
   agentImages?: Record<string, string>;
   hasTour?: boolean;
@@ -195,7 +197,7 @@ function heatmapBg(pct: number | null): string {
   return `hsl(${hue}, ${sat}%, ${light}%)`;
 }
 
-export function OperatorUseSection({ byWeapon, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, agentImages = {}, hasTour = false, defaultHiddenMaps = [], series, buySeries, fixedTeams }: Props) {
+export function OperatorUseSection({ byWeapon, maps, teamLogos = {}, teamRegions = {}, teamSubregions = {}, mapImages = {}, agentImages = {}, hasTour = false, defaultHiddenMaps = [], series, buySeries, fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [side, setSide] = useState<Side>('all');
   const [showDetail, setShowDetail] = useState(false);
@@ -375,6 +377,7 @@ export function OperatorUseSection({ byWeapon, maps, teamLogos = {}, teamRegions
           setSelectedTeams={setSelectedTeams}
           teamLogos={teamLogos}
           teamRegions={teamRegions}
+          teamSubregions={teamSubregions}
         />
 
         <div className="flex flex-col gap-2">
@@ -517,9 +520,9 @@ export function OperatorUseSection({ byWeapon, maps, teamLogos = {}, teamRegions
                       <div className="flex items-center gap-2">
                         <span className="text-[9px] text-gray-500 w-2">{isOpen ? '▼' : '▶'}</span>
                         {teamLogos[team] && (
-                          <img src={teamLogos[team]} alt={team} className="w-5 h-5 object-contain shrink-0" />
+                          <img src={teamLogos[team]} alt={teamLabel(team)} className="w-5 h-5 object-contain shrink-0" />
                         )}
-                        {team}
+                        {teamLabel(team)}
                       </div>
                     </td>
                     {COLS.map(col => cell(col, teamSide))}

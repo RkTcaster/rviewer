@@ -7,6 +7,7 @@ import { useNavigation, useFilterParams } from './NavigationContext';
 import { TournamentTreeFilter } from './TournamentTreeFilter';
 import { SearchableSelect } from './SearchableSelect';
 import { StringMultiSelect } from './StringMultiSelect';
+import { teamLabel } from '@/lib/teamKey';
 
 interface Props {
   tree: TournamentNode[];
@@ -44,7 +45,7 @@ export function MetaShiftFilters({ tree, regions, selectedA, selectedB, teamsA, 
   const withLogo = (team: string) => (
     <span className="flex items-center gap-2">
       {teamLogos[team] && <img src={teamLogos[team]} alt="" className="w-5 h-5 object-contain shrink-0" />}
-      {team}
+      {teamLabel(team)}
     </span>
   );
 

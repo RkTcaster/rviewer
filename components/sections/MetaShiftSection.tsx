@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, ReferenceLine } from 'recharts';
 import { AgentPickStat } from '@/lib/types';
+import { teamLabel } from '@/lib/teamKey';
 
 interface SideFilters {
   regIds: string[];
@@ -35,7 +36,7 @@ const PICK_RATE_COLOR = '#60a5fa';
 
 // Un equipo elegido manda sobre las regiones y se pinta con el color de su region.
 function sideItems({ regIds, team }: SideFilters, teamRegions: Record<string, string>, teamLogos: Record<string, string> = {}) {
-  if (team) return [{ label: team, color: REGION_META[teamRegions[team]]?.color ?? FALLBACK_COLOR, logo: teamLogos[team] }];
+  if (team) return [{ label: teamLabel(team), color: REGION_META[teamRegions[team]]?.color ?? FALLBACK_COLOR, logo: teamLogos[team] }];
   if (regIds.length === 0) return [{ label: 'All regions', color: REGION_META.reg_4.color, logo: REGION_META.reg_4.logo }];
   return [...regIds]
     .sort((a, b) => REGION_ORDER.indexOf(a) - REGION_ORDER.indexOf(b))

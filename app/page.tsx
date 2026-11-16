@@ -1,5 +1,6 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getAgentPickStats, getAgentNonMirrorMatches, getAgentCompMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getMapInfo, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows, getSeriesOutcomes, emptySeriesOutcomes, getOperatorUseStats, getWeaponPickStats, getTimeSiteStats, getTournamentTree, getRelevantTeams, getRelevantTags, getPlayedTags, getTeamMaps, getTeamCompare, getTeamDashboard, getTeamSeriesIds, getTeamOptions, getAddableTeams, getTeamProfiling } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getAgentPickStats, getAgentNonMirrorMatches, getAgentCompMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getMapInfo, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getTeamSubregions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows, getSeriesOutcomes, emptySeriesOutcomes, getOperatorUseStats, getWeaponPickStats, getTimeSiteStats, getTournamentTree, getRelevantTeams, getRelevantTags, getPlayedTags, getTeamMaps, getTeamCompare, getTeamDashboard, getTeamSeriesIds, getTeamOptions, getAddableTeams, getTeamProfiling } from '@/lib/data-service';
+import { teamLabel } from '@/lib/teamKey';
 import { DEFAULT_TOURS, MapInfoData, TeamRankStats, TeamMapsData, TeamCompareData, TeamProfilingData } from '@/lib/types';
 import { getLatestNews } from '@/lib/news';
 import { Filters } from '@/components/Filters';
@@ -45,7 +46,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { section = 'compare-maps', team, team2 } = await searchParams;
   if ((section === 'compare-maps' || section === 'compare-stats' || section === 'compare-economy') && team && team2) {
-    return { title: `${team} vs ${team2} VCT Data` };
+    return { title: `${teamLabel(team)} vs ${teamLabel(team2)} VCT Data` };
   }
   return {};
 }
@@ -213,12 +214,14 @@ export default async function Page({
     ? getAgentRoles()
     : Promise.resolve({});
 
-  const needsLogos = isStatsRank || isMapsMasters || isOperatorUse || isWeaponPick || isTimeSite || isTeamProfiling || isNeonDependency || isPostPistolForce || isMetaShift || isVetoPredictor || isSeriesOutcomes || section === 'compare-maps' || section === 'compare-stats' || isCompareEconomy;
+  const needsLogos = isStatsRank || section === 'agent-picks' || isMapsMasters || isOperatorUse || isWeaponPick || isTimeSite || isTeamProfiling || isNeonDependency || isPostPistolForce || isMetaShift || isVetoPredictor || isSeriesOutcomes || section === 'compare-maps' || section === 'compare-stats' || isCompareEconomy;
   // Every section that renders Filters gets logos for its team selects
   const showsFilters = !isSkirmish && !isPlayoffPct && !isVetoPredictor && !usesTreeFilter;
   const teamLogosP = (needsLogos || showsFilters || isTeamMaps || isPlayerStats) ? getTeamLogos() : Promise.resolve({});
   // New filter: regions from the selected tournaments first (tricodes shared across qualifiers)
   const teamRegionsP = needsLogos ? getTeamRegions(usesTreeFilter ? (isMetaShift ? `${tour},${tour2}` : tour) : undefined) : Promise.resolve({});
+  // Rows of the team chips (TeamChipsPanel): one per subregion
+  const teamSubregionsP = needsLogos ? getTeamSubregions(usesTreeFilter ? tour : undefined) : Promise.resolve<Record<string, string>>({});
 
   const mapsMastersP = (isMapsMasters && hasTour)
     ? v2Teams.then(teams => getMapsMastersStats({ tour, bo, dateFrom, dateTo, teams }))
@@ -330,7 +333,7 @@ export default async function Page({
   const [
     result, compareA, compareB, statsA, statsB, lastMatchA, lastMatchB, teamOptions2, rankings, economy, mapInfo,
     teamOptions, teamMaps, agentPickStats, agentCompositions, agentMatches, agentCompMatches,
-    mapImages, defaultHiddenMaps, agentImages, agentRoles, teamLogos, teamRegions, mapsMasters, neonDep, postPistolForce,
+    mapImages, defaultHiddenMaps, agentImages, agentRoles, teamLogos, teamRegions, teamSubregions, mapsMasters, neonDep, postPistolForce,
     agentPickStatsLeft, agentPickStatsRight,
     playerStats, tournamentPlayerAvg, playerTimeline, playerLastMatch,
     regions, teams, lastUpdateDate, news,
@@ -339,7 +342,7 @@ export default async function Page({
   ] = await Promise.all([
     resultP, compareAP, compareBP, statsAP, statsBP, lastMatchAP, lastMatchBP, teamOptions2P, rankingsP, economyP, mapInfoP,
     teamOptionsP, teamMapsP, agentPickStatsP, agentCompositionsP, agentMatchesP, agentCompMatchesP,
-    mapImagesP, defaultHiddenMapsP, agentImagesP, agentRolesP, teamLogosP, teamRegionsP, mapsMastersP, neonDepP, postPistolForceP,
+    mapImagesP, defaultHiddenMapsP, agentImagesP, agentRolesP, teamLogosP, teamRegionsP, teamSubregionsP, mapsMastersP, neonDepP, postPistolForceP,
     agentPickStatsLeftP, agentPickStatsRightP,
     playerStatsP, tournamentPlayerAvgP, playerTimelineP, playerLastMatchP,
     getRegions(), getTeams(regArr), getLastUpdateDate(), getLatestNews(),
@@ -371,7 +374,7 @@ export default async function Page({
       case 'map-picks':
         return <MapPicksSection data={mapInfo} />;
       case 'agent-picks':
-        return <AgentPicksSection stats={agentPickStats} compositions={agentCompositions} agentMatches={agentMatches} compMatches={agentCompMatches} mapImages={mapImages} agentImages={agentImages} agentRoles={agentRoles} mapInfo={mapInfo} />;
+        return <AgentPicksSection stats={agentPickStats} compositions={agentCompositions} agentMatches={agentMatches} compMatches={agentCompMatches} mapImages={mapImages} agentImages={agentImages} agentRoles={agentRoles} mapInfo={mapInfo} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} fixedTeams={relevantTeams ?? [...new Set(agentCompMatches.map(m => m.team))]} />;
       case 'meta-shift':
         return <MetaShiftSection
           statsLeft={agentPickStatsLeft}
@@ -398,7 +401,7 @@ export default async function Page({
       case 'economy':
         return <EconomySection bins={economyBins} />;
       case 'compare-economy':
-        return <CompareEconomySection statsA={econCompareA} statsB={econCompareB} teamAName={teamOptions.selected?.tag ?? ''} teamBName={teamOptions2.selected?.tag ?? ''} />;
+        return <CompareEconomySection statsA={econCompareA} statsB={econCompareB} teamAName={teamLabel(teamOptions.selected?.tag ?? '')} teamBName={teamLabel(teamOptions2.selected?.tag ?? '')} />;
       case 'relevant-info':
         return <RelevantInfoSection maps={longestMaps} performances={topPerformances} />;
       case 'skirmish-americas':
@@ -406,27 +409,27 @@ export default async function Page({
       case 'playoff-pct':
         return <PlayoffPctSection scenarios={simulationScenarios} />;
       case 'stats-rank':
-        return <StatsRankSection rankings={rankings} economy={economy} teamLogos={teamLogos} teamRegions={teamRegions} hasTour={hasTour} fixedTeams={relevantTeams ?? Object.keys(rankings)} />;
+        return <StatsRankSection rankings={rankings} economy={economy} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} hasTour={hasTour} fixedTeams={relevantTeams ?? Object.keys(rankings)} />;
       case 'maps-masters':
-        return <MapsMastersSection stats={mapsMasters.stats} maps={mapsMasters.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} series={mapsMasters.series} draftSeries={mapsMasters.draftSeries} fixedTeams={relevantTeams ?? Object.keys(mapsMasters.stats)} />;
+        return <MapsMastersSection stats={mapsMasters.stats} maps={mapsMasters.maps} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} series={mapsMasters.series} draftSeries={mapsMasters.draftSeries} fixedTeams={relevantTeams ?? Object.keys(mapsMasters.stats)} />;
       case 'neon-dependency':
-        return <NeonDependencySection stats={neonDep.stats} maps={neonDep.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} defaultHiddenMaps={defaultHiddenMaps} fixedTeams={relevantTeams ?? Object.keys(neonDep.stats)} />;
+        return <NeonDependencySection stats={neonDep.stats} maps={neonDep.maps} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} mapImages={mapImages} defaultHiddenMaps={defaultHiddenMaps} fixedTeams={relevantTeams ?? Object.keys(neonDep.stats)} />;
       case 'operator-use':
-        return <OperatorUseSection byWeapon={operatorUse.byWeapon} maps={operatorUse.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} agentImages={agentImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} series={operatorUse.series} buySeries={operatorUse.buySeries} fixedTeams={relevantTeams ?? []} />;
+        return <OperatorUseSection byWeapon={operatorUse.byWeapon} maps={operatorUse.maps} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} mapImages={mapImages} agentImages={agentImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} series={operatorUse.series} buySeries={operatorUse.buySeries} fixedTeams={relevantTeams ?? []} />;
       case 'weapon-pick':
-        return <WeaponPickSection stats={weaponPick.stats} maps={weaponPick.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} series={weaponPick.series} buySeries={weaponPick.buySeries} fixedTeams={relevantTeams ?? []} />;
+        return <WeaponPickSection stats={weaponPick.stats} maps={weaponPick.maps} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} series={weaponPick.series} buySeries={weaponPick.buySeries} fixedTeams={relevantTeams ?? []} />;
       case 'time-site':
-        return <TimeSiteSection stats={timeSite.stats} maps={timeSite.maps} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} series={timeSite.series} dataSeries={timeSite.dataSeries} fixedTeams={relevantTeams ?? []} />;
+        return <TimeSiteSection stats={timeSite.stats} maps={timeSite.maps} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} series={timeSite.series} dataSeries={timeSite.dataSeries} fixedTeams={relevantTeams ?? []} />;
       case 'team-profiling':
         return <TeamProfilingSection data={teamProfiling} teamLogos={teamLogos} hasTour={hasTour} fixedTeams={relevantTeams ?? []} />;
       case 'post-pistol-force':
-        return <PostPistolForceSection stats={postPistolForce} teamLogos={teamLogos} teamRegions={teamRegions} fixedTeams={relevantTeams ?? Object.keys(postPistolForce)} />;
+        return <PostPistolForceSection stats={postPistolForce} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} fixedTeams={relevantTeams ?? Object.keys(postPistolForce)} />;
       case 'veto':
         return <VetoSection flows={vetoFlows} teamName={team || ''} />;
       case 'veto-predictor':
         return <VetoPredictorSection model={vetoModel!} teamLogos={teamLogos} teamRegions={teamRegions} mapImages={mapImages} />;
       case 'series-outcomes':
-        return <SeriesOutcomesSection data={seriesOutcomes} teamLogos={teamLogos} teamRegions={teamRegions} fixedTeams={relevantTeams ?? Object.keys(seriesOutcomes.teams)} />;
+        return <SeriesOutcomesSection data={seriesOutcomes} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} fixedTeams={relevantTeams ?? Object.keys(seriesOutcomes.teams)} />;
       case 'form':
         return <FormSection points={formTimeline} teamName={team || ''} />;
       case 'charts':

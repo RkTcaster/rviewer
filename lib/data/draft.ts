@@ -130,10 +130,8 @@ async function getMapInfo_impl(
 
 // Team pages on the new main filter (ROADMAP Phase 12). The team is a vlr id, not a tricode:
 // its series come from round_info (team_a_id_vlr / team_b_id_vlr, so qualifiers without draft
-// count and a homonym's series stay out), `last` keeps its newest N, and each round is read from
-// its own column by id. Compositions come from player_stats.team_id_vlr. Only `draft` has no id:
-// inside one of its series the team is the side with its tricode (a series between two teams
-// with the same tricode, like 785082, can't be told apart there).
+// count and a homonym's series stay out), `last` keeps its newest N, and each round and draft
+// row is read from its own column by id. Compositions come from player_stats.team_id_vlr.
 // procesarTodo matches by tricode, so the team's side is renamed to TEAM_KEY first.
 const TEAM_KEY = '__team__';
 type TeamRound = Pick<RoundInfoRow, 'series_id' | 'map_id' | 'map' | 'round' | 'side' | 'teamA' | 'teamB' | 'rndA' | 'rndB'>
@@ -142,7 +140,7 @@ type TeamRound = Pick<RoundInfoRow, 'series_id' | 'map_id' | 'map' | 'round' | '
 // Series (getTeamSeriesIds), drafts and rounds of the team in the selection, the last two
 // already on TEAM_KEY
 async function loadTeamSeries(filters: TeamFilters) {
-  const { tours, seriesIds, dateOf, tagOf, lastMatchDate } = await getTeamSeriesIds(filters);
+  const { tours, seriesIds, dateOf, lastMatchDate } = await getTeamSeriesIds(filters);
   if (seriesIds.length === 0) return { tours, seriesIds, drafts: [] as DraftRow[], rounds: [] as TeamRound[], dateOf, lastMatchDate };
 
   const [drafts, allRounds] = await Promise.all([
@@ -161,7 +159,7 @@ async function loadTeamSeries(filters: TeamFilters) {
       .filter(r => r.team_a_id_vlr === filters.teamId || r.team_b_id_vlr === filters.teamId)
       .map(r => r.team_a_id_vlr === filters.teamId ? { ...r, teamA: TEAM_KEY, teamB: 'rival' } : { ...r, teamA: 'rival', teamB: TEAM_KEY }),
     drafts: drafts.map(d => {
-      const isTeam = d.team?.trim() === tagOf.get(Number(d.series_id));
+      const isTeam = d.team_id_vlr === filters.teamId;
       return isTeam ? { ...d, team: TEAM_KEY, rival: 'rival' } : { ...d, team: 'rival', rival: TEAM_KEY };
     }),
   };
@@ -179,7 +177,8 @@ function teamMapWins(rounds: TeamRound[]): Record<string, boolean> {
 }
 
 // The team's map table, draft order, pistols, anti-eco, recovery and PAB (Compare Stats)
-export const getTeamDashboard = versioned('team-dashboard-v1', getTeamDashboard_impl);
+// v2: the team's draft side by vlr id
+export const getTeamDashboard = versioned('team-dashboard-v2', getTeamDashboard_impl);
 async function getTeamDashboard_impl(filters: TeamFilters): Promise<TeamDashboardData> {
   const { seriesIds, drafts, rounds } = await loadTeamSeries(filters);
   const { lastMatchData, ...stats } = procesarTodo(drafts, rounds as unknown as RoundInfoRow[], TEAM_KEY);
@@ -187,7 +186,8 @@ async function getTeamDashboard_impl(filters: TeamFilters): Promise<TeamDashboar
 }
 
 // Team → Maps
-export const getTeamMaps = versioned('team-maps-v1', getTeamMaps_impl);
+// v2: the team's draft side by vlr id
+export const getTeamMaps = versioned('team-maps-v2', getTeamMaps_impl);
 async function getTeamMaps_impl(filters: TeamFilters): Promise<TeamMapsData> {
   const { tours, seriesIds, drafts, rounds, lastMatchDate } = await loadTeamSeries(filters);
   if (seriesIds.length === 0) return { mapStats: [], compositions: [], series: 0, draftSeries: 0, lastMatchDate };
@@ -226,7 +226,8 @@ async function getTeamMaps_impl(filters: TeamFilters): Promise<TeamMapsData> {
 // One side of Compare Maps: the map table (procesarTodo) plus the team's compositions per map,
 // one row per composition and roster (same agents with other players = another row), with its
 // rounds by side, W-L and the vlr link and date of the last time it was played.
-export const getTeamCompare = versioned('team-compare-v1', getTeamCompare_impl);
+// v2: the team's draft side by vlr id
+export const getTeamCompare = versioned('team-compare-v2', getTeamCompare_impl);
 async function getTeamCompare_impl(filters: TeamFilters): Promise<TeamCompareData> {
   const { tours, seriesIds, drafts, rounds, dateOf, lastMatchDate } = await loadTeamSeries(filters);
   if (seriesIds.length === 0) return { mapStats: [], draftOrder: { a: 0, b: 0 }, comps: [], series: 0, draftSeries: 0, lastMatchDate };

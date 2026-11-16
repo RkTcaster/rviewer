@@ -11,6 +11,8 @@ import { Region, TeamOption, TournamentNode } from '@/lib/types';
 import { useNavigation, useFilterParams } from './NavigationContext';
 import { DateFilter } from './DateFilter';
 import { AddTeamsSelect } from './AddTeamsSelect';
+import { teamLabel } from '@/lib/teamKey';
+import { subregionFlagFile } from '@/lib/subregionFlags';
 
 interface Props {
   tree: TournamentNode[];
@@ -62,15 +64,10 @@ function tourLabel(t: TournamentNode): string {
 // toggle every tournament of that stage in the year (all regions / one region), whatever the
 // Region row and the subregion menus say, the same way a region chip toggles the whole region
 const GROUPED_STAGES = ['open_qualifier'];
-// Flag in public/flags/ per subregion (tournament.subregion, compared without case or spaces)
-const SUBREGION_FLAGS: Record<string, string> = {
-  brazil: 'br', china: 'cn', europe: 'eu', japan: 'jp', korea: 'kr', mena: 'mena', northamerica: 'na',
-  latamnorth: 'latamnorth', latamsouth: 'latamsouth', latamnorthsouth: 'latamnorthsouth', latam: 'latamnorthsouth',
-  sea: 'sea', southeastasia: 'sea', turkey: 'turrkiye', turkiye: 'turrkiye', türkiye: 'turrkiye',
-};
+// Flag per subregion (lib/subregionFlags)
 const subregionFlag = (subregion: string | null) => {
-  const file = subregion && SUBREGION_FLAGS[subregion.toLowerCase().replace(/[^a-zü]/g, '')];
-  return file ? <img src={`/flags/${file}.png`} alt="" className="w-[18px] h-3 object-cover rounded-[2px] shrink-0" /> : null;
+  const file = subregionFlagFile(subregion);
+  return file ? <img src={file} alt="" className="w-[18px] h-3 object-cover rounded-[2px] shrink-0" /> : null;
 };
 // Circuit stage a qualifier feeds, from the event before " - " minus season and region:
 // "vct 2027 america kickoff - north america open qualifier" → "Kickoff" (later "Cup 1"…).
@@ -304,7 +301,7 @@ export function TournamentTreeFilter({ tree, regions, selected, suffix = '', tit
           <span className={LABEL}>Teams</span>
           <div className="flex gap-2">
             {!hideTeams && <>
-              <button onClick={() => setParam('allTeams', null)} className={pill(!allTeams)} title={`Teams: ${relevantTags.join(', ') || 'none in this selection'}`}>
+              <button onClick={() => setParam('allTeams', null)} className={pill(!allTeams)} title={`Teams: ${relevantTags.map(teamLabel).join(', ') || 'none in this selection'}`}>
                 Relevant
               </button>
               <button onClick={() => setParam('allTeams', '1')} className={pill(allTeams)}>

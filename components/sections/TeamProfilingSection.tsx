@@ -5,6 +5,7 @@ import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Tooltip 
 import { Info } from 'lucide-react';
 import { TeamProfile, TeamProfilingData } from '@/lib/types';
 import { Tooltip } from '../Tooltip';
+import { teamLabel } from '@/lib/teamKey';
 
 interface Props {
   data: TeamProfilingData;
@@ -171,7 +172,7 @@ export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fi
                 style={slot >= 0 ? { borderColor: SLOT_COLORS[slot] } : undefined}
               >
                 {teamLogos[team] && <img src={teamLogos[team]} alt="" className="w-4 h-4 object-contain" />}
-                {team}
+                {teamLabel(team)}
               </button>
             );
           })}
@@ -192,7 +193,7 @@ export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fi
                 {shown.map(({ team, slot }) => (
                   <Radar
                     key={team}
-                    name={team}
+                    name={teamLabel(team)}
                     dataKey={`s${slot}`}
                     stroke={SLOT_COLORS[slot]}
                     strokeWidth={2}
@@ -235,7 +236,7 @@ export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fi
                       <span className="flex items-center gap-1.5 text-gray-100 font-bold">
                         <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: SLOT_COLORS[slot] }} />
                         {teamLogos[team] && <img src={teamLogos[team]} alt="" className="w-4 h-4 object-contain" />}
-                        {team}
+                        {teamLabel(team)}
                       </span>
                     </th>
                   ))}
@@ -294,7 +295,7 @@ function RadarTooltip({ active, payload, profiles, shown, scaled, showDetail }: 
         return (
           <p key={team} className="flex items-center gap-1.5 text-gray-300">
             <span className="w-2.5 h-2.5 rounded-sm" style={{ background: SLOT_COLORS[slot] }} />
-            <span className="font-bold text-gray-100">{team}</span>
+            <span className="font-bold text-gray-100">{teamLabel(team)}</span>
             {axis.show(profiles[team])}
             {showDetail && (
               <span className="text-gray-500">

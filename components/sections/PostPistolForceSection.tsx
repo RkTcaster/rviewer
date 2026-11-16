@@ -8,11 +8,13 @@ import { useNavigation } from '../NavigationContext';
 import { Tooltip } from '../Tooltip';
 import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 import { TeamChipsPanel } from '../TeamChipsPanel';
+import { teamLabel } from '@/lib/teamKey';
 
 interface Props {
   stats: Record<string, TeamPostPistolForce>;
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
+  teamSubregions?: Record<string, string>;
   /** Teams of the main filter (relevant / all) */
   fixedTeams: string[];
 }
@@ -176,7 +178,7 @@ function RegionTooltipContent({ active, payload }: { active?: boolean; payload?:
   );
 }
 
-export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {}, fixedTeams }: Props) {
+export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {}, teamSubregions = {}, fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [half, setHalf] = useState<Half>('both');
   const [postPlant, setPostPlant] = useState(false);
@@ -262,6 +264,7 @@ export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {}
         setSelectedTeams={setSelectedTeams}
         teamLogos={teamLogos}
         teamRegions={teamRegions}
+        teamSubregions={teamSubregions}
       />
 
       {/* Controls */}
@@ -352,8 +355,8 @@ export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {}
                 <td className="w-8 text-center py-2.5 text-[11px] font-bold text-gray-600">{rank + 1}</td>
                 <td className="px-5 py-2.5 text-[11px] font-bold text-gray-300 border-r border-gray-800 whitespace-nowrap">
                   <div className="flex items-center gap-2">
-                    {teamLogos[team] && <img src={teamLogos[team]} alt={team} className="w-5 h-5 object-contain shrink-0" />}
-                    {team}
+                    {teamLogos[team] && <img src={teamLogos[team]} alt={teamLabel(team)} className="w-5 h-5 object-contain shrink-0" />}
+                    {teamLabel(team)}
                   </div>
                 </td>
                 <StatCells s={teamStat(team)} />
@@ -425,7 +428,7 @@ export function PostPistolForceSection({ stats, teamLogos = {}, teamRegions = {}
         <p className="px-1 text-[11px] leading-snug text-gray-400">
           {baseTeams.length === 0
             ? 'No teams selected.'
-            : <>Evaluating {baseTeams.length} {baseTeams.length === 1 ? 'team' : 'teams'}: <span className="font-bold text-gray-200">{baseTeams.join(', ')}</span></>}
+            : <>Evaluating {baseTeams.length} {baseTeams.length === 1 ? 'team' : 'teams'}: <span className="font-bold text-gray-200">{baseTeams.map(teamLabel).join(', ')}</span></>}
         </p>
       </div>
     </div>

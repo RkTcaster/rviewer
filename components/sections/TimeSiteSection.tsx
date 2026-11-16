@@ -8,12 +8,14 @@ import { useUrlSet } from '@/hooks/useUrlSet';
 import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 import { TeamChipsPanel } from '../TeamChipsPanel';
 import { Tooltip } from '../Tooltip';
+import { teamLabel } from '@/lib/teamKey';
 
 interface Props {
   stats: TimeSiteData['stats'] | null;
   maps: string[];
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
+  teamSubregions?: Record<string, string>;
   mapImages?: Record<string, string>;
   hasTour?: boolean;
   defaultHiddenMaps?: string[];
@@ -154,7 +156,7 @@ function legend() {
   );
 }
 
-export function TimeSiteSection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, hasTour = false, defaultHiddenMaps = [], series, dataSeries, fixedTeams }: Props) {
+export function TimeSiteSection({ stats, maps, teamLogos = {}, teamRegions = {}, teamSubregions = {}, mapImages = {}, hasTour = false, defaultHiddenMaps = [], series, dataSeries, fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [side, setSide] = useState<Side>('all');
   const [showDetail, setShowDetail] = useState(false);
@@ -316,6 +318,7 @@ export function TimeSiteSection({ stats, maps, teamLogos = {}, teamRegions = {},
           setSelectedTeams={setSelectedTeams}
           teamLogos={teamLogos}
           teamRegions={teamRegions}
+          teamSubregions={teamSubregions}
         />
 
         <div className="flex flex-col gap-2">
@@ -437,9 +440,9 @@ export function TimeSiteSection({ stats, maps, teamLogos = {}, teamRegions = {},
                 <td className="sticky left-8 z-10 bg-[#1a1d23] px-5 py-3 text-[11px] font-bold text-gray-300 border-r border-gray-800 whitespace-nowrap">
                   <div className="flex items-center gap-2">
                     {teamLogos[team] && (
-                      <img src={teamLogos[team]} alt={team} className="w-5 h-5 object-contain shrink-0" />
+                      <img src={teamLogos[team]} alt={teamLabel(team)} className="w-5 h-5 object-contain shrink-0" />
                     )}
-                    {team}
+                    {teamLabel(team)}
                   </div>
                 </td>
                 {cols.map(col => cell(col, totals[team]))}

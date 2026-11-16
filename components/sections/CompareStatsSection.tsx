@@ -1,5 +1,6 @@
 import { Sword, Shield } from 'lucide-react';
 import { MapStat, TeamRankStats } from '@/lib/types';
+import { teamLabel } from '@/lib/teamKey';
 
 type PabStat = { wins: number; total: number; atkWins: number; atkTotal: number; defWins: number; defTotal: number };
 
@@ -355,18 +356,18 @@ export function CompareStatsSection({
             <th colSpan={3} className="sticky top-0 z-20 bg-[#0f1115] py-3 text-center text-blue-300 text-3xl font-bold tracking-wider border-b border-gray-700">
               <div className="flex items-center justify-center gap-3">
                 {teamLogos[teamAName] && (
-                  <img src={teamLogos[teamAName]} alt={teamAName} className="w-12 h-12 object-contain shrink-0" />
+                  <img src={teamLogos[teamAName]} alt={teamLabel(teamAName)} className="w-12 h-12 object-contain shrink-0" />
                 )}
-                {teamAName}
+                {teamLabel(teamAName)}
               </div>
             </th>
             <th className="sticky top-0 z-20 bg-[#0f1115] py-3 border-b border-gray-700" />
             <th colSpan={3} className="sticky top-0 z-20 bg-[#0f1115] py-3 text-center text-orange-300 text-3xl font-bold tracking-wider border-b border-gray-700">
               <div className="flex items-center justify-center gap-3">
                 {teamLogos[teamBName] && (
-                  <img src={teamLogos[teamBName]} alt={teamBName} className="w-12 h-12 object-contain shrink-0" />
+                  <img src={teamLogos[teamBName]} alt={teamLabel(teamBName)} className="w-12 h-12 object-contain shrink-0" />
                 )}
-                {teamBName}
+                {teamLabel(teamBName)}
               </div>
             </th>
           </tr>

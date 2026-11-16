@@ -1,6 +1,8 @@
 // lib/data/helpers.ts — helpers compartidos de la capa de datos
 import { unstable_cache } from 'next/cache';
 import { supabase } from '../supabase';
+import { getTeamKeys, keyOf } from './teamKeys';
+import { teamLabel } from '../teamKey';
 
 // Envuelve una función de datos con unstable_cache, invalidando cuando cambia la
 // última actualización (getLastUpdateDate, cacheada 5min). La key combina keyBase +
@@ -153,35 +155,34 @@ export async function getAllSeriesIds(filters: {
 }
 
 // Team pages: the series one team (vlr id) played in the selection, newest first, cut to its last
-// N with `last`. Also the date of each (first map), the tricode the team played it under (the
-// tables without ids are matched by it inside the team's own series), the rival's tricode and
-// `lastMatchDate`, its latest match in the selected tournaments whatever the other filters say.
+// N with `last`. Also the date of each (first map), the rival's current tag (from `teams`, so a
+// rival that changed tag shows the same one everywhere) and `lastMatchDate`, its latest match in
+// the selected tournaments whatever the other filters say.
 export type TeamFilters = { teamId: string; tour?: string; bo?: string; dateFrom?: string; dateTo?: string; last?: string };
 export async function getTeamSeriesIds(filters: TeamFilters) {
   const tours = filters.tour?.split(',').filter(Boolean) ?? [];
   const dateOf = new Map<number, string>();
-  const tagOf = new Map<number, string>();
   const rivalOf = new Map<number, string>();
   let lastMatchDate: string | null = null;
-  if (tours.length === 0) return { tours, seriesIds: [] as number[], dateOf, tagOf, rivalOf, lastMatchDate };
+  if (tours.length === 0) return { tours, seriesIds: [] as number[], dateOf, rivalOf, lastMatchDate };
 
-  const [firstRounds, filtered] = await Promise.all([
+  const [firstRounds, filtered, keys] = await Promise.all([
     getFirstRounds([...tours].sort().join(',')),
     getAllSeriesIds({ tour: filters.tour, bo: filters.bo, dateFrom: filters.dateFrom, dateTo: filters.dateTo, teams: [filters.teamId] }),
+    getTeamKeys(),
   ]);
   for (const r of firstRounds) {
     const isA = r.team_a_id_vlr === filters.teamId;
     if (!isA && r.team_b_id_vlr !== filters.teamId) continue;
     const id = Number(r.series_id);
-    tagOf.set(id, ((isA ? r.teamA : r.teamB) ?? '').trim());
-    rivalOf.set(id, ((isA ? r.teamB : r.teamA) ?? '').trim());
+    rivalOf.set(id, teamLabel(keyOf(keys, isA ? r.team_b_id_vlr : r.team_a_id_vlr) ?? ''));
     if (!r.date) continue;
     if (!dateOf.has(id) || r.date < dateOf.get(id)!) dateOf.set(id, r.date);
     if (!lastMatchDate || r.date > lastMatchDate) lastMatchDate = r.date;
   }
   let seriesIds = [...filtered].sort((a, b) => (dateOf.get(b) ?? '').localeCompare(dateOf.get(a) ?? '') || b - a);
   if (filters.last && filters.last !== 'all') seriesIds = seriesIds.slice(0, parseInt(filters.last));
-  return { tours, seriesIds, dateOf, tagOf, rivalOf, lastMatchDate };
+  return { tours, seriesIds, dateOf, rivalOf, lastMatchDate };
 }
 
 // Keyed on round_info, not draft: qualifier uploads have no draft and wouldn't bust the cache (12.3)

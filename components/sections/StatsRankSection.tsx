@@ -7,12 +7,14 @@ import { useNavigation } from '../NavigationContext';
 import { Tooltip } from '../Tooltip';
 import { TeamChipsPanel } from '../TeamChipsPanel';
 import { useHiddenTeams } from '@/hooks/useHiddenTeams';
+import { teamLabel } from '@/lib/teamKey';
 
 interface Props {
   rankings: Record<string, TeamRankStats>;
   economy?: Record<string, TeamEconomyCompare>;
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
+  teamSubregions?: Record<string, string>;
   hasTour?: boolean;
   /** Teams of the main filter (relevant / all) */
   fixedTeams: string[];
@@ -226,7 +228,7 @@ function getCellColor(value: number | null, allValues: (number | null)[], lowerI
   return 'text-gray-300';
 }
 
-export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamRegions = {}, hasTour = false, fixedTeams }: Props) {
+export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamRegions = {}, teamSubregions = {}, hasTour = false, fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<number | string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -324,6 +326,7 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
       setSelectedTeams={setSelectedTeams}
       teamLogos={teamLogos}
       teamRegions={teamRegions}
+      teamSubregions={teamSubregions}
     />
 
     {/* Table info subtitle + group filter chips */}
@@ -491,9 +494,9 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
               <td className="sticky z-10 bg-[#1a1d23] px-5 py-3 text-[11px] font-bold text-gray-300 border-r border-gray-800 whitespace-nowrap" style={{ width: '1%', left: 'calc(2rem - 1px)' }}>
                 <div className="flex items-center gap-2">
                   {teamLogos[team] && (
-                    <img src={teamLogos[team]} alt={team} className="w-5 h-5 object-contain shrink-0" />
+                    <img src={teamLogos[team]} alt={teamLabel(team)} className="w-5 h-5 object-contain shrink-0" />
                   )}
-                  {team}
+                  {teamLabel(team)}
                 </div>
               </td>
               {metricDefs.map((m, mi) => {

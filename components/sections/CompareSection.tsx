@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { MapStat, MapCompositionStat } from '@/lib/types';
 import { CompareVetoPanel, slotColor, slotLabel, useCompareVeto } from '../CompareVetoPanel';
 import type { VetoModelCore } from '../CompareVetoPanel';
+import { teamLabel } from '@/lib/teamKey';
 
 interface Props {
   statsA: MapStat[];
@@ -345,18 +346,18 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
                   <th colSpan={6} className="sticky top-0 z-20 bg-[#0f1115] py-2 text-center text-blue-300 border-b border-gray-700 font-bold tracking-wider text-[23px]">
                     <div className="flex items-center justify-center gap-2.5">
                       {teamLogos[teamAName] && (
-                        <img src={teamLogos[teamAName]} alt={teamAName} className="w-8 h-8 object-contain shrink-0" />
+                        <img src={teamLogos[teamAName]} alt={teamLabel(teamAName)} className="w-8 h-8 object-contain shrink-0" />
                       )}
-                      {teamAName}
+                      {teamLabel(teamAName)}
                     </div>
                   </th>
                   <th className="sticky top-0 z-20 bg-[#0f1115] py-2 border-b border-gray-700" />
                   <th colSpan={6} className="sticky top-0 z-20 bg-[#0f1115] py-2 text-center text-orange-300 border-b border-gray-700 font-bold tracking-wider text-[23px]">
                     <div className="flex items-center justify-center gap-2.5">
                       {teamLogos[teamBName] && (
-                        <img src={teamLogos[teamBName]} alt={teamBName} className="w-8 h-8 object-contain shrink-0" />
+                        <img src={teamLogos[teamBName]} alt={teamLabel(teamBName)} className="w-8 h-8 object-contain shrink-0" />
                       )}
-                      {teamBName}
+                      {teamLabel(teamBName)}
                     </div>
                   </th>
                 </tr>
@@ -475,7 +476,7 @@ export function CompareSection({ statsA, statsB, compsA, compsB, agentImages, te
                             const i = vetoSlotOf[mapName];
                             const side = veto.sideOf(i);
                             const team = side === 'left' ? teamAName : side === 'right' ? teamBName : '';
-                            const logo = team && teamLogos[team] && <img src={teamLogos[team]} alt={team} className="w-4 h-4 object-contain shrink-0" />;
+                            const logo = team && teamLogos[team] && <img src={teamLogos[team]} alt={teamLabel(team)} className="w-4 h-4 object-contain shrink-0" />;
                             return (
                               <div className="flex items-center justify-center gap-1 mt-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: slotColor(i) }}>
                                 {side === 'left' && <><ArrowLeft className="w-3.5 h-3.5 shrink-0" />{logo}</>}

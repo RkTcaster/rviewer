@@ -4,6 +4,9 @@ import { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, ReferenceLine } from 'recharts';
 import { AgentMatchDetail, AgentPickStat, CompMatch, CompositionStat, MapInfoData } from '@/lib/types';
 import { KPICard } from '@/components/KPICard';
+import { teamLabel } from '@/lib/teamKey';
+import { TeamChipsPanel } from '../TeamChipsPanel';
+import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 
 // Una composición son 5 agentes: es el tope tanto de agentes elegidos como de la suma de roles
 const MAX_PICKS = 5;
@@ -23,6 +26,11 @@ interface Props {
   agentRoles: Record<string, string>;
   /** Atk / Def WR from every series; picks / bans / deciders only from the ones with a draft */
   mapInfo: MapInfoData;
+  teamLogos: Record<string, string>;
+  teamRegions: Record<string, string>;
+  teamSubregions: Record<string, string>;
+  /** Teams of the main filter (relevant / all) */
+  fixedTeams: string[];
 }
 
 function AgentYTick({ x, y, payload, agentImages }: any) {
@@ -295,7 +303,39 @@ function CompFilterSelector({ label, filter, agentsByRole, agentImages, enabled 
   );
 }
 
-export function AgentPicksSection({ stats, compositions, agentMatches, compMatches, mapImages, agentImages, agentRoles, mapInfo }: Props) {
+export function AgentPicksSection({ stats: allStats, compositions, agentMatches: allAgentMatches, compMatches: allCompMatches, mapImages, agentImages, agentRoles, mapInfo, teamLogos, teamRegions, teamSubregions, fixedTeams }: Props) {
+  // Team chips (same panel as Stats Rank): the filter's teams that played the selection, all on by
+  // default. A team turned off leaves with its comps: its picks and comps leave the pick rate, and
+  // its maps leave the NMWR, the compositions and the match list (its rivals' comps stay).
+  const chipTeams = useMemo(() => [...new Set(allCompMatches.map(m => m.team))].filter(t => fixedTeams.includes(t)).sort(), [allCompMatches, fixedTeams]);
+  const { selected: selectedTeams, setSelected: setSelectedTeams } = useHiddenTeams(chipTeams);
+  const hiddenKey = chipTeams.filter(t => !selectedTeams.has(t)).join(',');
+  const teamFiltered = hiddenKey !== '';
+  const agentMatches = useMemo(() => {
+    const hidden = new Set(hiddenKey.split(','));
+    return teamFiltered ? allAgentMatches.filter(m => !hidden.has(m.team)) : allAgentMatches;
+  }, [allAgentMatches, hiddenKey]);
+  const compMatches = useMemo(() => {
+    const hidden = new Set(hiddenKey.split(','));
+    return teamFiltered ? allCompMatches.filter(m => !hidden.has(m.team)) : allCompMatches;
+  }, [allCompMatches, hiddenKey]);
+  // Server picks minus the hidden teams' comps (one comp per team and map, from compMatches)
+  const stats = useMemo(() => {
+    if (!teamFiltered) return allStats;
+    const hidden = new Set(hiddenKey.split(','));
+    const lostComps: Record<string, number> = {};
+    const lostPicks: Record<string, number> = {};
+    for (const m of allCompMatches) {
+      if (!hidden.has(m.team)) continue;
+      lostComps[m.map] = (lostComps[m.map] ?? 0) + 1;
+      for (const agent of m.composition) lostPicks[`${m.map}__${agent}`] = (lostPicks[`${m.map}__${agent}`] ?? 0) + 1;
+    }
+    return allStats.map(s => {
+      const timesPlayed = s.timesPlayed - (lostPicks[`${s.map}__${s.agent}`] ?? 0);
+      const comps = s.comps - (lostComps[s.map] ?? 0);
+      return { ...s, timesPlayed, comps, pickRate: comps > 0 ? Math.round(timesPlayed / comps * 100) : 0 };
+    });
+  }, [allStats, allCompMatches, hiddenKey]);
   const mapFullStats = useMemo(() => Object.fromEntries(mapInfo.stats.map(s => [s.mapName, s])), [mapInfo]);
   // Qualifiers come without draft: with none in the selection, picks / bans / deciders are hidden
   const hasDraft = mapInfo.draftSeries > 0;
@@ -346,7 +386,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, compMatch
   // En modo rondas played/wins cuentan rondas en vez de mapas.
   // null = sin filtro y por mapas → se usan los agregados que ya vienen del server.
   const nmByComp = useMemo(() => {
-    if (!filterActive && !byRounds) return null;
+    if (!filterActive && !byRounds && !teamFiltered) return null;
     const by: Record<string, { nonMirrorPlayed: number; nonMirrorWins: number }> = {};
     for (const m of agentMatches) {
       if (!inScope(m.map)) continue;
@@ -356,7 +396,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, compMatch
       e.nonMirrorWins += byRounds ? m.roundsWon : (m.won ? 1 : 0);
     }
     return by;
-  }, [agentMatches, selectedMaps, selectedAgents, roleCounts, enemyActive, enemy.selectedAgents, enemy.roleCounts, byRounds]);
+  }, [agentMatches, selectedMaps, selectedAgents, roleCounts, enemyActive, enemy.selectedAgents, enemy.roleCounts, byRounds, teamFiltered]);
 
   const filtered = useMemo(() => {
     const nmwr = (wins?: number, played?: number) =>
@@ -444,11 +484,11 @@ export function AgentPicksSection({ stats, compositions, agentMatches, compMatch
   // Con filtro rival las comps salen de las instancias equipo+mapa (las del server no saben contra qué jugaron).
   // Mismos criterios que getOverallCompositions: WR sin espejos exactos, ATK/DEF del lado propio.
   const compSource = useMemo(() => {
-    if (!enemyActive) return compositions;
+    if (!enemyActive && !teamFiltered) return compositions;
     type Acc = { map: string; composition: string; played: number; nmPlayed: number; nmWins: number; attWins: number; attTotal: number; defWins: number; defTotal: number; teamCounts: Record<string, number> };
     const by: Record<string, Acc> = {};
     for (const m of compMatches) {
-      if (!enemy.matches(m.oppComposition)) continue;
+      if (!enemyOk(m.oppComposition)) continue;
       const composition = m.composition.join(', ');
       const e = (by[`${m.map}__${composition}`] ??= { map: m.map, composition, played: 0, nmPlayed: 0, nmWins: 0, attWins: 0, attTotal: 0, defWins: 0, defTotal: 0, teamCounts: {} });
       e.played++;
@@ -469,7 +509,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, compMatch
       winRate: nmPlayed > 0 ? Math.round(nmWins / nmPlayed * 100) : undefined,
       teams: Object.entries(teamCounts).map(([team, played]) => ({ team, played })).sort((a, b) => b.played - a.played),
     }));
-  }, [compositions, compMatches, enemyActive, enemy.selectedAgents, enemy.roleCounts]);
+  }, [compositions, compMatches, enemyActive, enemy.selectedAgents, enemy.roleCounts, teamFiltered]);
 
   // Compositions panel data
   const compositionPanel = useMemo(() => {
@@ -575,7 +615,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, compMatch
   const maxPickRate = Math.max(10, ...filtered.map(d => d.pickRate));
   const xDomain: [number, number] = [0, maxPickRate];
 
-  if (stats.length === 0) {
+  if (allStats.length === 0) {
     return (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
         Select a region or tournament to see agent pick data...
@@ -585,6 +625,14 @@ export function AgentPicksSection({ stats, compositions, agentMatches, compMatch
 
   return (
     <div className="flex flex-col gap-6">
+      <TeamChipsPanel
+        allTeams={chipTeams}
+        selectedTeams={selectedTeams}
+        setSelectedTeams={setSelectedTeams}
+        teamLogos={teamLogos}
+        teamRegions={teamRegions}
+        teamSubregions={teamSubregions}
+      />
       {mapInfo.draftSeries < mapInfo.series && (
         <p className="text-xs text-amber-200/90">
           <span className="font-bold text-amber-300">Picks, bans &amp; deciders: incomplete data.</span>{' '}
@@ -913,8 +961,8 @@ export function AgentPicksSection({ stats, compositions, agentMatches, compMatch
                         <div className="w-[135px] shrink-0 flex justify-end">
                           <CompositionIcons composition={m.composition.join(', ')} agentImages={agentImages} />
                         </div>
-                        <span className="text-xs text-gray-200 shrink-0 w-[150px] truncate text-center" title={`${m.team} vs ${m.opponent}`}>
-                          {m.team} <span className="text-gray-600">vs</span> {m.opponent}
+                        <span className="text-xs text-gray-200 shrink-0 w-[150px] truncate text-center" title={`${teamLabel(m.team)} vs ${teamLabel(m.opponent)}`}>
+                          {teamLabel(m.team)} <span className="text-gray-600">vs</span> {teamLabel(m.opponent)}
                         </span>
                         <div className="w-[135px] shrink-0 flex justify-start">
                           <CompositionIcons composition={m.oppComposition.join(', ')} agentImages={agentImages} />
@@ -987,7 +1035,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, compMatch
                               {c.teams.map((t, j) => (
                                 <span key={j}>
                                   {j > 0 && <span className="text-gray-600">, </span>}
-                                  {t.team} <span className="text-gray-600">({t.played})</span>
+                                  {teamLabel(t.team)} <span className="text-gray-600">({t.played})</span>
                                 </span>
                               ))}
                             </span>
@@ -1014,7 +1062,7 @@ export function AgentPicksSection({ stats, compositions, agentMatches, compMatch
                             {teams.map(([team, played], j) => (
                               <span key={team}>
                                 {j > 0 && <span className="text-gray-600">, </span>}
-                                {team} <span className="text-gray-600">({played})</span>
+                                {teamLabel(team)} <span className="text-gray-600">({played})</span>
                               </span>
                             ))}
                           </div>

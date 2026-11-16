@@ -8,11 +8,13 @@ import { Tooltip } from '../Tooltip';
 import { KPICard } from '../KPICard';
 import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 import { TeamChipsPanel } from '../TeamChipsPanel';
+import { teamLabel } from '@/lib/teamKey';
 
 interface Props {
   data: SeriesOutcomesData;
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
+  teamSubregions?: Record<string, string>;
   // Teams of the main filter (relevant / all) that played the selection
   fixedTeams: string[];
 }
@@ -191,7 +193,7 @@ const LEGEND = (
   </dl>
 );
 
-export function SeriesOutcomesSection({ data, teamLogos = {}, teamRegions = {}, fixedTeams }: Props) {
+export function SeriesOutcomesSection({ data, teamLogos = {}, teamRegions = {}, teamSubregions = {}, fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<SortCol>('wr');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -266,6 +268,7 @@ export function SeriesOutcomesSection({ data, teamLogos = {}, teamRegions = {}, 
         setSelectedTeams={setSelectedTeams}
         teamLogos={teamLogos}
         teamRegions={teamRegions}
+        teamSubregions={teamSubregions}
         headerExtra={<>
           <Tooltip content={LEGEND} className="items-center">
             <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-gray-200 hover:text-white transition-colors cursor-help">
@@ -341,8 +344,8 @@ export function SeriesOutcomesSection({ data, teamLogos = {}, teamRegions = {}, 
                 <td className="w-8 text-center py-2.5 text-[11px] font-bold text-gray-600">{rank + 1}</td>
                 <td className="px-3 py-2.5 text-[11px] font-bold text-gray-300 border-r border-gray-800 whitespace-nowrap">
                   <div className="flex items-center gap-2">
-                    {teamLogos[team] && <img src={teamLogos[team]} alt={team} className="w-5 h-5 object-contain shrink-0" />}
-                    {team}
+                    {teamLogos[team] && <img src={teamLogos[team]} alt={teamLabel(team)} className="w-5 h-5 object-contain shrink-0" />}
+                    {teamLabel(team)}
                   </div>
                 </td>
                 <StatCells s={teamStat(team)} />

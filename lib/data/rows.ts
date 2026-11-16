@@ -13,6 +13,8 @@ export type DraftRow = {
   event: string | null;
   team: string | null;
   rival: string | null;
+  team_id_vlr: string | null;
+  rival_id_vlr: string | null;
   bo: Num;
   team_1_select_1: string | null;
   team_1_select_2: string | null;
@@ -33,6 +35,8 @@ export type RoundInfoRow = {
   winCon: string | null;
   teamA: string | null;
   teamB: string | null;
+  team_a_id_vlr: string | null;
+  team_b_id_vlr: string | null;
   rndA: Num;
   rndB: Num;
 };
@@ -40,6 +44,7 @@ export type RoundInfoRow = {
 export type PlayerPerformanceRow = {
   map_id: string;
   team: string | null;
+  team_id_vlr: string | null;
   DE: Num;
   PL: Num;
 };
@@ -52,6 +57,7 @@ export type PlayerStatsRow = {
   player: string | null;
   player_id_vlr: string;
   team: string | null;
+  team_id_vlr: string | null;
   agent: string | null;
   map: string | null;
   map_duration: string | null;
@@ -100,9 +106,12 @@ export type RoundSummaryRow = {
   tour_id: string;
   team_a: string;
   team_b: string;
+  team_a_id_vlr: string | null;
+  team_b_id_vlr: string | null;
   side_team_a: string;
   fb_player_id: string | null;
   fb_team: string | null;
+  fb_team_id_vlr: string | null;
   fb_victim_id: string | null;
   fb_t: Num;
   plant_t: Num;
@@ -134,10 +143,12 @@ export type RoundEventRow = {
   player: string | null;
   player_id: string | null;
   team: string | null;
+  team_id_vlr: string | null;
   side: string | null;
   victim: string | null;
   victim_id: string | null;
   victim_team: string | null;
+  victim_team_id_vlr: string | null;
   weapon: string | null;
   site: string | null;
   is_first_blood: boolean | null;

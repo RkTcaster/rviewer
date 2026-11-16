@@ -899,6 +899,27 @@ Still open:
   `vct_2026_pacific_stage_1` twice (series 644656 and 644659, the copy with null ids), which
   counted double for TS, NS and DRX. Fixed by the scraper (checked 2026-11-13: no `round_info`
   row with a null id left; Pacific Stage 1 has 2289 rounds in `round_info` and `round_buy`).
+- **12.8 Stats by vlr team id** (2026-11-15, `handoff/RKTDATA_TAG_VS_TEAM_ID.md`): every row keeps
+  the tag the team had in that match (XXXM → MPMT mid-qualifier; 8 teams so far) and different
+  teams share tags, so grouping by the tag columns split one team in two and merged homonyms.
+  Now the data layer reads the `*_id_vlr` columns and turns each id into a **team key**
+  (`lib/data/teamKeys.ts`, `getTeamKeys`, cached 5 min): the team's current tag (`teams.team_id`);
+  when several teams share it, the main one (relevant, else more tournaments) keeps the bare tag and
+  the others get `TAG~<id>`. Logos, regions, Relevant lists (`getRelevantTags`, `getPlayedTags`,
+  team options) use the same keys, so the components keep keying by string; on screen
+  `teamLabel()` (`lib/teamKey.ts`) shows only the tag (user's choice). Migrated: Stats Rank,
+  Maps Rank, Map Info, economy (Stats Rank, Compare Economy, Post Pistol Force, Operator Use,
+  Weapon Pick), Time & Site, Series Outcomes, Agent Picks / compositions / Meta Shift, Neon,
+  Team Profiling (through its inputs), team pages' draft side (`tagOf` removed). Cache keys bumped.
+  Verified: MPMT in the Europe Qualifier is one row with 293 rounds (ATK 91/145, DEF 97/148, maps
+  13/17, FK 174, FD 119), equal to a hand count by id; the qualifier's 5 different `THE` teams are
+  5 rows, each equal to a hand count (they used to be one row of 17 maps). Every new-filter section
+  renders with no `~` key or old tag visible; `tsc` + `next build` clean.
+  Still by tag: the old draft-based pages (Veto, Form, Overall map picks, economy distribution,
+  longest maps, top performances, `getMapStats`, `getTeams` / `getTours`) and the Veto Predictor
+  model; the unused `allSeries = false` branches of `lib/data/agents.ts`.
+  `player_performance.team_id_vlr` has 22 nulls (2026-11-15): those rows drop out of retake /
+  post-plant (to report to vlr-scraper).
 - **12.6 Relevant teams wiped** ✅ (reloaded, 2026-11-13): the list now follows the circuit stage
   (opens → closed → Kickoff → Cups), about 48–60 teams once complete. 15 relevant on 2026-11-13 is
   expected: two EMEA / Americas opens are still to come and nothing of China / Pacific is loaded.

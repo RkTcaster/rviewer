@@ -10,9 +10,10 @@ import { supabase } from '../supabase';
 import { versioned, fetchAllBySeries, getAllSeriesIds } from './helpers';
 import { SeriesOutcomeGlobal, SeriesOutcomeStats, SeriesOutcomesData } from '../types';
 import { RoundInfoRow } from './rows';
+import { getTeamKeys, keyOf } from './teamKeys';
 
-type SeriesRow = { series_id: string; team: string | null; rival: string | null; bo: number | string | null };
-type OutcomeRound = Pick<RoundInfoRow, 'series_id' | 'map_id' | 'map_order' | 'round' | 'teamA' | 'teamB' | 'rndA'>;
+type SeriesRow = { series_id: string; team_id_vlr: string | null; bo: number | string | null };
+type OutcomeRound = Pick<RoundInfoRow, 'series_id' | 'map_id' | 'map_order' | 'round' | 'team_a_id_vlr' | 'team_b_id_vlr' | 'rndA'>;
 
 // A map went to overtime when it played more than 24 rounds (13 to win, so 24 is
 // the regulation maximum before a 12-12 tie). OT always comes in pairs.
@@ -30,7 +31,8 @@ export const emptySeriesOutcomes = (): SeriesOutcomesData => ({
 // (user's choice): the veto order and the pick columns need it, and the whole table stays on
 // the same series. `selected` / `withDraft` say how many that leaves out (qualifiers).
 // Drafts are read by series_id with no reduced guard: the NA open qualifier has 72 real ones.
-export const getSeriesOutcomes = versioned('series-outcomes-v4', getSeriesOutcomes_impl);
+// v5: teams by vlr id, keyed by getTeamKeys
+export const getSeriesOutcomes = versioned('series-outcomes-v5', getSeriesOutcomes_impl);
 
 async function getSeriesOutcomes_impl(filters: {
   tour?: string;
@@ -40,9 +42,9 @@ async function getSeriesOutcomes_impl(filters: {
 }): Promise<SeriesOutcomesData> {
   const selected = await getAllSeriesIds(filters);
   if (selected.length === 0) return emptySeriesOutcomes();
-  const idList = await fetchAllBySeries<SeriesRow>(selected, (ids, from, to) =>
-    supabase.from('draft').select('series_id, team, rival, bo').in('series_id', ids).order('series_id').range(from, to)
-  );
+  const [idList, keys] = await Promise.all([fetchAllBySeries<SeriesRow>(selected, (ids, from, to) =>
+    supabase.from('draft').select('series_id, team_id_vlr, bo').in('series_id', ids).order('series_id').range(from, to)
+  ), getTeamKeys()]);
   if (idList.length === 0) return { ...emptySeriesOutcomes(), selected: selected.length };
 
   // Team A is the side that opens the veto (draft.team), the same notion as the
@@ -50,8 +52,9 @@ async function getSeriesOutcomes_impl(filters: {
   const teamAbySeries: Record<string, string> = {};
   const boBySeries: Record<string, number> = {};
   for (const s of idList) {
-    if (!s.team) continue;
-    teamAbySeries[s.series_id] = s.team.trim();
+    const team = keyOf(keys, s.team_id_vlr);
+    if (!team) continue;
+    teamAbySeries[s.series_id] = team;
     boBySeries[s.series_id] = Number(s.bo);
   }
   const seriesIds = Object.keys(teamAbySeries);
@@ -60,7 +63,7 @@ async function getSeriesOutcomes_impl(filters: {
   const rounds = await fetchAllBySeries<OutcomeRound>(seriesIds, (ids, from, to) =>
     supabase
       .from('round_info')
-      .select('series_id, map_id, map_order, round, teamA, teamB, rndA')
+      .select('series_id, map_id, map_order, round, team_a_id_vlr, team_b_id_vlr, rndA')
       .in('series_id', ids)
       .order('series_id').order('team_map_round_id')
       .range(from, to)
@@ -73,8 +76,8 @@ async function getSeriesOutcomes_impl(filters: {
   const byMapId: Record<string, MapAgg> = {};
   for (const r of rounds) {
     if (!r.map_id) continue;
-    const tA = r.teamA?.trim();
-    const tB = r.teamB?.trim();
+    const tA = keyOf(keys, r.team_a_id_vlr);
+    const tB = keyOf(keys, r.team_b_id_vlr);
     if (!tA || !tB) continue;
     const round = Number(r.round);
     const prev = byMapId[r.map_id];

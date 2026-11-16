@@ -3,6 +3,8 @@ import { unstable_cache } from 'next/cache';
 import { supabase } from '../supabase';
 import { versioned, getReducedTourIds, getFirstRounds } from './helpers';
 import { Region, TeamOption, Tournament, TournamentNode } from '../types';
+import { getTeamKeys, keyOf } from './teamKeys';
+import { teamLabel } from '../teamKey';
 
 // Every tournament with its hierarchy columns, reduced ones included (Stats Rank v2 reads their
 // series from round_info, not draft). A row the scraper uploads before year is filled by hand
@@ -43,28 +45,27 @@ async function getRelevantTeams_impl(): Promise<string[]> {
   return (data ?? []).map(t => t.team_id_vlr);
 }
 
-// Tricodes of the relevant teams that played the given tournaments, for the team lists: the stats
-// tables only carry the tricode, so this is what a section can match. Taken from round_info by
-// vlr id, so a tricode only shows up when the relevant team itself played the selection.
+// Keys (getTeamKeys) of the relevant teams that played the given tournaments, for the team lists:
+// the stats are keyed the same way. Taken from round_info by vlr id, so a team only shows up when
+// the relevant team itself played the selection.
 // `extra`: vlr ids the visitor added to Relevant from the filter (URL `addTeams`).
 export async function getRelevantTags(tour?: string, extra: string[] = []): Promise<string[]> {
   const tours = tour?.split(',').filter(Boolean) ?? [];
   if (tours.length === 0) return [];
-  const [ids, rounds] = await Promise.all([getRelevantTeams(), getFirstRounds(tours.sort().join(','))]);
+  const [ids, rounds, keys] = await Promise.all([getRelevantTeams(), getFirstRounds(tours.sort().join(',')), getTeamKeys()]);
   const relevant = new Set([...ids, ...extra]);
   const tags = new Set<string>();
   for (const r of rounds) {
-    if (r.teamA && relevant.has(r.team_a_id_vlr ?? '')) tags.add(r.teamA.trim());
-    if (r.teamB && relevant.has(r.team_b_id_vlr ?? '')) tags.add(r.teamB.trim());
+    for (const id of [r.team_a_id_vlr, r.team_b_id_vlr]) if (id && relevant.has(id)) tags.add(keyOf(keys, id)!);
   }
   return [...tags].sort();
 }
 
 // Team select of the team pages on the new main filter: the teams (vlr id) that played the given
-// tournaments, relevant only unless `all`, labeled by the tricode they played under, plus the name
-// when two options share it. `selected` is the team to show: `teamId` when it still goes with
-// `tag` (the other team pages only write the tricode), else the team with that tricode, taken
-// from the selection first and a relevant one first. It is listed even when the filter leaves it out.
+// tournaments, relevant only unless `all`. `tag` is the team's key (getTeamKeys), what the stats
+// are keyed by; the label is its tag, plus the name when two options show the same tag.
+// `selected` is the team to show: `teamId` when it still goes with `tag` (the other team pages
+// only write the key), else the team with that key. It is listed even when the filter leaves it out.
 const getTeamNames = unstable_cache(async () => {
   const { data, error } = await supabase.from('teams').select('team_id_vlr, team_id, name, relevant');
   if (error) throw error;
@@ -72,26 +73,28 @@ const getTeamNames = unstable_cache(async () => {
 }, ['team-names-v2'], { revalidate: 300 });
 export async function getTeamOptions(tour: string | undefined, all: boolean, tag?: string, teamId?: string, extra: string[] = []): Promise<{ options: TeamOption[]; selected: TeamOption | null }> {
   const tours = tour?.split(',').filter(Boolean) ?? [];
-  const [teams, rounds] = await Promise.all([getTeamNames(), tours.length ? getFirstRounds(tours.sort().join(',')) : []]);
+  const [teams, rounds, keys] = await Promise.all([getTeamNames(), tours.length ? getFirstRounds(tours.sort().join(',')) : [], getTeamKeys()]);
   const byId = new Map(teams.map(t => [t.team_id_vlr, t]));
-  const played = new Map<string, string>();
+  const played = new Set<string>();
   for (const r of rounds) {
-    if (r.team_a_id_vlr && r.teamA) played.set(r.team_a_id_vlr, r.teamA.trim());
-    if (r.team_b_id_vlr && r.teamB) played.set(r.team_b_id_vlr, r.teamB.trim());
+    if (r.team_a_id_vlr) played.add(r.team_a_id_vlr);
+    if (r.team_b_id_vlr) played.add(r.team_b_id_vlr);
   }
-  const tagOf = (id: string) => played.get(id) ?? byId.get(id)?.team_id ?? '';
-  const relevantFirst = (ids: string[]) => ids.find(id => byId.get(id)?.relevant) ?? ids[0];
-  const selectedId = teamId && (!tag || tagOf(teamId) === tag) && (played.has(teamId) || byId.has(teamId)) ? teamId
-    : tag ? relevantFirst([...played].filter(([, t]) => t === tag).map(([id]) => id))
-      ?? relevantFirst(teams.filter(t => t.team_id === tag).map(t => t.team_id_vlr))
+  const keyById = (id: string) => keyOf(keys, id)!;
+  const idByKey = new Map(Object.entries(keys).map(([id, key]) => [key, id]));
+  const selectedId = teamId && (!tag || keyById(teamId) === tag) && byId.has(teamId) ? teamId
+    : tag ? idByKey.get(tag)
     : undefined;
 
-  const ids = [...played.keys()].filter(id => all || byId.get(id)?.relevant || extra.includes(id));
+  const ids = [...played].filter(id => all || byId.get(id)?.relevant || extra.includes(id));
   if (selectedId && !ids.includes(selectedId)) ids.push(selectedId);
   const count: Record<string, number> = {};
-  for (const id of ids) count[tagOf(id)] = (count[tagOf(id)] ?? 0) + 1;
+  for (const id of ids) count[teamLabel(keyById(id))] = (count[teamLabel(keyById(id))] ?? 0) + 1;
   const options = ids
-    .map(id => ({ id, tag: tagOf(id), label: count[tagOf(id)] > 1 ? `${tagOf(id)} · ${byId.get(id)?.name ?? id}` : tagOf(id) }))
+    .map(id => {
+      const key = keyById(id), shown = teamLabel(key);
+      return { id, tag: key, label: count[shown] > 1 ? `${shown} · ${byId.get(id)?.name ?? id}` : shown };
+    })
     .sort((a, b) => a.label.localeCompare(b.label));
   return { options, selected: options.find(o => o.id === selectedId) ?? null };
 }
@@ -101,28 +104,30 @@ export async function getTeamOptions(tour: string | undefined, all: boolean, tag
 export async function getAddableTeams(tour?: string): Promise<TeamOption[]> {
   const tours = tour?.split(',').filter(Boolean) ?? [];
   if (tours.length === 0) return [];
-  const [teams, rounds] = await Promise.all([getTeamNames(), getFirstRounds(tours.sort().join(','))]);
+  const [teams, rounds, keys] = await Promise.all([getTeamNames(), getFirstRounds(tours.sort().join(',')), getTeamKeys()]);
   const byId = new Map(teams.map(t => [t.team_id_vlr, t]));
-  const played = new Map<string, string>();
+  const played = new Set<string>();
   for (const r of rounds) {
-    if (r.team_a_id_vlr && r.teamA) played.set(r.team_a_id_vlr, r.teamA.trim());
-    if (r.team_b_id_vlr && r.teamB) played.set(r.team_b_id_vlr, r.teamB.trim());
+    if (r.team_a_id_vlr) played.add(r.team_a_id_vlr);
+    if (r.team_b_id_vlr) played.add(r.team_b_id_vlr);
   }
   return [...played]
-    .filter(([id]) => !byId.get(id)?.relevant)
-    .map(([id, tag]) => ({ id, tag, label: byId.get(id)?.name ? `${tag} · ${byId.get(id)!.name}` : tag }))
+    .filter(id => !byId.get(id)?.relevant)
+    .map(id => {
+      const tag = keyOf(keys, id)!, shown = teamLabel(tag);
+      return { id, tag, label: byId.get(id)?.name ? `${shown} · ${byId.get(id)!.name}` : shown };
+    })
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
-// Tricodes of every team that played the given tournaments (Meta Shift team lists on All teams)
+// Keys of every team that played the given tournaments (Meta Shift team lists on All teams)
 export async function getPlayedTags(tour?: string): Promise<string[]> {
   const tours = tour?.split(',').filter(Boolean) ?? [];
   if (tours.length === 0) return [];
-  const rounds = await getFirstRounds(tours.sort().join(','));
+  const [rounds, keys] = await Promise.all([getFirstRounds(tours.sort().join(',')), getTeamKeys()]);
   const tags = new Set<string>();
   for (const r of rounds) {
-    if (r.teamA) tags.add(r.teamA.trim());
-    if (r.teamB) tags.add(r.teamB.trim());
+    for (const id of [r.team_a_id_vlr, r.team_b_id_vlr]) if (id) tags.add(keyOf(keys, id)!);
   }
   return [...tags].sort();
 }

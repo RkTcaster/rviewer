@@ -7,12 +7,14 @@ import { useNavigation } from '../NavigationContext';
 import { useUrlSet } from '@/hooks/useUrlSet';
 import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 import { TeamChipsPanel } from '../TeamChipsPanel';
+import { teamLabel } from '@/lib/teamKey';
 
 interface Props {
   stats: Record<string, Record<string, MapWL>>;
   maps: string[];
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
+  teamSubregions?: Record<string, string>;
   mapImages?: Record<string, string>;
   hasTour?: boolean;
   defaultHiddenMaps?: string[];
@@ -72,7 +74,7 @@ function getCellRank(value: number | null, allValues: (number | null)[]): 'best'
   return null;
 }
 
-export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, hasTour = false, defaultHiddenMaps = [], series, draftSeries, fixedTeams }: Props) {
+export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = {}, teamSubregions = {}, mapImages = {}, hasTour = false, defaultHiddenMaps = [], series, draftSeries, fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -191,6 +193,7 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
               setSelectedTeams={setSelectedTeams}
               teamLogos={teamLogos}
               teamRegions={teamRegions}
+              teamSubregions={teamSubregions}
             />
 
             {/* Maps */}
@@ -302,9 +305,9 @@ export function MapsMastersSection({ stats, maps, teamLogos = {}, teamRegions = 
                 <td className="sticky z-10 bg-[#1a1d23] px-5 py-3 text-[11px] font-bold text-gray-300 border-r border-gray-800 whitespace-nowrap" style={{ width: '1%', left: 'calc(2rem - 1px)' }}>
                   <div className="flex items-center gap-2">
                     {teamLogos[team] && (
-                      <img src={teamLogos[team]} alt={team} className="w-5 h-5 object-contain shrink-0" />
+                      <img src={teamLogos[team]} alt={teamLabel(team)} className="w-5 h-5 object-contain shrink-0" />
                     )}
-                    {team}
+                    {teamLabel(team)}
                   </div>
                 </td>
                 {(() => {

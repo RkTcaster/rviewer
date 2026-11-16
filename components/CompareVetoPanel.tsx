@@ -5,6 +5,7 @@ import { ArrowLeftRight, Lock, RotateCcw, Undo2 } from 'lucide-react';
 import { buildSnapshot, stepProbabilities, vetoDistribution, SLOTS, SLOT_ACTOR } from '@/lib/vetoPredict';
 import type { VetoDistribution, VetoSnapshot } from '@/lib/vetoPredict';
 import type { VetoModelRows } from '@/lib/data-service';
+import { teamLabel } from '@/lib/teamKey';
 
 // Only the veto tables; the result_* tables of the model are not used in Compare Maps
 export type VetoModelCore = Pick<VetoModelRows, 'teamMap' | 'maps' | 'coef' | 'meta'>;
@@ -107,8 +108,8 @@ export function CompareVetoPanel({ veto, teamLogos = {}, mapImages = {} }: {
           className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide border border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200"
         >
           <ArrowLeftRight className="w-3 h-3" />
-          {teamLogos[teamA] && <img src={teamLogos[teamA]} alt={teamA} className="w-4 h-4 object-contain" />}
-          {teamA} starts
+          {teamLogos[teamA] && <img src={teamLogos[teamA]} alt={teamLabel(teamA)} className="w-4 h-4 object-contain" />}
+          {teamLabel(teamA)} starts
         </button>
         {locked.length > 0 && (
           <>

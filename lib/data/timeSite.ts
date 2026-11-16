@@ -3,8 +3,9 @@ import { supabase } from '../supabase';
 import { versioned, fetchAllBySeries, getAllSeriesIds } from './helpers';
 import { TimeSiteData, TimeSiteRound } from '../types';
 import type { RoundSummaryRow } from './rows';
+import { getTeamKeys, keyOf } from './teamKeys';
 
-type TsRow = Pick<RoundSummaryRow, 'map_id' | 'team_a' | 'team_b' | 'side_team_a' | 'fb_team' | 'fb_t' | 'plant_t' | 'plant_site'>;
+type TsRow = Pick<RoundSummaryRow, 'map_id' | 'team_a_id_vlr' | 'team_b_id_vlr' | 'side_team_a' | 'fb_team_id_vlr' | 'fb_t' | 'plant_t' | 'plant_site'>;
 
 // Every round of round_summary (pistols included) of the selected series. Each round gives one
 // entry per team, on that team's side.
@@ -12,7 +13,8 @@ type TsRow = Pick<RoundSummaryRow, 'map_id' | 'team_a' | 'team_b' | 'side_team_a
 // count; `teams` (Relevant) keeps the series those teams played and `keepTags` only their
 // entries, dropped inside the cached function (see getOperatorUseStats); rows by series in
 // chunks, strict. `series` / `dataSeries`: series selected and how many have round_summary rows.
-export const getTimeSiteStats = versioned('time-site-stats-v2', getTimeSiteStats_impl);
+// v3: teams by vlr id, keyed by getTeamKeys
+export const getTimeSiteStats = versioned('time-site-stats-v3', getTimeSiteStats_impl);
 async function getTimeSiteStats_impl(
   filters: { tour?: string; bo?: string; dateFrom?: string; dateTo?: string; teams?: string[]; keepTags?: string[] }
 ): Promise<TimeSiteData> {
@@ -20,13 +22,13 @@ async function getTimeSiteStats_impl(
   if (seriesIds.length === 0) return { stats: {}, maps: [], series: 0, dataSeries: 0 };
 
   // Ordered by the PK so the pages never overlap or skip rows
-  const rows = await fetchAllBySeries<TsRow>(seriesIds, (ids, from, to) =>
+  const [rows, keys] = await Promise.all([fetchAllBySeries<TsRow>(seriesIds, (ids, from, to) =>
     supabase.from('round_summary')
-      .select('map_id, team_a, team_b, side_team_a, fb_team, fb_t, plant_t, plant_site')
+      .select('map_id, team_a_id_vlr, team_b_id_vlr, side_team_a, fb_team_id_vlr, fb_t, plant_t, plant_site')
       .in('series_id', ids)
       .order('team_map_round_id')
       .range(from, to)
-  );
+  ), getTeamKeys()]);
 
   const keep = filters.keepTags ? new Set(filters.keepTags) : null;
   const stats: TimeSiteData['stats'] = {};
@@ -40,9 +42,9 @@ async function getTimeSiteStats_impl(
     const plantT = num(r.plant_t);
     const fbT = num(r.fb_t);
     const site = plantT === null ? null : r.plant_site?.trim() || null;
-    const fbTeam = r.fb_team?.trim() || null;
+    const fbTeam = keyOf(keys, r.fb_team_id_vlr) ?? null;
     for (const s of ['a', 'b'] as const) {
-      const team = (s === 'a' ? r.team_a : r.team_b)?.trim();
+      const team = keyOf(keys, s === 'a' ? r.team_a_id_vlr : r.team_b_id_vlr);
       if (!team || (keep && !keep.has(team))) continue;
       const atk = (r.side_team_a === 'atk') === (s === 'a');
       const entry: TimeSiteRound = { plantT, site, fbT, fbOwn: fbTeam === null || fbT === null ? null : fbTeam === team };

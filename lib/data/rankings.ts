@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { versioned, fetchAllPages, fetchAllBySeries, getAllSeriesIds, getTeamSeriesIds, getReducedTourList } from './helpers';
 import { FormMapPoint, MapsMastersData, MapWL, TeamRankStats } from '../types';
 import { DraftRow, PlayerPerformanceRow, RoundInfoRow } from './rows';
+import { getTeamKeys, keyOf } from './teamKeys';
 
 // v2: saves / savesLost from round_events
 // v3: trades / tradeDeaths from round_summary
@@ -13,12 +14,13 @@ import { DraftRow, PlayerPerformanceRow, RoundInfoRow } from './rows';
 // v8: chunks retry and throw instead of returning cut rows (v7 could still cache them)
 // v9 / v10: pages of 10000 rows, retries with backoff (same figures; new keys to time uncached loads)
 // v11: getAllSeriesIds strict (v10 could cache an empty result after a timeout)
-export const getTournamentRankings = versioned('tournament-rankings-v11', getTournamentRankings_impl);
+// v12: teams by vlr id, keyed by getTeamKeys (a team that changed tag is one row)
+export const getTournamentRankings = versioned('tournament-rankings-v12', getTournamentRankings_impl);
 async function getTournamentRankings_impl(
   // allSeries (Stats Rank v2): series from round_info, drafts or not; reg and last are ignored.
   // teams (with allSeries): only series those teams played, see getAllSeriesIds
   // teamId (with allSeries, Compare Stats): only the series of that team (vlr id), cut to its
-  // last N with `last`; the result still goes by tricode, the caller reads the team's own
+  // last N with `last`; the result is keyed like every team (getTeamKeys), the caller reads the team's own
   filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string; allSeries?: boolean; teams?: string[]; teamId?: string }
 ): Promise<Record<string, TeamRankStats>> {
   let seriesIds: (string | number)[];
@@ -39,6 +41,7 @@ async function getTournamentRankings_impl(
     seriesIds = [...new Set((idList ?? []).map(x => x.series_id))];
   }
   if (seriesIds.length === 0) return {};
+  const keys = await getTeamKeys();
   const rounds = await fetchAllBySeries<RoundInfoRow>(seriesIds, (ids, from, to) =>
     supabase.from('round_info').select('*').in('series_id', ids).range(from, to)
   );
@@ -47,11 +50,11 @@ async function getTournamentRankings_impl(
   // Deaths per round and team from round_events, to know who survived a lost round. Distinct
   // victims, since a revived player can die twice. Only maps with kill rows have data.
   const killRows = await fetchAllBySeries<{
-    map_id: string; round: number; team: string | null; victim_id: string | null; victim_team: string | null;
+    map_id: string; round: number; team_id_vlr: string | null; victim_id: string | null; victim_team_id_vlr: string | null;
     is_first_blood: boolean | null; is_traded: boolean | null;
   }>(seriesIds, (ids, from, to) =>
     supabase.from('round_events')
-      .select('map_id, round, team, victim_id, victim_team, is_first_blood, is_traded')
+      .select('map_id, round, team_id_vlr, victim_id, victim_team_id_vlr, is_first_blood, is_traded')
       .in('series_id', ids)
       .eq('type', 'kill')
       .order('series_id')
@@ -63,7 +66,7 @@ async function getTournamentRankings_impl(
   const deadBy: Record<string, Set<string>> = {};
   for (const k of killRows) {
     if (!k.victim_id) continue;
-    (deadBy[`${k.map_id}|${Number(k.round)}|${k.victim_team?.trim()}`] ??= new Set()).add(k.victim_id);
+    (deadBy[`${k.map_id}|${Number(k.round)}|${keyOf(keys, k.victim_team_id_vlr)}`] ??= new Set()).add(k.victim_id);
   }
   // Round endings where the loser can still have players alive
   const SAVE_WIN_CONS = new Set(['tim', 'boom', 'defus']);
@@ -109,8 +112,8 @@ async function getTournamentRankings_impl(
   rounds.forEach((r) => {
     const id = r.map_id;
     if (!id) return;
-    const tA = r.teamA?.trim();
-    const tB = r.teamB?.trim();
+    const tA = keyOf(keys, r.team_a_id_vlr);
+    const tB = keyOf(keys, r.team_b_id_vlr);
     if (!tA || !tB) return;
     init(tA); init(tB);
 
@@ -157,8 +160,8 @@ async function getTournamentRankings_impl(
 
   // Map winners
   Object.values(mapLastRound).forEach((finalRound) => {
-    const tA = finalRound.teamA?.trim();
-    const tB = finalRound.teamB?.trim();
+    const tA = keyOf(keys, finalRound.team_a_id_vlr);
+    const tB = keyOf(keys, finalRound.team_b_id_vlr);
     if (!tA || !tB) return;
     init(tA); init(tB);
     teamStats[tA].mapPlayed++;
@@ -230,8 +233,8 @@ async function getTournamentRankings_impl(
   // One first blood per round, so the wins count rounds won after a true FK / FD.
   for (const k of killRows) {
     if (!k.is_first_blood) continue;
-    const team = k.team?.trim();
-    const victimTeam = k.victim_team?.trim();
+    const team = keyOf(keys, k.team_id_vlr);
+    const victimTeam = keyOf(keys, k.victim_team_id_vlr);
     const winner = roundWinner[`${k.map_id}|${Number(k.round)}`];
     if (team) {
       init(team);
@@ -252,17 +255,17 @@ async function getTournamentRankings_impl(
   }
 
   // Trades: round_summary kills already leave team kills out, and one team's kills are the other's deaths
-  const summaryRows = await fetchAllBySeries<{ team_a: string; team_b: string; kills_team_a: number; kills_team_b: number; trades_team_a: number; trades_team_b: number }>(seriesIds, (ids, from, to) =>
+  const summaryRows = await fetchAllBySeries<{ team_a_id_vlr: string; team_b_id_vlr: string; kills_team_a: number; kills_team_b: number; trades_team_a: number; trades_team_b: number }>(seriesIds, (ids, from, to) =>
     supabase.from('round_summary')
-      .select('team_a, team_b, kills_team_a, kills_team_b, trades_team_a, trades_team_b')
+      .select('team_a_id_vlr, team_b_id_vlr, kills_team_a, kills_team_b, trades_team_a, trades_team_b')
       .in('series_id', ids)
       .order('series_id')
       .order('team_map_round_id')
       .range(from, to)
   );
   for (const r of summaryRows) {
-    const tA = r.team_a?.trim();
-    const tB = r.team_b?.trim();
+    const tA = keyOf(keys, r.team_a_id_vlr);
+    const tB = keyOf(keys, r.team_b_id_vlr);
     if (!tA || !tB) continue;
     init(tA); init(tB);
     teamStats[tA].trades += Number(r.trades_team_a) || 0;
@@ -272,24 +275,24 @@ async function getTournamentRankings_impl(
   }
 
   // Retake efficiency from player_performance
-  const perfRows = await fetchAllBySeries<PlayerPerformanceRow>(seriesIds, (ids, from, to) =>
+  const perfRows = await fetchAllBySeries<Pick<PlayerPerformanceRow, 'map_id' | 'team_id_vlr' | 'DE' | 'PL'>>(seriesIds, (ids, from, to) =>
     supabase.from('player_performance')
-      .select('map_id, team, DE, PL')
+      .select('map_id, team_id_vlr, DE, PL')
       .in('series_id', ids)
       .range(from, to)
   );
 
   const perfByMapTeam: Record<string, { de: number; pl: number }> = {};
   for (const p of perfRows) {
-    const k = `${p.map_id}__${p.team?.trim()}`;
+    const k = `${p.map_id}__${keyOf(keys, p.team_id_vlr)}`;
     if (!perfByMapTeam[k]) perfByMapTeam[k] = { de: 0, pl: 0 };
     perfByMapTeam[k].de += Number(p.DE) || 0;
     perfByMapTeam[k].pl += Number(p.PL) || 0;
   }
 
   Object.entries(mapLastRound).forEach(([map_id, r]) => {
-    const tA = r.teamA?.trim();
-    const tB = r.teamB?.trim();
+    const tA = keyOf(keys, r.team_a_id_vlr);
+    const tB = keyOf(keys, r.team_b_id_vlr);
     if (!tA || !tB) return;
     init(tA); init(tB);
     const perfA = perfByMapTeam[`${map_id}__${tA}`];
@@ -312,24 +315,26 @@ async function getTournamentRankings_impl(
 // so qualifiers without draft count. Per team and map, wins / played come from every series;
 // bans only from the series with a draft (no reduced guard: the NA open qualifier has 72 real
 // ones), so the section says how many those are. `teams` (Relevant): only series they played.
-export const getMapsMastersStats = versioned('maps-masters-stats-v2', getMapsMastersStats_impl);
+// v3: teams by vlr id, keyed by getTeamKeys
+export const getMapsMastersStats = versioned('maps-masters-stats-v3', getMapsMastersStats_impl);
 async function getMapsMastersStats_impl(
   filters: { tour?: string; bo?: string; dateFrom?: string; dateTo?: string; teams?: string[] }
 ): Promise<MapsMastersData> {
   const seriesIds = await getAllSeriesIds(filters);
   if (seriesIds.length === 0) return { stats: {}, maps: [], series: 0, draftSeries: 0 };
 
-  type MastersRound = Pick<RoundInfoRow, 'map_id' | 'map' | 'teamA' | 'teamB' | 'rndA' | 'round'>;
-  type MastersDraft = Pick<DraftRow, 'series_id' | 'team' | 'rival' | 'bo' | 'team_1_select_1' | 'team_1_select_3' | 'team_2_select_1' | 'team_2_select_3'>;
-  const [rounds, idList] = await Promise.all([
+  type MastersRound = Pick<RoundInfoRow, 'map_id' | 'map' | 'team_a_id_vlr' | 'team_b_id_vlr' | 'rndA' | 'round'>;
+  type MastersDraft = Pick<DraftRow, 'series_id' | 'team_id_vlr' | 'rival_id_vlr' | 'bo' | 'team_1_select_1' | 'team_1_select_3' | 'team_2_select_1' | 'team_2_select_3'>;
+  const [rounds, idList, keys] = await Promise.all([
     fetchAllBySeries<MastersRound>(seriesIds, (ids, from, to) =>
-      supabase.from('round_info').select('map_id, map, teamA, teamB, rndA, round').in('series_id', ids)
+      supabase.from('round_info').select('map_id, map, team_a_id_vlr, team_b_id_vlr, rndA, round').in('series_id', ids)
         .order('series_id').order('team_map_round_id').range(from, to)
     ),
     fetchAllBySeries<MastersDraft>(seriesIds, (ids, from, to) =>
-      supabase.from('draft').select('series_id, team, rival, bo, team_1_select_1, team_1_select_3, team_2_select_1, team_2_select_3')
+      supabase.from('draft').select('series_id, team_id_vlr, rival_id_vlr, bo, team_1_select_1, team_1_select_3, team_2_select_1, team_2_select_3')
         .in('series_id', ids).order('series_id').range(from, to)
     ),
+    getTeamKeys(),
   ]);
   if (rounds.length === 0) return { stats: {}, maps: [], series: 0, draftSeries: 0 };
 
@@ -349,8 +354,8 @@ async function getMapsMastersStats_impl(
   };
 
   Object.values(mapLastRound).forEach((r) => {
-    const tA = r.teamA?.trim();
-    const tB = r.teamB?.trim();
+    const tA = keyOf(keys, r.team_a_id_vlr);
+    const tB = keyOf(keys, r.team_b_id_vlr);
     const map = r.map?.trim();
     if (!tA || !tB || !map) return;
     ensure(tA, map); ensure(tB, map);
@@ -364,8 +369,8 @@ async function getMapsMastersStats_impl(
   // Bans por equipo y mapa (desde el draft).
   // select_1 siempre es un ban; en BO3 select_3 también es ban.
   idList.forEach((d) => {
-    const t1 = d.team?.trim();
-    const t2 = d.rival?.trim();
+    const t1 = keyOf(keys, d.team_id_vlr);
+    const t2 = keyOf(keys, d.rival_id_vlr);
     const isBo3 = Number(d.bo) === 3;
     const addBan = (team: string | undefined, map: string | null | undefined) => {
       const m = map?.trim();

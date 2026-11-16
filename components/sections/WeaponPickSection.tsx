@@ -8,12 +8,14 @@ import { useUrlSet } from '@/hooks/useUrlSet';
 import { useHiddenTeams } from '@/hooks/useHiddenTeams';
 import { TeamChipsPanel } from '../TeamChipsPanel';
 import { Tooltip } from '../Tooltip';
+import { teamLabel } from '@/lib/teamKey';
 
 interface Props {
   stats: WeaponPickData['stats'] | null;
   maps: string[];
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
+  teamSubregions?: Record<string, string>;
   mapImages?: Record<string, string>;
   hasTour?: boolean;
   defaultHiddenMaps?: string[];
@@ -111,7 +113,7 @@ function heatmapBg(pct: number | null): string {
   return `hsl(${220 - t * 80}, 55%, ${18 + t * 28}%)`;
 }
 
-export function WeaponPickSection({ stats, maps, teamLogos = {}, teamRegions = {}, mapImages = {}, hasTour = false, defaultHiddenMaps = [], series, buySeries, fixedTeams }: Props) {
+export function WeaponPickSection({ stats, maps, teamLogos = {}, teamRegions = {}, teamSubregions = {}, mapImages = {}, hasTour = false, defaultHiddenMaps = [], series, buySeries, fixedTeams }: Props) {
   const { navigate } = useNavigation();
   const [side, setSide] = useState<Side>('all');
   const [showAll, setShowAll] = useState<Set<string>>(new Set());
@@ -251,6 +253,7 @@ export function WeaponPickSection({ stats, maps, teamLogos = {}, teamRegions = {
           setSelectedTeams={setSelectedTeams}
           teamLogos={teamLogos}
           teamRegions={teamRegions}
+          teamSubregions={teamSubregions}
         />
 
         <div className="flex flex-col gap-2">
@@ -332,8 +335,8 @@ export function WeaponPickSection({ stats, maps, teamLogos = {}, teamRegions = {
             return (
               <div key={team} className="bg-[#1a1d23] rounded-xl border border-gray-800 p-4 flex flex-col gap-2">
                 <div className="flex items-center gap-2">
-                  {teamLogos[team] && <img src={teamLogos[team]} alt={team} className="w-5 h-5 object-contain shrink-0" />}
-                  <span className="text-sm font-bold text-gray-200">{team}</span>
+                  {teamLogos[team] && <img src={teamLogos[team]} alt={teamLabel(team)} className="w-5 h-5 object-contain shrink-0" />}
+                  <span className="text-sm font-bold text-gray-200">{teamLabel(team)}</span>
                   <span className="text-[11px] text-gray-500">{total} rounds</span>
                 </div>
                 {loadouts.length === 0 ? (
