@@ -1,7 +1,7 @@
 'use client';
 
 import { Dispatch, ReactNode, SetStateAction, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { ChevronDown, Users } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { teamLabel } from '@/lib/teamKey';
 import { subregionFlagFile } from '@/lib/subregionFlags';
 
@@ -96,19 +96,27 @@ export function TeamChipsPanel({ allTeams, selectedTeams, setSelectedTeams, team
   }
 
   const knownRegions = new Set(REGIONS.map(r => r.id));
-  // Per region: one chip per subregion (alphabetical), then one for its teams without a subregion
-  const rows: { label: string; logo: string | null; flag: string | null; teams: string[] }[] = [];
+  // One line per region: one chip per subregion (alphabetical), then one for its teams without a
+  // subregion. A region with fewer than MIN_SPLIT teams in the list is a single chip, with an
+  // "All" badge where the subregion flag goes.
+  const MIN_SPLIT = 8;
+  type Chip = { label: string; logo: string | null; flag: string | null; all?: boolean; teams: string[] };
+  const lines: { region: string; chips: Chip[] }[] = [];
   for (const r of REGIONS) {
     const regionTeams = allTeams.filter(t => teamRegions[t] === r.id);
     const logo = `/region/${r.label.toLowerCase()}.png`;
-    const subs = [...new Set(regionTeams.map(t => teamSubregions[t]).filter((s): s is string => !!s))].sort();
-    for (const sub of subs) {
-      rows.push({ label: `${r.label} · ${sub}`, logo, flag: subregionFlagFile(sub), teams: regionTeams.filter(t => teamSubregions[t] === sub) });
+    if (regionTeams.length < MIN_SPLIT) {
+      lines.push({ region: r.id, chips: [{ label: r.label, logo, flag: null, all: true, teams: regionTeams }] });
+      continue;
     }
-    rows.push({ label: r.label, logo, flag: null, teams: regionTeams.filter(t => !teamSubregions[t]) });
+    const subs = [...new Set(regionTeams.map(t => teamSubregions[t]).filter((s): s is string => !!s))].sort();
+    const chips: Chip[] = subs.map(sub =>
+      ({ label: `${r.label} · ${sub}`, logo, flag: subregionFlagFile(sub), teams: regionTeams.filter(t => teamSubregions[t] === sub) }));
+    chips.push({ label: r.label, logo, flag: null, teams: regionTeams.filter(t => !teamSubregions[t]) });
+    lines.push({ region: r.id, chips });
   }
   const otherTeams = allTeams.filter(t => !knownRegions.has(teamRegions[t]));
-  if (otherTeams.length > 0) rows.push({ label: 'Other', logo: null, flag: null, teams: otherTeams });
+  if (otherTeams.length > 0) lines.push({ region: 'other', chips: [{ label: 'Other', logo: null, flag: null, teams: otherTeams }] });
   // Same tones as the tournament filter chips: all / some / none of the subregion selected
   const TONE = {
     on: 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60',
@@ -143,8 +151,18 @@ export function TeamChipsPanel({ allTeams, selectedTeams, setSelectedTeams, team
             }`}
           >
             <span className="flex flex-col items-center gap-1 text-[11px] font-bold uppercase tracking-wide">
-              <span className="w-[50px] h-[40px] flex items-center justify-center shrink-0">
-                <Users className="w-7 h-7" />
+              {/* The 4 region logos, 2 x 2: in color the regions with any team selected */}
+              <span className="w-[50px] h-[40px] grid grid-cols-2 place-items-center shrink-0">
+                {REGIONS.map(r => (
+                  <img
+                    key={r.id}
+                    src={`/region/${r.label.toLowerCase()}.png`}
+                    alt={r.label}
+                    className={`w-[18px] h-[18px] object-contain transition-all ${
+                      allTeams.some(t => teamRegions[t] === r.id && selectedTeams.has(t)) ? '' : 'grayscale opacity-40'
+                    }`}
+                  />
+                ))}
               </span>
               Teams
             </span>
@@ -169,9 +187,9 @@ export function TeamChipsPanel({ allTeams, selectedTeams, setSelectedTeams, team
         )}
       </div>
 
-      {open && (
-        <div className="flex flex-wrap items-start gap-2 px-1">
-          {rows.filter(row => row.teams.length > 0).map(row => {
+      {open && lines.map(line => ({ ...line, chips: line.chips.filter(c => c.teams.length > 0) })).filter(line => line.chips.length > 0).map(line => (
+        <div key={line.region} className="flex flex-wrap items-start gap-2 px-1">
+          {line.chips.map(row => {
             const n = row.teams.filter(t => selectedTeams.has(t)).length;
             const tone = n === 0 ? 'off' : n === row.teams.length ? 'on' : 'partial';
             const menuOpen = openMenu === row.label;
@@ -192,6 +210,9 @@ export function TeamChipsPanel({ allTeams, selectedTeams, setSelectedTeams, team
                           <img src={row.logo} alt={row.label} className="w-[28px] h-[28px] object-contain" />
                           {row.flag && (
                             <img src={row.flag} alt="" className="absolute -bottom-0.5 -right-1.5 w-[15px] h-[10px] object-cover rounded-[2px] ring-1 ring-gray-900" />
+                          )}
+                          {row.all && (
+                            <span className="absolute -bottom-0.5 -right-2.5 h-[10px] px-0.5 flex items-center rounded-[2px] ring-1 ring-gray-900 bg-gray-700 text-[7px] font-bold leading-none tracking-normal text-gray-200">All</span>
                           )}
                         </span>
                       )
@@ -261,7 +282,7 @@ export function TeamChipsPanel({ allTeams, selectedTeams, setSelectedTeams, team
             );
           })}
         </div>
-      )}
+      ))}
     </div>
   );
 }

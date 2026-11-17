@@ -171,7 +171,9 @@ async function getTournamentEconomy_impl(filters: {
       .from('team_economy')
       .select('team_a_id_vlr,team_b_id_vlr,team_a_economy,team_b_economy,win_A,round')
       .in('series_id', ids)
-      .range(from, to)
+      .range(from, to),
+    // Chunks of 50: 100 hit the statement timeout on cold reads (ROADMAP Backlog, 2026-11-17)
+    50
   ), getTeamKeys()]);
 
   const result: Record<string, TeamEconomyCompare> = {};

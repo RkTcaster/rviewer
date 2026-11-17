@@ -992,6 +992,15 @@ Not checked in a browser (chart hover, chips).
   → superseded by Phase 13 (Team Profiling, first version 2026-11-13).
 - **3.5 WR vs economy difference curve**: probability of winning the round given the credit gap,
   from `team_economy`. Complements Compare Economy.
+- **Done — `team_economy` timeout on a cold read (2026-11-17)**: Stats Rank failed with "The
+  data could not be loaded" (`getTournamentEconomy`, `lib/data/economy.ts:165`: "canceling
+  statement due to statement timeout" after both retries), right after
+  `scripts/merge-team-ids.sql` rewrote every big table. Measured: chunk of 100 series 3457 ms cold,
+  ~620 ms warm (anon limit ~3 s). The next load worked. Suggested `vacuum analyze` on the touched
+  tables. It came back the same day toggling the Brazil subregion chip, so `getTournamentEconomy`
+  now reads in chunks of 50 series (Brazil open qualifier, 351 series: 100 → 670-1320 ms per
+  chunk, 50 → 520-640 ms). Times swing 2-3x between runs on every round table (load, not an
+  index): if it still fails, next step is more retries in `fetchAllPages`.
 
 ---
 
