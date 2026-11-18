@@ -1000,7 +1000,10 @@ Not checked in a browser (chart hover, chips).
   tables. It came back the same day toggling the Brazil subregion chip, so `getTournamentEconomy`
   now reads in chunks of 50 series (Brazil open qualifier, 351 series: 100 → 670-1320 ms per
   chunk, 50 → 520-640 ms). Times swing 2-3x between runs on every round table (load, not an
-  index): if it still fails, next step is more retries in `fetchAllPages`.
+  index). Still failed on opening Stats Rank: the default reads only 276 series (41 relevant
+  teams, 2027), the cause was the rankings' reads (round_events…) running at the same time. Now
+  `economyP` starts after `rankingsP` (app/page.tsx), and `fetchAllPages` retries 4 times
+  (1, 2, 4, 8 s) instead of 2 as a safety net.
 
 ---
 

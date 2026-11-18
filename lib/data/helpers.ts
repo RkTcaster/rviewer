@@ -17,8 +17,8 @@ export function versioned<A extends unknown[], R>(
   };
 }
 
-// A failed page is retried twice, after 1 s and 2 s (statement timeouts under load are transient,
-// an immediate retry hits the same load). If it still fails, the rows read so far are returned,
+// A failed page is retried 4 times, after 1, 2, 4 and 8 s (statement timeouts under load are
+// transient, an immediate retry hits the same load). If it still fails, the rows read so far are returned,
 // or with `strict` it throws, so a cut result never reaches unstable_cache.
 export async function fetchAllPages<T>(
   buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
@@ -29,8 +29,8 @@ export async function fetchAllPages<T>(
   let from = 0;
   while (true) {
     let { data, error } = await buildQuery(from, from + pageSize - 1);
-    for (let retry = 1; error && retry <= 2; retry++) {
-      await new Promise(r => setTimeout(r, retry * 1000));
+    for (let retry = 1; error && retry <= 4; retry++) {
+      await new Promise(r => setTimeout(r, 2 ** (retry - 1) * 1000));
       ({ data, error } = await buildQuery(from, from + pageSize - 1));
     }
     if (error) {

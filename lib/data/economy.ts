@@ -148,59 +148,6 @@ async function getEconomyCompare_impl(filters: TeamFilters): Promise<TeamEconomy
   return stats;
 }
 
-// v2: series-wide query in chunks (v1 could cache a result cut by a statement timeout)
-// v3: chunks retry and throw instead of returning cut rows
-// v4 / v5: pages of 10000 rows, retries with backoff (same figures; new keys to time uncached loads)
-// v6: getAllSeriesIds strict (v5 could cache an empty result after a timeout)
-// v7: teams by vlr id, keyed by getTeamKeys
-export const getTournamentEconomy = versioned('tournament-economy-v7', getTournamentEconomy_impl);
-// Stats Rank: series from round_info, drafts or not (getAllSeriesIds); `teams` (Relevant): only
-// series those teams played
-async function getTournamentEconomy_impl(filters: {
-  tour?: string; bo?: string; dateFrom?: string; dateTo?: string; teams?: string[];
-}): Promise<Record<string, TeamEconomyCompare>> {
-  const seriesIds = await getAllSeriesIds(filters);
-  if (seriesIds.length === 0) return {};
-
-  const [rows, keys] = await Promise.all([fetchAllBySeries<{
-    team_a_id_vlr: string; team_b_id_vlr: string;
-    team_a_economy: number; team_b_economy: number;
-    win_A: number; round: number;
-  }>(seriesIds, (ids, from, to) =>
-    supabase
-      .from('team_economy')
-      .select('team_a_id_vlr,team_b_id_vlr,team_a_economy,team_b_economy,win_A,round')
-      .in('series_id', ids)
-      .range(from, to),
-    // Chunks of 50: 100 hit the statement timeout on cold reads (ROADMAP Backlog, 2026-11-17)
-    50
-  ), getTeamKeys()]);
-
-  const result: Record<string, TeamEconomyCompare> = {};
-  const ensure = (team: string) => (result[team] ??= emptyTeamEconomyCompare());
-
-  for (const row of rows) {
-    if (row.round === 1 || row.round === 13) continue;
-    if (row.team_a_economy == null || row.team_b_economy == null) continue;
-
-    for (const { team, teamEco, oppEco, won } of [
-      { team: keyOf(keys, row.team_a_id_vlr), teamEco: row.team_a_economy, oppEco: row.team_b_economy, won: row.win_A === 1 },
-      { team: keyOf(keys, row.team_b_id_vlr), teamEco: row.team_b_economy, oppEco: row.team_a_economy, won: row.win_A === 0 },
-    ]) {
-      if (!team) continue;
-      const teamCat = classifyEconomy(teamEco);
-      const vsKey   = vsMap[classifyEconomy(oppEco)];
-      const stats = ensure(team);
-      stats[teamCat].total.played++;
-      if (won) stats[teamCat].total.wins++;
-      stats[teamCat][vsKey].played++;
-      if (won) stats[teamCat][vsKey].wins++;
-    }
-  }
-
-  return result;
-}
-
 // Post Pistol Force: the team that lost R1 / R13 "forces" the next round (R2 / R14) when it
 // spends more than FORCE_SPEND or is left with less than FORCE_BANK. Everything comes from
 // team_economy: its win_A / team_a match round_info's rndA / teamA row by row.

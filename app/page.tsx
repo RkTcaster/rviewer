@@ -1,5 +1,5 @@
 // app/page.tsx
-import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getAllTours, getOverallCompositions, getAgentPickStats, getAgentNonMirrorMatches, getAgentCompMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getMapInfo, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getTournamentEconomy, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getTeamSubregions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows, getSeriesOutcomes, emptySeriesOutcomes, getOperatorUseStats, getWeaponPickStats, getTimeSiteStats, getTournamentTree, getRelevantTeams, getRelevantTags, getPlayedTags, getTeamMaps, getTeamCompare, getTeamDashboard, getTeamSeriesIds, getTeamOptions, getAddableTeams, getTeamProfiling } from '@/lib/data-service';
+import { getMapStats, getRegions, getTours, getTeams, getTournamentRankings, getTournamentRankingsByMap, getAllTours, getOverallCompositions, getAgentPickStats, getAgentNonMirrorMatches, getAgentCompMatches, getPlayerStats, getTournamentPlayerAvg, getPlayerTimeline, getMapImages, getOutOfRotationMaps, getAgentImages, getAgentRoles, getMapInfo, getLastUpdateDate, getEconomyDistribution, getEconomyCompare, getLongestMaps, getTopPlayerPerformances, getSkirmishStats, getSimulationScenarios, getTeamLogos, getTeamRegions, getTeamSubregions, getMapsMastersStats, getNeonDependencyStats, getPostPistolForce, getVetoFlows, getTeamFormTimeline, getVetoModelRows, getSeriesOutcomes, emptySeriesOutcomes, getOperatorUseStats, getWeaponPickStats, getTimeSiteStats, getTournamentTree, getRelevantTeams, getRelevantTags, getPlayedTags, getTeamMaps, getTeamCompare, getTeamDashboard, getTeamSeriesIds, getTeamOptions, getAddableTeams, getTeamProfiling } from '@/lib/data-service';
 import { teamLabel } from '@/lib/teamKey';
 import { DEFAULT_TOURS, MapInfoData, TeamRankStats, TeamMapsData, TeamCompareData, TeamProfilingData } from '@/lib/types';
 import { getLatestNews } from '@/lib/news';
@@ -125,15 +125,14 @@ export default async function Page({
   const addableP = usesTreeFilter ? getAddableTeams(tour) : Promise.resolve([]);
   const addable2P = (isMetaShift || isCompare) ? getAddableTeams(tour2) : Promise.resolve([]);
 
-  const rankingsP = (isStatsRank && hasTour)
-    ? v2Teams.then(teams => getTournamentRankings({ tour, bo, dateFrom, dateTo, allSeries: true, teams }))
-    : section === 'graphs'
+  const rankingsP = section === 'graphs'
     ? getTournamentRankings({ tour, reg: regArr, bo, last, dateFrom, dateTo })
     : Promise.resolve<Record<string, TeamRankStats>>({});
 
-  const economyP = (isStatsRank && hasTour)
-    ? v2Teams.then(teams => getTournamentEconomy({ tour, bo, dateFrom, dateTo, teams }))
-    : Promise.resolve({});
+  // Stats Rank: per map, the page sums the selected maps
+  const rankingsByMapP = (isStatsRank && hasTour)
+    ? v2Teams.then(teams => getTournamentRankingsByMap({ tour, bo, dateFrom, dateTo, allSeries: true, teams }))
+    : Promise.resolve<Record<string, Record<string, TeamRankStats>>>({});
 
   // Overall data (only for overall sections)
   const mapInfoP = (isOverall && hasTour)
@@ -197,7 +196,7 @@ export default async function Page({
     ? v2Teams.then(teams => getAgentCompMatches({ tour, bo, dateFrom, dateTo, teams }))
     : Promise.resolve([]);
 
-  const mapImagesP = (section === 'agent-picks' || section === 'maps-masters' || isOperatorUse || isWeaponPick || isTimeSite || section === 'neon-dependency' || section === 'compare-maps' || section === 'maps' || isVetoPredictor)
+  const mapImagesP = (section === 'agent-picks' || section === 'maps-masters' || isStatsRank || isOperatorUse || isWeaponPick || isTimeSite || section === 'neon-dependency' || section === 'compare-maps' || section === 'maps' || isVetoPredictor)
     ? getMapImages()
     : Promise.resolve({});
 
@@ -331,7 +330,7 @@ export default async function Page({
     : getTours(team, regArr);
 
   const [
-    result, compareA, compareB, statsA, statsB, lastMatchA, lastMatchB, teamOptions2, rankings, economy, mapInfo,
+    result, compareA, compareB, statsA, statsB, lastMatchA, lastMatchB, teamOptions2, rankings, rankingsByMap, mapInfo,
     teamOptions, teamMaps, agentPickStats, agentCompositions, agentMatches, agentCompMatches,
     mapImages, defaultHiddenMaps, agentImages, agentRoles, teamLogos, teamRegions, teamSubregions, mapsMasters, neonDep, postPistolForce,
     agentPickStatsLeft, agentPickStatsRight,
@@ -340,7 +339,7 @@ export default async function Page({
     econCompareA, econCompareB, economyBins, longestMaps, topPerformances,
     skirmishStats, simulationScenarios, tours, vetoFlows, formTimeline, vetoModel, seriesOutcomes, operatorUse, weaponPick, timeSite, teamProfiling, relevantTeams, metaTeams, addable, addable2, relTags, relTags2,
   ] = await Promise.all([
-    resultP, compareAP, compareBP, statsAP, statsBP, lastMatchAP, lastMatchBP, teamOptions2P, rankingsP, economyP, mapInfoP,
+    resultP, compareAP, compareBP, statsAP, statsBP, lastMatchAP, lastMatchBP, teamOptions2P, rankingsP, rankingsByMapP, mapInfoP,
     teamOptionsP, teamMapsP, agentPickStatsP, agentCompositionsP, agentMatchesP, agentCompMatchesP,
     mapImagesP, defaultHiddenMapsP, agentImagesP, agentRolesP, teamLogosP, teamRegionsP, teamSubregionsP, mapsMastersP, neonDepP, postPistolForceP,
     agentPickStatsLeftP, agentPickStatsRightP,
@@ -409,7 +408,7 @@ export default async function Page({
       case 'playoff-pct':
         return <PlayoffPctSection scenarios={simulationScenarios} />;
       case 'stats-rank':
-        return <StatsRankSection rankings={rankings} economy={economy} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} hasTour={hasTour} fixedTeams={relevantTeams ?? Object.keys(rankings)} />;
+        return <StatsRankSection rankingsByMap={rankingsByMap} mapImages={mapImages} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} hasTour={hasTour} fixedTeams={relevantTeams ?? [...new Set(Object.values(rankingsByMap).flatMap(Object.keys))]} />;
       case 'maps-masters':
         return <MapsMastersSection stats={mapsMasters.stats} maps={mapsMasters.maps} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} series={mapsMasters.series} draftSeries={mapsMasters.draftSeries} fixedTeams={relevantTeams ?? Object.keys(mapsMasters.stats)} />;
       case 'neon-dependency':

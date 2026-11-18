@@ -2,16 +2,18 @@
 
 import { useState } from 'react';
 import { Info } from 'lucide-react';
-import { TeamRankStats, TeamEconomyCompare, EconomyCategoryStats, EconomyMatchup } from '@/lib/types';
+import { TeamRankStats } from '@/lib/types';
 import { useNavigation } from '../NavigationContext';
 import { Tooltip } from '../Tooltip';
 import { TeamChipsPanel } from '../TeamChipsPanel';
 import { useHiddenTeams } from '@/hooks/useHiddenTeams';
+import { useUrlSet } from '@/hooks/useUrlSet';
 import { teamLabel } from '@/lib/teamKey';
 
 interface Props {
-  rankings: Record<string, TeamRankStats>;
-  economy?: Record<string, TeamEconomyCompare>;
+  /** Stats per map, then per team (getTournamentRankingsByMap); the table sums the selected maps */
+  rankingsByMap: Record<string, Record<string, TeamRankStats>>;
+  mapImages?: Record<string, string>;
   teamLogos?: Record<string, string>;
   teamRegions?: Record<string, string>;
   teamSubregions?: Record<string, string>;
@@ -20,32 +22,18 @@ interface Props {
   fixedTeams: string[];
 }
 
-const ECO_CATEGORIES: { key: keyof TeamEconomyCompare; label: string; range: string }[] = [
-  { key: 'eco',     label: 'Eco',      range: '0-5k'   },
-  { key: 'semiEco', label: 'Semi-Eco', range: '5-15k'  },
-  { key: 'semiBuy', label: 'Semi-Buy', range: '15-20k' },
-  { key: 'fullBuy', label: 'Full Buy', range: '20k+'   },
-];
-const ECO_VS: { key: keyof EconomyCategoryStats; label: string }[] = [
-  { key: 'total',     label: 'Overall'     },
-  { key: 'vsEco',     label: 'vs Eco'      },
-  { key: 'vsSemiEco', label: 'vs Semi-Eco' },
-  { key: 'vsSemiBuy', label: 'vs Semi-Buy' },
-  { key: 'vsFullBuy', label: 'vs Full-Buy' },
-];
-// Toggleable column groups (chips). 'overall', 'fkfd' and 'first3' come from METRICS; the rest are economy categories.
+// Toggleable column groups (chips), from the METRICS separators
 const COLUMN_GROUPS: { id: string; label: string }[] = [
   { id: 'overall', label: 'Overall' },
   { id: 'fkfd',    label: 'FK-FD' },
   { id: 'first3',  label: 'First 3 rounds performance' },
-  ...ECO_CATEGORIES.map(c => ({ id: c.key as string, label: c.label })),
 ];
-const ecoColKey = (cat: keyof TeamEconomyCompare, vs: keyof EconomyCategoryStats) => `${cat}:${vs}`;
-function ecoMatchup(economy: Record<string, TeamEconomyCompare>, team: string, cat: keyof TeamEconomyCompare, vs: keyof EconomyCategoryStats): EconomyMatchup | undefined {
-  return economy[team]?.[cat]?.[vs];
-}
-function ecoValue(m: EconomyMatchup | undefined): number | null {
-  return m && m.played > 0 ? Math.round((m.wins / m.played) * 100) : null;
+
+// Every TeamRankStats field is a counter: a team's stats over several maps are the sum
+function sumStats(list: TeamRankStats[]): TeamRankStats {
+  const out = { ...list[0] };
+  for (const s of list.slice(1)) for (const k of Object.keys(out) as (keyof TeamRankStats)[]) out[k] += s[k];
+  return out;
 }
 
 function pct(wins: number, total: number): number | null {
@@ -200,13 +188,6 @@ const LEGEND = (
       </dd>
     </div>
     <div>
-      <dt className="font-bold text-gray-100">Economy groups</dt>
-      <dd className="text-gray-400">
-        Round win rate by the team&apos;s loadout (Eco under 5k, Semi-Eco 5-15k, Semi-Buy 15-20k,
-        Full Buy 20k+), overall and against each rival loadout. Pistols are left out.
-      </dd>
-    </div>
-    <div>
       <dt className="font-bold text-gray-100">Colors and Detail info</dt>
       <dd className="text-gray-400">
         Green is the best value of the column and red the worst. Detail info adds the counts
@@ -228,24 +209,39 @@ function getCellColor(value: number | null, allValues: (number | null)[], lowerI
   return 'text-gray-300';
 }
 
-export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamRegions = {}, teamSubregions = {}, hasTour = false, fixedTeams }: Props) {
+export function StatsRankSection({ rankingsByMap, mapImages = {}, teamLogos = {}, teamRegions = {}, teamSubregions = {}, hasTour = false, fixedTeams }: Props) {
   const { navigate } = useNavigation();
-  const [sortCol, setSortCol] = useState<number | string | null>(null);
+  const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const [showDetail, setShowDetail] = useState(false);
 
-  const allTeams = Object.keys(rankings).sort();
+  // Maps: all selected by default, the hidden ones mirrored in the URL (`hideMaps`)
+  const maps = Object.keys(rankingsByMap).sort();
+  const [hiddenMaps, setHiddenMaps] = useUrlSet('hideMaps', []);
+  const visibleMaps = maps.filter(m => !hiddenMaps.has(m));
+  function toggleMap(map: string) {
+    setHiddenMaps(prev => {
+      const next = new Set(prev);
+      if (next.has(map)) next.delete(map); else next.add(map);
+      return next;
+    });
+  }
+  // Each team's stats summed over the selected maps; a team with no map there has no entry
+  const perTeam: Record<string, TeamRankStats[]> = {};
+  for (const m of visibleMaps) for (const [t, st] of Object.entries(rankingsByMap[m])) (perTeam[t] ??= []).push(st);
+  const rankings: Record<string, TeamRankStats> = {};
+  for (const [t, list] of Object.entries(perTeam)) rankings[t] = sumStats(list);
+
+  const allTeams = [...new Set(maps.flatMap(m => Object.keys(rankingsByMap[m])))].sort();
   // Chip list: the filter's teams (relevant / all) that played the selection, grouped by the
   // region they played it in (teamRegions); all selected by default
   const chipTeams = allTeams.filter(t => fixedTeams.includes(t));
   const { selected: selectedTeams, setSelected: setSelectedTeams, reset: resetTeams } = useHiddenTeams(chipTeams);
-  const baseTeams = chipTeams.filter(t => selectedTeams.has(t));
+  const baseTeams = chipTeams.filter(t => selectedTeams.has(t) && rankings[t]);
 
-  // Column-group visibility (chips). Default: Overall + First 3 visible, economy groups hidden.
-  const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(
-    () => new Set(ECO_CATEGORIES.map(c => c.key))
-  );
+  // Column-group visibility (chips). Default: all visible.
+  const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(() => new Set());
 
   function toggleGroup(id: string) {
     setHiddenGroups(prev => {
@@ -258,7 +254,8 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   function resetFilters() {
     // Back to the initial state: default tournaments and teams (no params)
     resetTeams();
-    setHiddenGroups(new Set(ECO_CATEGORIES.map(c => c.key)));
+    setHiddenMaps(new Set());
+    setHiddenGroups(new Set());
     setSortCol(null);
     setSortDir('desc');
     navigate('?section=stats-rank');
@@ -277,23 +274,11 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   // and some metric column is visible before it.
   const firstVisibleMi = metricDefs.findIndex((_, mi) => !hiddenGroups.has(metricGroups[mi]));
   const isGroupStart = (mi: number) => mi !== firstVisibleMi && (mi === 0 || metricGroups[mi] !== metricGroups[mi - 1]);
-  const visibleEcoCats = ECO_CATEGORIES.filter(c => !hiddenGroups.has(c.key));
 
   // Pre-compute per-metric values for all teams (for coloring, always uses base alphabetical order)
   const metricAllValues = metricDefs.map(m => baseTeams.map(t => m.getValue(rankings[t])));
 
-  // Pre-compute per-economy-column values for all teams (keyed by "cat:vs")
-  const ecoAllValues: Record<string, (number | null)[]> = {};
-  for (const c of ECO_CATEGORIES) for (const v of ECO_VS) {
-    ecoAllValues[ecoColKey(c.key, v.key)] = baseTeams.map(t => ecoValue(ecoMatchup(economy, t, c.key, v.key)));
-  }
-
-  // Resolve the sortable value for a team given the current sort column (metric index or eco "cat:vs" key)
-  const sortValue = (t: string): number | null => {
-    if (typeof sortCol === 'number') return metricDefs[sortCol].getValue(rankings[t]);
-    const [cat, vs] = (sortCol as string).split(':') as [keyof TeamEconomyCompare, keyof EconomyCategoryStats];
-    return ecoValue(ecoMatchup(economy, t, cat, vs));
-  };
+  const sortValue = (t: string): number | null => metricDefs[sortCol!].getValue(rankings[t]);
 
   // Sort teams by selected column
   const teams = sortCol === null
@@ -307,7 +292,7 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
         return sortDir === 'asc' ? valA - valB : valB - valA;
       });
 
-  function handleColClick(col: number | string) {
+  function handleColClick(col: number) {
     if (sortCol === col) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     } else {
@@ -320,14 +305,46 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
   return (
     <div className="flex flex-col gap-4">
 
-    <TeamChipsPanel
-      allTeams={chipTeams}
-      selectedTeams={selectedTeams}
-      setSelectedTeams={setSelectedTeams}
-      teamLogos={teamLogos}
-      teamRegions={teamRegions}
-      teamSubregions={teamSubregions}
-    />
+    {/* Filters: teams on the left, maps on the right (like Maps Rank) */}
+    <div className="flex flex-wrap gap-x-10 gap-y-4">
+      <TeamChipsPanel
+        allTeams={chipTeams}
+        selectedTeams={selectedTeams}
+        setSelectedTeams={setSelectedTeams}
+        teamLogos={teamLogos}
+        teamRegions={teamRegions}
+        teamSubregions={teamSubregions}
+      />
+      <div className="flex flex-col gap-2">
+        <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Maps</span>
+        <div className="flex gap-2 px-1 overflow-x-auto">
+          {maps.map(map => {
+            const active = !hiddenMaps.has(map);
+            const img = mapImages[map];
+            return (
+              <button
+                key={map}
+                onClick={() => toggleMap(map)}
+                className={`shrink-0 flex flex-col items-center gap-1 p-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-colors border ${
+                  active
+                    ? 'bg-blue-900/40 border-blue-700 text-blue-300 hover:bg-blue-900/60'
+                    : 'bg-transparent border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'
+                }`}
+              >
+                {img && (
+                  <img
+                    src={img}
+                    alt={map}
+                    className={`w-[50px] h-[40px] object-cover rounded shrink-0 transition-opacity ${active ? '' : 'opacity-40 grayscale'}`}
+                  />
+                )}
+                <span className={active ? '' : 'line-through'}>{map}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
 
     {/* Table info subtitle + group filter chips */}
     <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">Table info</span>
@@ -378,7 +395,9 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
 
     {baseTeams.length === 0 ? (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">
-        {chipTeams.length === 0 ? 'No relevant teams in this selection — switch Teams to All' : 'Select at least one team to see the ranking...'}
+        {chipTeams.length === 0 ? 'No relevant teams in this selection — switch Teams to All'
+          : visibleMaps.length === 0 ? 'Select at least one map to see the ranking...'
+          : 'Select at least one team to see the ranking...'}
       </div>
     ) : (
     <div className="bg-[#1a1d23] rounded-xl shadow-2xl border border-gray-800 overflow-auto max-h-[85vh]">
@@ -407,15 +426,6 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
                 className={`px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-widest text-gray-500 border-b ${gi > 0 ? 'border-l-2' : ''} border-gray-700`}
               >
                 {g.label}
-              </th>
-            ))}
-            {visibleEcoCats.map(c => (
-              <th
-                key={c.key}
-                colSpan={ECO_VS.length}
-                className="px-3 py-1.5 text-center text-[9px] font-bold uppercase tracking-widest text-gray-500 border-b border-l-2 border-gray-700"
-              >
-                {c.label} <span className="text-gray-600 normal-case">{c.range}</span>
               </th>
             ))}
           </tr>
@@ -457,32 +467,6 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
                 </th>
               );
             })}
-            {visibleEcoCats.map(c => ECO_VS.map((v, vi) => {
-              const colKey = ecoColKey(c.key, v.key);
-              const isActive = sortCol === colKey;
-              const isFirstOfGroup = vi === 0;
-              const w = v.label.split(' ');
-              return (
-                <th
-                  key={colKey}
-                  onClick={() => handleColClick(colKey)}
-                  className={`border-b border-gray-800 cursor-pointer select-none transition-colors hover:bg-[#252a33] ${isFirstOfGroup ? 'border-l-2 border-l-gray-600' : ''} ${isActive ? 'bg-[#1e2430]' : ''}`}
-                  style={{ minWidth: 48 }}
-                >
-                  <div className="flex flex-col items-center justify-end pb-2 pt-1 gap-1" style={{ height: 64 }}>
-                    <span
-                      className={`text-[10px] font-bold uppercase tracking-wide text-center leading-tight ${isActive ? 'text-blue-400' : 'text-gray-400'}`}
-                      style={{ whiteSpace: 'pre' }}
-                    >
-                      {`${w[0]}\n${w.slice(1).join(' ')}`}
-                    </span>
-                    <span className={`text-[9px] shrink-0 ${isActive ? 'text-blue-400' : 'text-gray-600'}`}>
-                      {isActive ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}
-                    </span>
-                  </div>
-                </th>
-              );
-            }))}
           </tr>
         </thead>
         <tbody>
@@ -527,30 +511,6 @@ export function StatsRankSection({ rankings, economy = {}, teamLogos = {}, teamR
                   </td>
                 );
               })}
-              {visibleEcoCats.map(c => ECO_VS.map((v, vi) => {
-                const colKey = ecoColKey(c.key, v.key);
-                const mu = ecoMatchup(economy, team, c.key, v.key);
-                const val = ecoValue(mu);
-                const color = getCellColor(val, ecoAllValues[colKey], false);
-                const isFirstOfGroup = vi === 0;
-                const isActive = sortCol === colKey;
-                return (
-                  <td
-                    key={colKey}
-                    className={`py-3 text-center ${isActive ? 'bg-[#1e2430]' : 'bg-[#1a1d23]'} ${isFirstOfGroup ? 'border-l-2 border-l-gray-700' : ''}`}
-                    style={{ minWidth: 48 }}
-                  >
-                    <span className={`text-[16px] ${color}`}>
-                      {val !== null ? `${val}%` : <span className="text-gray-700">—</span>}
-                    </span>
-                    {showDetail && mu && mu.played > 0 && (
-                      <div className="text-[11px] text-gray-600 whitespace-nowrap">
-                        {mu.wins}W-{mu.played - mu.wins}L
-                      </div>
-                    )}
-                  </td>
-                );
-              }))}
             </tr>
           ))}
         </tbody>

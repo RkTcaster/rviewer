@@ -16,13 +16,50 @@ import { getTeamKeys, keyOf } from './teamKeys';
 // v11: getAllSeriesIds strict (v10 could cache an empty result after a timeout)
 // v12: teams by vlr id, keyed by getTeamKeys (a team that changed tag is one row)
 export const getTournamentRankings = versioned('tournament-rankings-v12', getTournamentRankings_impl);
-async function getTournamentRankings_impl(
-  // allSeries (Stats Rank v2): series from round_info, drafts or not; reg and last are ignored.
-  // teams (with allSeries): only series those teams played, see getAllSeriesIds
-  // teamId (with allSeries, Compare Stats): only the series of that team (vlr id), cut to its
-  // last N with `last`; the result is keyed like every team (getTeamKeys), the caller reads the team's own
-  filters: { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string; allSeries?: boolean; teams?: string[]; teamId?: string }
-): Promise<Record<string, TeamRankStats>> {
+async function getTournamentRankings_impl(filters: RankingFilters): Promise<Record<string, TeamRankStats>> {
+  const rows = await loadRankingRows(filters);
+  return rows ? aggregateRankings(rows) : {};
+}
+
+// Stats Rank map filter: the same stats per map (round_info.map), then per team. Every stat is a
+// counter, so the page sums the selected maps.
+export const getTournamentRankingsByMap = versioned('tournament-rankings-by-map-v1', getTournamentRankingsByMap_impl);
+async function getTournamentRankingsByMap_impl(filters: RankingFilters): Promise<Record<string, Record<string, TeamRankStats>>> {
+  const rows = await loadRankingRows(filters);
+  if (!rows) return {};
+  const mapOf = new Map<string, string>();
+  for (const r of rows.rounds) if (r.map_id && r.map) mapOf.set(r.map_id, r.map.trim());
+  const groups: Record<string, Omit<RankingRows, 'keys'>> = {};
+  const group = (mapId: string) => {
+    const map = mapOf.get(mapId);
+    return map ? (groups[map] ??= { rounds: [], killRows: [], summaryRows: [], perfRows: [] }) : null;
+  };
+  for (const r of rows.rounds) group(r.map_id)?.rounds.push(r);
+  for (const k of rows.killRows) group(k.map_id)?.killRows.push(k);
+  for (const s of rows.summaryRows) group(s.map_id)?.summaryRows.push(s);
+  for (const p of rows.perfRows) group(p.map_id)?.perfRows.push(p);
+  return Object.fromEntries(Object.entries(groups).map(([map, g]) => [map, aggregateRankings({ ...g, keys: rows.keys })]));
+}
+
+// allSeries (Stats Rank v2): series from round_info, drafts or not; reg and last are ignored.
+// teams (with allSeries): only series those teams played, see getAllSeriesIds
+// teamId (with allSeries, Compare Stats): only the series of that team (vlr id), cut to its
+// last N with `last`; the result is keyed like every team (getTeamKeys), the caller reads the team's own
+type RankingFilters = { tour?: string; reg?: string[]; bo?: string; last?: string; dateFrom?: string; dateTo?: string; allSeries?: boolean; teams?: string[]; teamId?: string };
+type KillRow = {
+  map_id: string; round: number; team_id_vlr: string | null; victim_id: string | null; victim_team_id_vlr: string | null;
+  is_first_blood: boolean | null; is_traded: boolean | null;
+};
+type SummaryRow = { map_id: string; team_a_id_vlr: string; team_b_id_vlr: string; kills_team_a: number; kills_team_b: number; trades_team_a: number; trades_team_b: number };
+type PerfRow = Pick<PlayerPerformanceRow, 'map_id' | 'team_id_vlr' | 'DE' | 'PL'>;
+type RankingRows = {
+  rounds: RoundInfoRow[]; killRows: KillRow[]; summaryRows: SummaryRow[]; perfRows: PerfRow[];
+  keys: Awaited<ReturnType<typeof getTeamKeys>>;
+};
+
+// The rows behind the rankings, read one table after the other (in parallel they hit the
+// statement timeout on a cold read). null when the selection has no rounds.
+async function loadRankingRows(filters: RankingFilters): Promise<RankingRows | null> {
   let seriesIds: (string | number)[];
   if (filters.allSeries) {
     seriesIds = filters.teamId
@@ -40,19 +77,15 @@ async function getTournamentRankings_impl(
     const { data: idList } = await idQuery;
     seriesIds = [...new Set((idList ?? []).map(x => x.series_id))];
   }
-  if (seriesIds.length === 0) return {};
+  if (seriesIds.length === 0) return null;
   const keys = await getTeamKeys();
   const rounds = await fetchAllBySeries<RoundInfoRow>(seriesIds, (ids, from, to) =>
     supabase.from('round_info').select('*').in('series_id', ids).range(from, to)
   );
-  if (!rounds || rounds.length === 0) return {};
+  if (!rounds || rounds.length === 0) return null;
 
-  // Deaths per round and team from round_events, to know who survived a lost round. Distinct
-  // victims, since a revived player can die twice. Only maps with kill rows have data.
-  const killRows = await fetchAllBySeries<{
-    map_id: string; round: number; team_id_vlr: string | null; victim_id: string | null; victim_team_id_vlr: string | null;
-    is_first_blood: boolean | null; is_traded: boolean | null;
-  }>(seriesIds, (ids, from, to) =>
+  // Kills: deaths per round (saves) and first bloods (FK / FD)
+  const killRows = await fetchAllBySeries<KillRow>(seriesIds, (ids, from, to) =>
     supabase.from('round_events')
       .select('map_id, round, team_id_vlr, victim_id, victim_team_id_vlr, is_first_blood, is_traded')
       .in('series_id', ids)
@@ -62,6 +95,28 @@ async function getTournamentRankings_impl(
       .order('ev_index')
       .range(from, to)
   );
+  // Trades
+  const summaryRows = await fetchAllBySeries<SummaryRow>(seriesIds, (ids, from, to) =>
+    supabase.from('round_summary')
+      .select('map_id, team_a_id_vlr, team_b_id_vlr, kills_team_a, kills_team_b, trades_team_a, trades_team_b')
+      .in('series_id', ids)
+      .order('series_id')
+      .order('team_map_round_id')
+      .range(from, to)
+  );
+  // Retake efficiency / post plant
+  const perfRows = await fetchAllBySeries<PerfRow>(seriesIds, (ids, from, to) =>
+    supabase.from('player_performance')
+      .select('map_id, team_id_vlr, DE, PL')
+      .in('series_id', ids)
+      .range(from, to)
+  );
+  return { rounds, killRows, summaryRows, perfRows, keys };
+}
+
+function aggregateRankings({ rounds, killRows, summaryRows, perfRows, keys }: RankingRows): Record<string, TeamRankStats> {
+  // Deaths per round and team from round_events, to know who survived a lost round. Distinct
+  // victims, since a revived player can die twice. Only maps with kill rows have data.
   const mapsWithEvents = new Set(killRows.map(k => k.map_id));
   const deadBy: Record<string, Set<string>> = {};
   for (const k of killRows) {
@@ -255,14 +310,6 @@ async function getTournamentRankings_impl(
   }
 
   // Trades: round_summary kills already leave team kills out, and one team's kills are the other's deaths
-  const summaryRows = await fetchAllBySeries<{ team_a_id_vlr: string; team_b_id_vlr: string; kills_team_a: number; kills_team_b: number; trades_team_a: number; trades_team_b: number }>(seriesIds, (ids, from, to) =>
-    supabase.from('round_summary')
-      .select('team_a_id_vlr, team_b_id_vlr, kills_team_a, kills_team_b, trades_team_a, trades_team_b')
-      .in('series_id', ids)
-      .order('series_id')
-      .order('team_map_round_id')
-      .range(from, to)
-  );
   for (const r of summaryRows) {
     const tA = keyOf(keys, r.team_a_id_vlr);
     const tB = keyOf(keys, r.team_b_id_vlr);
@@ -275,13 +322,6 @@ async function getTournamentRankings_impl(
   }
 
   // Retake efficiency from player_performance
-  const perfRows = await fetchAllBySeries<Pick<PlayerPerformanceRow, 'map_id' | 'team_id_vlr' | 'DE' | 'PL'>>(seriesIds, (ids, from, to) =>
-    supabase.from('player_performance')
-      .select('map_id, team_id_vlr, DE, PL')
-      .in('series_id', ids)
-      .range(from, to)
-  );
-
   const perfByMapTeam: Record<string, { de: number; pl: number }> = {};
   for (const p of perfRows) {
     const k = `${p.map_id}__${keyOf(keys, p.team_id_vlr)}`;
