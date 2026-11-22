@@ -985,6 +985,18 @@ DEF 0.00, FK 0.72, Op 0.31, speed 0.78, meta 0.50). Champions 2026 shows "No dat
 2026 league team is relevant right now (Relevant follows the circuit stage, see 12.6).
 Not checked in a browser (chart hover, chips).
 
+Update (2026-11-21/22):
+- **ORBS axis** (quality, more is better): ultimate orbs taken / orbs there were (2 per round, 4 on
+  Fracture), only rounds with `team_orbs` rows (GRID, see `handoff/RKTDATA_TEAM_ORBS.md`); from
+  `getTournamentRankings` (`orbs` / `orbCap` / `orbFracture`, cache v13, by-map v2). Same figure in
+  Stats Rank as "Orb Capture" (last Overall column). Legend note in both, plus a visible line when
+  the selection has Fracture. Verified on Americas Kickoff 2026: 12/12 teams equal to the CSV hand
+  count. A Fracture tournament is still to verify.
+- **OP USE dropped** for now: `getOperatorUseStats` returns 2.4 MB, over the 2 MB `unstable_cache`
+  limit, so it never caches; every load re-reads `round_buy` / `team_economy` / `round_events` and
+  the cold read hits the anon timeout (57014). The Operator Use page has the same problem. To bring
+  the axis back: a light function with only the Op counts per team, or shrink/split that result.
+
 ## Backlog
 
 - **3.4 Team profile radar** in Compare Stats: a pentagon (pistol WR, ATK WR, DEF WR, retake eff,

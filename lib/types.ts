@@ -125,6 +125,9 @@ export type TeamRankStats = {
   postPlantDe: number;
   first3Lost: number;
   first3Total: number;
+  orbs: number;        // ultimate orbs the team took (team_orbs, GRID; only rounds GRID covers)
+  orbCap: number;      // orbs there were in those rounds: 2 per round, 4 on Fracture
+  orbFracture: number; // of those rounds, the ones on Fracture
 };
 
 // Maps Masters: por equipo y por mapa, victorias/jugados
@@ -317,18 +320,17 @@ export type TeamProfile = {
   atk: [number, number];     // ATK rounds won / played
   def: [number, number];     // DEF rounds won / played
   fk: [number, number];      // first duels won: FK / (FK + FD)
-  op: [number, number];      // eligible rounds with an Operator / eligible rounds (Operator Use)
   plantMedian: number | null; // median plant second of the team's ATK rounds with a plant
   plants: number;
   meta: number | null;       // 0 = same agent picks as the teams shown, 1 = nothing in common
   metaMaps: number;          // maps the meta distance is averaged over
+  orbs: [number, number];    // ultimate orbs taken / orbs there were (2 per round, 4 on Fracture)
+  orbFracture: number;       // rounds with orb data on Fracture
 };
-// `series`: series of the filter; `buySeries` / `roundDataSeries`: the ones with round_buy /
-// round_summary rows (Op use / FK and Atk speed)
+// `series`: series of the filter; `roundDataSeries`: the ones with round_summary rows (FK and Atk speed)
 export type TeamProfilingData = {
   teams: Record<string, TeamProfile>;
   series: number;
-  buySeries: number;
   roundDataSeries: number;
 };
 

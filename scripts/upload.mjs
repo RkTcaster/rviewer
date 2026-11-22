@@ -40,11 +40,11 @@ const FILES_TO_UPLOAD = [
   { file: 'veto_map.csv', table: 'veto_map', pk: 'map' },
   { file: 'veto_coef.csv', table: 'veto_coef', pk: 'feature' },
   { file: 'veto_meta.csv', table: 'veto_meta', pk: 'key' },
-
   // Files for the win probability model.
   { file: 'result_team.csv', table: 'result_team', pk: 'model, team' },
   { file: 'result_team_map.csv', table: 'result_team_map', pk: 'model, team, map' },
   { file: 'result_meta.csv', table: 'result_meta', pk: 'key' },
+  { file: 'table_team_orbs.csv', table: 'team_orbs', pk: 'team_map_round_id, team_id_vlr' }, // orbs
 
   // {
   //   file: 'simulations.csv',

@@ -67,6 +67,7 @@ const METRICS: RowDef[] = [
   { label: 'Retake Eff',             getValue: s => pct(s.retakeDe, s.retakePl),                 getWL: s => ({ wins: s.retakeDe, total: s.retakePl }) },
   { label: 'Trade Rate',             getValue: s => pct(s.trades, s.tradeDeaths), getWL: s => ({ wins: s.trades, total: s.tradeDeaths }), ratioDetail: true },
   { label: 'Save Rate',              getValue: s => pct(s.saves, s.savesLost), neutral: true, getWL: s => ({ wins: s.saves, total: s.savesLost }), ratioDetail: true },
+  { label: 'Orb Capture',            getValue: s => pct(s.orbs, s.orbCap), getWL: s => ({ wins: s.orbs, total: s.orbCap }), ratioDetail: true },
   { separator: true, id: 'fkfd', label: 'FK-FD' },
   { label: 'True FK Rate',           getValue: s => pct(s.trueFk, s.fk), getWL: s => ({ wins: s.trueFk, total: s.fk }), ratioDetail: true },
   { label: 'True FK Into Win',       getValue: s => pct(s.trueFkWins, s.trueFk), getWL: s => ({ wins: s.trueFkWins, total: s.trueFk }) },
@@ -134,6 +135,15 @@ const LEGEND = (
         lost by time or by defuse while attacking, or the spike went off while defending. Over
         lost rounds. Needs kill data, only loaded for some tournaments (— without it). Not colored:
         saving isn&apos;t good or bad by itself.
+      </dd>
+    </div>
+    <div>
+      <dt className="font-bold text-gray-100">Orb Capture</dt>
+      <dd className="text-gray-400">
+        Ultimate orbs taken over the orbs there were: 2 per round, 4 on Fracture. Only rounds with
+        GRID data (VCT 2026, Masters, Champions, Game Changers; not the qualifiers or Pacific Stage 1);
+        — without it. With Fracture in the selection the figure may not be representative, since its
+        rounds have 4 orbs.
       </dd>
     </div>
     <div>
@@ -392,6 +402,12 @@ export function StatsRankSection({ rankingsByMap, mapImages = {}, teamLogos = {}
         </span>
       </Tooltip>
     </div>
+
+    {baseTeams.some(t => rankings[t].orbFracture > 0) && (
+      <p className="px-1 text-xs text-gray-400">
+        Orb Capture: Fracture is in the selection and its rounds have 4 orbs instead of 2, so the figure may not be representative
+      </p>
+    )}
 
     {baseTeams.length === 0 ? (
       <div className="p-20 text-center border-2 border-dashed rounded-2xl text-gray-400">

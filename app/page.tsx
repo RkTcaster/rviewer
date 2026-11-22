@@ -245,7 +245,7 @@ export default async function Page({
   const teamProfilingP = (isTeamProfiling && hasTour)
     ? Promise.all([v2Teams, relevantTeamsP]).then(([teams, tags]) =>
         getTeamProfiling({ tour, bo, dateFrom, dateTo, teams, keepTags: tags ?? [] }))
-    : Promise.resolve<TeamProfilingData>({ teams: {}, series: 0, buySeries: 0, roundDataSeries: 0 });
+    : Promise.resolve<TeamProfilingData>({ teams: {}, series: 0, roundDataSeries: 0 });
 
   // Series Outcomes is Bo3-only by definition, so it ignores the bo filter
   const seriesOutcomesP = (isSeriesOutcomes && hasTour)

@@ -15,7 +15,8 @@ import { getTeamKeys, keyOf } from './teamKeys';
 // v9 / v10: pages of 10000 rows, retries with backoff (same figures; new keys to time uncached loads)
 // v11: getAllSeriesIds strict (v10 could cache an empty result after a timeout)
 // v12: teams by vlr id, keyed by getTeamKeys (a team that changed tag is one row)
-export const getTournamentRankings = versioned('tournament-rankings-v12', getTournamentRankings_impl);
+// v13: orbs / orbCap / orbFracture from team_orbs
+export const getTournamentRankings = versioned('tournament-rankings-v13', getTournamentRankings_impl);
 async function getTournamentRankings_impl(filters: RankingFilters): Promise<Record<string, TeamRankStats>> {
   const rows = await loadRankingRows(filters);
   return rows ? aggregateRankings(rows) : {};
@@ -23,7 +24,8 @@ async function getTournamentRankings_impl(filters: RankingFilters): Promise<Reco
 
 // Stats Rank map filter: the same stats per map (round_info.map), then per team. Every stat is a
 // counter, so the page sums the selected maps.
-export const getTournamentRankingsByMap = versioned('tournament-rankings-by-map-v1', getTournamentRankingsByMap_impl);
+// v2: orbs / orbCap / orbFracture from team_orbs
+export const getTournamentRankingsByMap = versioned('tournament-rankings-by-map-v2', getTournamentRankingsByMap_impl);
 async function getTournamentRankingsByMap_impl(filters: RankingFilters): Promise<Record<string, Record<string, TeamRankStats>>> {
   const rows = await loadRankingRows(filters);
   if (!rows) return {};
@@ -32,12 +34,13 @@ async function getTournamentRankingsByMap_impl(filters: RankingFilters): Promise
   const groups: Record<string, Omit<RankingRows, 'keys'>> = {};
   const group = (mapId: string) => {
     const map = mapOf.get(mapId);
-    return map ? (groups[map] ??= { rounds: [], killRows: [], summaryRows: [], perfRows: [] }) : null;
+    return map ? (groups[map] ??= { rounds: [], killRows: [], summaryRows: [], perfRows: [], orbRows: [] }) : null;
   };
   for (const r of rows.rounds) group(r.map_id)?.rounds.push(r);
   for (const k of rows.killRows) group(k.map_id)?.killRows.push(k);
   for (const s of rows.summaryRows) group(s.map_id)?.summaryRows.push(s);
   for (const p of rows.perfRows) group(p.map_id)?.perfRows.push(p);
+  for (const o of rows.orbRows) group(o.map_id)?.orbRows.push(o);
   return Object.fromEntries(Object.entries(groups).map(([map, g]) => [map, aggregateRankings({ ...g, keys: rows.keys })]));
 }
 
@@ -52,8 +55,9 @@ type KillRow = {
 };
 type SummaryRow = { map_id: string; team_a_id_vlr: string; team_b_id_vlr: string; kills_team_a: number; kills_team_b: number; trades_team_a: number; trades_team_b: number };
 type PerfRow = Pick<PlayerPerformanceRow, 'map_id' | 'team_id_vlr' | 'DE' | 'PL'>;
+type OrbRow = { map_id: string; map: string; team_id_vlr: string; orbs: number };
 type RankingRows = {
-  rounds: RoundInfoRow[]; killRows: KillRow[]; summaryRows: SummaryRow[]; perfRows: PerfRow[];
+  rounds: RoundInfoRow[]; killRows: KillRow[]; summaryRows: SummaryRow[]; perfRows: PerfRow[]; orbRows: OrbRow[];
   keys: Awaited<ReturnType<typeof getTeamKeys>>;
 };
 
@@ -111,10 +115,21 @@ async function loadRankingRows(filters: RankingFilters): Promise<RankingRows | n
       .in('series_id', ids)
       .range(from, to)
   );
-  return { rounds, killRows, summaryRows, perfRows, keys };
+  // Ultimate orbs (GRID, see handoff/RKTDATA_TEAM_ORBS.md): one row per team and round, only
+  // for the rounds GRID covers; a round without rows has no data, not 0 orbs
+  const orbRows = await fetchAllBySeries<OrbRow>(seriesIds, (ids, from, to) =>
+    supabase.from('team_orbs')
+      .select('map_id, map, team_id_vlr, orbs')
+      .in('series_id', ids)
+      .order('series_id')
+      .order('team_map_round_id')
+      .order('team_id_vlr')
+      .range(from, to)
+  );
+  return { rounds, killRows, summaryRows, perfRows, orbRows, keys };
 }
 
-function aggregateRankings({ rounds, killRows, summaryRows, perfRows, keys }: RankingRows): Record<string, TeamRankStats> {
+function aggregateRankings({ rounds, killRows, summaryRows, perfRows, orbRows, keys }: RankingRows): Record<string, TeamRankStats> {
   // Deaths per round and team from round_events, to know who survived a lost round. Distinct
   // victims, since a revived player can die twice. Only maps with kill rows have data.
   const mapsWithEvents = new Set(killRows.map(k => k.map_id));
@@ -160,6 +175,7 @@ function aggregateRankings({ rounds, killRows, summaryRows, perfRows, keys }: Ra
       postPlantDe: 0,
       first3Lost: 0,
       first3Total: 0,
+      orbs: 0, orbCap: 0, orbFracture: 0,
     };
   };
 
@@ -347,6 +363,17 @@ function aggregateRankings({ rounds, killRows, summaryRows, perfRows, keys }: Ra
     if (perfB) teamStats[tB].postPlantPl += perfB.pl;
     if (perfA) teamStats[tB].postPlantDe += perfA.de;
   });
+
+  // Orb capture: orbs taken over the orbs there were (2 per round, 4 on Fracture), rounds with data only
+  for (const o of orbRows) {
+    const team = keyOf(keys, o.team_id_vlr);
+    if (!team) continue;
+    init(team);
+    const fracture = o.map?.trim().toLowerCase() === 'fracture';
+    teamStats[team].orbs += Number(o.orbs) || 0;
+    teamStats[team].orbCap += fracture ? 4 : 2;
+    if (fracture) teamStats[team].orbFracture++;
+  }
 
   return teamStats;
 }

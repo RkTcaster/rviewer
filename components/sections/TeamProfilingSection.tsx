@@ -34,13 +34,13 @@ const AXES: Axis[] = [
   { key: 'atk', label: 'ATK WR', raw: p => rate(p.atk), higherOut: true, show: p => pctLabel(p.atk), detail: p => countLabel(p.atk) },
   { key: 'def', label: 'DEF WR', raw: p => rate(p.def), higherOut: true, show: p => pctLabel(p.def), detail: p => countLabel(p.def) },
   { key: 'fk', label: 'FK EFF', raw: p => rate(p.fk), higherOut: true, show: p => pctLabel(p.fk), detail: p => countLabel(p.fk) },
-  { key: 'op', label: 'OP USE', raw: p => rate(p.op), higherOut: true, show: p => pctLabel(p.op), detail: p => countLabel(p.op) },
   { key: 'speed', label: 'ATK SPD', raw: p => p.plantMedian, higherOut: false,
     show: p => p.plantMedian === null ? '—' : `${Math.round(p.plantMedian)} s`,
     detail: p => p.plantMedian === null ? '' : `median plant, ${p.plants} plants` },
   { key: 'meta', label: 'OFFMETA', raw: p => p.meta, higherOut: true,
     show: p => p.meta === null ? '—' : p.meta.toFixed(2),
     detail: p => p.meta === null ? '' : `${p.metaMaps} maps` },
+  { key: 'orbs', label: 'ORBS', raw: p => rate(p.orbs), higherOut: true, show: p => pctLabel(p.orbs), detail: p => countLabel(p.orbs) },
 ];
 
 const LEGEND = (
@@ -61,10 +61,6 @@ const LEGEND = (
       <dd className="text-gray-400">First duels won: first kills over first kills + first deaths.</dd>
     </div>
     <div>
-      <dt className="font-bold text-gray-100">OP USE</dt>
-      <dd className="text-gray-400">Rounds with at least one Operator over eligible rounds (not 1, 2, 13, 14), both sides.</dd>
-    </div>
-    <div>
       <dt className="font-bold text-gray-100">ATK SPD</dt>
       <dd className="text-gray-400">Median plant time of the attack rounds with a plant; faster is further out.</dd>
     </div>
@@ -76,10 +72,19 @@ const LEGEND = (
       </dd>
     </div>
     <div>
+      <dt className="font-bold text-gray-100">ORBS</dt>
+      <dd className="text-gray-400">
+        Ultimate orbs taken over the orbs there were: 2 per round, 4 on Fracture. Only rounds with
+        GRID data (VCT 2026, Masters, Champions, Game Changers; not the qualifiers or Pacific Stage 1);
+        — without it. With Fracture in the selection the figure may not be representative, since its
+        rounds have 4 orbs.
+      </dd>
+    </div>
+    <div>
       <dt className="font-bold text-gray-100">Style axes</dt>
       <dd className="text-gray-400">
-        OP USE, ATK SPD and OFFMETA describe style, not quality: outside = more Operator, faster
-        plants, picks further from the meta. A bigger area is not a better team.
+        ATK SPD and OFFMETA describe style, not quality: outside = faster plants, picks further
+        from the meta. A bigger area is not a better team.
       </dd>
     </div>
   </dl>
@@ -149,8 +154,12 @@ export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fi
 
   return (
     <div className="flex flex-col gap-4">
-      {missing(data.buySeries, 'Buy data (OP USE)', 'round_buy')}
       {missing(data.roundDataSeries, 'Round data (FK EFF, ATK SPD)', 'round_summary / round_events')}
+      {teams.some(t => data.teams[t].orbFracture > 0) && (
+        <p className="px-1 text-xs text-gray-400">
+          ORBS: Fracture is in the selection and its rounds have 4 orbs instead of 2, so the figure may not be representative
+        </p>
+      )}
 
       {/* Team picker: up to 3 */}
       <div className="flex flex-col gap-2">

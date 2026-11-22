@@ -63,7 +63,7 @@ function tourLabel(t: TournamentNode): string {
 // with a ▾ menu of its regions (logo + name) like the region chips. The chip and each menu entry
 // toggle every tournament of that stage in the year (all regions / one region), whatever the
 // Region row and the subregion menus say, the same way a region chip toggles the whole region
-const GROUPED_STAGES = ['open_qualifier'];
+const GROUPED_STAGES = ['open_qualifier', 'closed_qualifier'];
 // Flag per subregion (lib/subregionFlags)
 const subregionFlag = (subregion: string | null) => {
   const file = subregionFlagFile(subregion);
