@@ -56,8 +56,10 @@ type KillRow = {
 type SummaryRow = { map_id: string; team_a_id_vlr: string; team_b_id_vlr: string; kills_team_a: number; kills_team_b: number; trades_team_a: number; trades_team_b: number };
 type PerfRow = Pick<PlayerPerformanceRow, 'map_id' | 'team_id_vlr' | 'DE' | 'PL'>;
 type OrbRow = { map_id: string; map: string; team_id_vlr: string; orbs: number };
+// round_info columns the rankings read (map for the by-map grouping)
+type RankRound = Pick<RoundInfoRow, 'map_id' | 'map' | 'round' | 'side' | 'winCon' | 'rndA' | 'team_a_id_vlr' | 'team_b_id_vlr'>;
 type RankingRows = {
-  rounds: RoundInfoRow[]; killRows: KillRow[]; summaryRows: SummaryRow[]; perfRows: PerfRow[]; orbRows: OrbRow[];
+  rounds: RankRound[]; killRows: KillRow[]; summaryRows: SummaryRow[]; perfRows: PerfRow[]; orbRows: OrbRow[];
   keys: Awaited<ReturnType<typeof getTeamKeys>>;
 };
 
@@ -83,8 +85,8 @@ async function loadRankingRows(filters: RankingFilters): Promise<RankingRows | n
   }
   if (seriesIds.length === 0) return null;
   const keys = await getTeamKeys();
-  const rounds = await fetchAllBySeries<RoundInfoRow>(seriesIds, (ids, from, to) =>
-    supabase.from('round_info').select('*').in('series_id', ids).range(from, to)
+  const rounds = await fetchAllBySeries<RankRound>(seriesIds, (ids, from, to) =>
+    supabase.from('round_info').select('map_id, map, round, side, winCon, rndA, team_a_id_vlr, team_b_id_vlr').in('series_id', ids).range(from, to)
   );
   if (!rounds || rounds.length === 0) return null;
 
@@ -142,7 +144,7 @@ function aggregateRankings({ rounds, killRows, summaryRows, perfRows, orbRows, k
   const SAVE_WIN_CONS = new Set(['tim', 'boom', 'defus']);
 
   const teamStats: Record<string, TeamRankStats> = {};
-  const mapLastRound: Record<string, RoundInfoRow> = {};
+  const mapLastRound: Record<string, RankRound> = {};
   const roundWinner: Record<string, string> = {};
 
   // Per-map key rounds for antiEco/recovery/PAB calculation

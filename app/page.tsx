@@ -65,13 +65,13 @@ export default async function Page({
   const isCompareEconomy = section === 'compare-economy';
   const isCompare = isCompareMaps || isCompareStats || isCompareEconomy;
   // Sections on the new main filter (ROADMAP Phase 12) read their own tournament tree; without a
-  // `tour` param they start on the latest season
+  // `tour` param they start on the closed qualifiers of the latest season (none → nothing selected)
   const isStatsRank = section === 'stats-rank';
   const isNeonDependency = section === 'neon-dependency';
   const usesTreeFilter = isStatsRank || isNeonDependency || section === 'map-picks' || section === 'maps-masters' || section === 'agent-picks' || section === 'post-pistol-force' || section === 'meta-shift' || section === 'maps' || isCompare || section === 'series-outcomes' || section === 'operator-use' || section === 'weapon-pick' || section === 'time-site' || section === 'player-stats' || section === 'team-profiling';
   const tourTree = usesTreeFilter ? await getTournamentTree() : [];
   const latestYear = Math.max(...tourTree.map(t => t.year ?? 0));
-  const v2DefaultTours = tourTree.filter(t => t.year === latestYear).map(t => t.tour_id).join(',');
+  const v2DefaultTours = tourTree.filter(t => t.year === latestYear && t.stage === 'closed_qualifier').map(t => t.tour_id).join(',');
   const tour = tourParam !== undefined ? tourParam : usesTreeFilter ? v2DefaultTours : DEFAULT_TOURS.join(',');
   const tour2 = tour2Param !== undefined ? tour2Param : usesTreeFilter ? v2DefaultTours : DEFAULT_TOURS.join(',');
   const hasTour = (tour?.split(',').filter(Boolean).length ?? 0) > 0;
@@ -245,7 +245,7 @@ export default async function Page({
   const teamProfilingP = (isTeamProfiling && hasTour)
     ? Promise.all([v2Teams, relevantTeamsP]).then(([teams, tags]) =>
         getTeamProfiling({ tour, bo, dateFrom, dateTo, teams, keepTags: tags ?? [] }))
-    : Promise.resolve<TeamProfilingData>({ teams: {}, series: 0, roundDataSeries: 0 });
+    : Promise.resolve<TeamProfilingData>({ teams: {}, series: 0, buySeries: 0, roundDataSeries: 0 });
 
   // Series Outcomes is Bo3-only by definition, so it ignores the bo filter
   const seriesOutcomesP = (isSeriesOutcomes && hasTour)
@@ -420,7 +420,7 @@ export default async function Page({
       case 'time-site':
         return <TimeSiteSection stats={timeSite.stats} maps={timeSite.maps} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} mapImages={mapImages} hasTour={hasTour} defaultHiddenMaps={defaultHiddenMaps} series={timeSite.series} dataSeries={timeSite.dataSeries} fixedTeams={relevantTeams ?? []} />;
       case 'team-profiling':
-        return <TeamProfilingSection data={teamProfiling} teamLogos={teamLogos} hasTour={hasTour} fixedTeams={relevantTeams ?? []} />;
+        return <TeamProfilingSection data={teamProfiling} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} hasTour={hasTour} fixedTeams={relevantTeams ?? []} />;
       case 'post-pistol-force':
         return <PostPistolForceSection stats={postPistolForce} teamLogos={teamLogos} teamRegions={teamRegions} teamSubregions={teamSubregions} fixedTeams={relevantTeams ?? Object.keys(postPistolForce)} />;
       case 'veto':

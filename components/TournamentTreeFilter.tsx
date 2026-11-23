@@ -122,7 +122,7 @@ export function TournamentTreeFilter({ tree, regions, selected, suffix = '', tit
     if (value === null) params.delete(key); else params.set(key, value);
     commitParams(params);
   };
-  // Empty is written as `tour=` (nothing): a missing param would bring the default year back
+  // Empty is written as `tour=` (nothing): a missing param would bring the default (latest season's closed) back
   const writeTours = (ids: Set<string>) => setParam(`tour${suffix}`, tours.filter(t => ids.has(t.tour_id)).map(t => t.tour_id).join(','));
 
   const state = (group: TournamentNode[]): keyof typeof TONE => {

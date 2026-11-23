@@ -1,20 +1,21 @@
 // lib/data/teamProfiling.ts — Team Profiling (ROADMAP Phase 13): one raw figure per radar axis
 import { getTournamentRankings } from './rankings';
+import { getOperatorUseTeams } from './economy';
 import { getTimeSiteStats } from './timeSite';
 import { getAgentCompMatches } from './agents';
 import { TeamProfile, TeamProfilingData } from '../types';
 
-// Reads the same cached functions as Stats Rank, Time & Site and Agent Picks (same
+// Reads the same cached functions as Stats Rank, Operator Use, Time & Site and Agent Picks (same
 // arguments, so the caches are shared) and reduces them to a few numbers per team. Not cached
 // itself: the inputs are, and the reduction is cheap. Only `keepTags` teams are returned.
-// OP USE was dropped (2026-11-22): getOperatorUseStats is 2.4 MB, over unstable_cache's 2 MB,
-// so it never caches and its cold read hits the anon timeout.
+// OP USE reads only the team-stats entry of Operator Use (getOperatorUseTeams, without players).
 export async function getTeamProfiling(
   filters: { tour?: string; bo?: string; dateFrom?: string; dateTo?: string; teams?: string[]; keepTags: string[] }
 ): Promise<TeamProfilingData> {
   const { tour, bo, dateFrom, dateTo, teams, keepTags } = filters;
-  const [rankings, timeSite, comps] = await Promise.all([
+  const [rankings, operator, timeSite, comps] = await Promise.all([
     getTournamentRankings({ tour, bo, dateFrom, dateTo, allSeries: true, teams }),
+    getOperatorUseTeams({ tour, bo, dateFrom, dateTo, teams, keepTags }),
     getTimeSiteStats({ tour, bo, dateFrom, dateTo, teams, keepTags }),
     getAgentCompMatches({ tour, bo, dateFrom, dateTo, teams }),
   ]);
@@ -60,8 +61,11 @@ export async function getTeamProfiling(
   const result: Record<string, TeamProfile> = {};
   for (const team of keepTags) {
     const r = rankings[team];
+    const op = operator.byWeapon.op.stats[team];
     const ts = timeSite.stats[team];
-    if (!r && !ts && !teamMaps[team]) continue; // didn't play the selection
+    if (!r && !op && !ts && !teamMaps[team]) continue; // didn't play the selection
+    let opRounds = 0, eligible = 0;
+    for (const m of Object.values(op ?? {})) for (const s of [m.atk, m.def]) { opRounds += s.op; eligible += s.eligible; }
     const plants = Object.values(ts ?? {}).flatMap(m => m.atk.map(x => x.plantT).filter((t): t is number => t !== null));
     result[team] = {
       atk: [r?.attWins ?? 0, r?.attTotal ?? 0],
@@ -73,11 +77,13 @@ export async function getTeamProfiling(
       metaMaps: Object.values(teamMaps[team] ?? {}).reduce((s, n) => s + n, 0),
       orbs: [r?.orbs ?? 0, r?.orbCap ?? 0],
       orbFracture: r?.orbFracture ?? 0,
+      op: [opRounds, eligible],
     };
   }
   return {
     teams: result,
     series: timeSite.series,
+    buySeries: operator.buySeries,
     roundDataSeries: timeSite.dataSeries,
   };
 }

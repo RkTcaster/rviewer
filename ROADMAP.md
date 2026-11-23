@@ -593,7 +593,9 @@ A main filter meant to replace the per-page one on almost every page, tried firs
   Closed / Kickoff; Closed joins the list when closed qualifiers arrive.
   Plus From / To, Bo3 / Bo5 and Relevant / All teams. No quick
   tournament chips, no region chips, no Last X, no team chip panel.
-- **Default**: every tournament of the latest season (2026 starts off).
+- **Default**: every tournament of the latest season (2026 starts off). Since 23/11/2026, only the
+  latest season's tournaments with `stage = 'closed_qualifier'`, on every page of the new filter
+  (Compare and the one-team pages too); with no closed in that season nothing is selected.
 - **Metadata**: `tournament.year / subregion / stage`, filled by hand in Supabase
   (`handoff/STATS_RANK_V2.sql`, local). Subregion only for qualifiers. A row without `year`
   falls back to the season in its `tour_id`.
@@ -991,11 +993,53 @@ Update (2026-11-21/22):
   `getTournamentRankings` (`orbs` / `orbCap` / `orbFracture`, cache v13, by-map v2). Same figure in
   Stats Rank as "Orb Capture" (last Overall column). Legend note in both, plus a visible line when
   the selection has Fracture. Verified on Americas Kickoff 2026: 12/12 teams equal to the CSV hand
-  count. A Fracture tournament is still to verify.
+  count. Fracture verified 2026-11-23 on Americas Stage 1 (100T 157/972, C9 58/506, equal to the
+  page, Fracture line shown). On 2027 qualifiers the axis is "—": GRID has no qualifier data.
+- **Team picker by region** (2026-11-23, user's choice): one row per region (logo + name, then
+  Other), teams by subregion (alphabetical, none last) then tag; subregion as the chip's `title`.
 - **OP USE dropped** for now: `getOperatorUseStats` returns 2.4 MB, over the 2 MB `unstable_cache`
   limit, so it never caches; every load re-reads `round_buy` / `team_economy` / `round_events` and
   the cold read hits the anon timeout (57014). The Operator Use page has the same problem. To bring
   the axis back: a light function with only the Op counts per team, or shrink/split that result.
+  → **Back 2026-11-23** (Phase 14): reads only the team-stats entry of Operator Use
+  (`getOperatorUseTeams`). Hand count on the default (closed 2027) from `round_buy`: 171 35/92,
+  NXT 65/142, equal to the page.
+
+## Phase 14 — Load times: Next cache size and Supabase reads (2026-11-23)
+
+Asked by the user. Decided: no `relevant` column in the other tables (`getAllSeriesIds` already
+keeps only the relevant teams' series by `team_id_vlr`, and the rivals' rows in those series are
+needed: FD, win rates); work in stages, Postgres summaries only for what stays slow.
+
+**Stage 0 — measured** (`next start`, empty `.next/cache/fetch-cache`, temporary timing in
+`versioned()`; default = closed 2027, plus 2026 full, 2027 full Relevant and All):
+- No statement timeouts at all (0 retries logged). Cold time is reading: on a cold Postgres a
+  table's first read is slow (`player_stats` 6.8 s the first time, 0.3 s after, same query); the
+  `series_id` indexes are fine. So raising the anon timeout is not needed for now.
+- Over the 2 MB `unstable_cache` limit (never cached, slow on every visit): Operator Use 2027 2.7 MB,
+  Weapon Pick 2027 2.2 MB, and in 2027 **All** (~600 teams) Stats Rank by-map 3.2 MB (~50-60 s)
+  and Agent Picks non-mirror 4.3-4.9 MB.
+- Concurrent calls of the same cached function in one load each read the database
+  (`getFirstRounds`: 7 reads where 1 does).
+
+**Stage 1 — done:**
+- `versioned()` (`lib/data/helpers.ts`) shares calls already in flight with the same key (map on
+  `globalThis`: the server bundles hold more than one copy of the module).
+- `versionedParts()`: a result over 2 MB stored as several entries, computed once per load and
+  joined back, so callers get the same object. Operator Use v11 = team stats of every weapon +
+  one entry of players per weapon (max 0.76 MB on 2027); Weapon Pick v9 = 3 entries, a third of
+  the teams each.
+- `loadRankingRows`: `round_info` with the 8 columns it uses instead of `*` (19).
+- OP USE back in Team Profiling (see Phase 13).
+- Verified: `tsc` + `next build` clean; the results of every cached function on 4 selections
+  (43 entries, Operator Use and Weapon Pick joined back) byte-identical before and after. Second
+  load: Operator Use 2027 12.7 s → 0.6 s, Weapon Pick 2027 2.8 s → 0.5 s. First loads unchanged
+  (database reads).
+
+**Stage 2 — open (to approve):** precomputed summaries in Postgres (per series / map / team /
+side counters, refreshed after each upload) for what still misses: 2027 All on Stats Rank and
+Agent Picks, and cold first loads in general. A cheaper step first: warm the cache after each
+upload by requesting the default pages.
 
 ## Backlog
 

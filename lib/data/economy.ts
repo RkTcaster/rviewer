@@ -1,8 +1,8 @@
 // lib/data/economy.ts — economía por ronda (distribución, compare, torneo)
 import { supabase } from '../supabase';
-import { versioned, fetchAllPages, fetchAllBySeries, getAllSeriesIds, getTeamSeriesIds, TeamFilters, getReducedTourList } from './helpers';
+import { versioned, versionedParts, fetchAllPages, fetchAllBySeries, getAllSeriesIds, getTeamSeriesIds, TeamFilters, getReducedTourList } from './helpers';
 import { getTeamKeys, keyOf } from './teamKeys';
-import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare, TeamPostPistolForce, OperatorUseData, OperatorUseStat, OperatorUseSide, OperatorUseWeapon, WeaponPickBank, WeaponPickData, WeaponPickRound, WeaponPickStat } from '../types';
+import { EconomyBin, EconomyCategoryStats, TeamEconomyCompare, TeamPostPistolForce, OperatorUseData, OperatorUseStat, OperatorUseSide, OperatorUseWeapon, OperatorUseWeaponData, WeaponPickBank, WeaponPickData, WeaponPickRound, WeaponPickStat } from '../types';
 
 export async function getEconomyDistribution(filters: {
   reg?: string[]; tour?: string; team?: string;
@@ -286,12 +286,30 @@ function emptyOpSide(): OperatorUseSide {
 // every round twice with the teams swapped (see getPostPistolForce) used to lose the round winner
 // whenever the swapped copy came last.
 // v10: teams by vlr id, keyed by getTeamKeys
-export const getOperatorUseStats = versioned('operator-use-stats-v10', getOperatorUseStats_impl);
+// v11: stored as 4 cache entries (2027 was 2.7 MB, over unstable_cache's 2 MB): entry 0 the team
+// stats of every weapon plus maps / series, entries 1-3 the players of each weapon
+const OP_PARTS: OperatorUseWeapon[] = ['op', 'outlaw', 'both'];
+type OperatorUsePlayers = OperatorUseWeaponData['players'];
+const operatorUseParts = versionedParts<[OperatorUseFilters], OperatorUseData, OperatorUseData | OperatorUsePlayers>(
+  'operator-use-stats-v11', f => getOperatorUseStats_impl(f), 1 + OP_PARTS.length,
+  (r, i) => i === 0
+    ? { ...r, byWeapon: Object.fromEntries(OP_PARTS.map(w => [w, { stats: r.byWeapon[w].stats, players: {} }])) as OperatorUseData['byWeapon'] }
+    : r.byWeapon[OP_PARTS[i - 1]].players,
+  ([teams, ...players]) => {
+    const t = teams as OperatorUseData;
+    return { ...t, byWeapon: Object.fromEntries(OP_PARTS.map((w, k) =>
+      [w, { stats: t.byWeapon[w].stats, players: players[k] as OperatorUsePlayers }])) as OperatorUseData['byWeapon'] };
+  }
+);
+export const getOperatorUseStats = operatorUseParts.all;
+// Team stats only (entry 0, players empty): what Team Profiling needs
+export const getOperatorUseTeams = (f: OperatorUseFilters) => operatorUseParts.part(0, f) as Promise<OperatorUseData>;
+type OperatorUseFilters = { tour?: string; bo?: string; dateFrom?: string; dateTo?: string; teams?: string[]; keepTags?: string[] };
 async function getOperatorUseStats_impl(
   // keepTags: team keys (getTeamKeys) whose entries are returned (the relevant teams; their rivals in those
   // series are dropped here, inside the cached function, so the entry stays under the 2 MB limit
   // of unstable_cache instead of being recomputed on every load)
-  filters: { tour?: string; bo?: string; dateFrom?: string; dateTo?: string; teams?: string[]; keepTags?: string[] }
+  filters: OperatorUseFilters
 ): Promise<OperatorUseData> {
   const seriesIds = await getAllSeriesIds(filters);
   const byWeapon = {} as OperatorUseData['byWeapon'];
@@ -513,9 +531,20 @@ function wpRoundBin(round: number): WeaponPickRound {
 // orientation, which is round_info's: of a round stored twice with the teams swapped only that
 // copy has each team's own bank (see getPostPistolForce).
 // v8: teams by vlr id, keyed by getTeamKeys
-export const getWeaponPickStats = versioned('weapon-pick-stats-v8', getWeaponPickStats_impl);
+// v9: stored as 3 cache entries (2027 was 2.2 MB, over unstable_cache's 2 MB), each with a third
+// of the teams in their original order and the same maps / series
+const WP_PARTS = 3;
+export const getWeaponPickStats = versionedParts<[OperatorUseFilters], WeaponPickData, WeaponPickData>(
+  'weapon-pick-stats-v9', f => getWeaponPickStats_impl(f), WP_PARTS,
+  (r, i) => {
+    const teams = Object.keys(r.stats);
+    const size = Math.ceil(teams.length / WP_PARTS);
+    return { ...r, stats: Object.fromEntries(teams.slice(i * size, (i + 1) * size).map(t => [t, r.stats[t]])) };
+  },
+  slices => ({ ...slices[0], stats: Object.assign({}, ...slices.map(s => s.stats)) })
+).all;
 async function getWeaponPickStats_impl(
-  filters: { tour?: string; bo?: string; dateFrom?: string; dateTo?: string; teams?: string[]; keepTags?: string[] }
+  filters: OperatorUseFilters
 ): Promise<WeaponPickData> {
   const seriesIds = await getAllSeriesIds(filters);
   if (seriesIds.length === 0) return { stats: {}, maps: [], series: 0, buySeries: 0 };

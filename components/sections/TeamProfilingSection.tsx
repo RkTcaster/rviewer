@@ -13,7 +13,17 @@ interface Props {
   hasTour?: boolean;
   // Teams of the main filter (the relevant ones) that played the selection
   fixedTeams: string[];
+  teamRegions?: Record<string, string>;
+  teamSubregions?: Record<string, string>;
 }
+
+// Team picker: one row per region (as in TeamChipsPanel), teams by subregion then tag
+const REGIONS: { id: string; label: string }[] = [
+  { id: 'reg_0', label: 'Americas' },
+  { id: 'reg_1', label: 'EMEA' },
+  { id: 'reg_2', label: 'China' },
+  { id: 'reg_3', label: 'Pacific' },
+];
 
 // Up to 3 teams overlaid. Categorical slots 1-3 of the dataviz palette, dark steps, validated
 // all-pairs on the page surface #0f1115. A team keeps its slot (and color) while it stays picked.
@@ -34,6 +44,7 @@ const AXES: Axis[] = [
   { key: 'atk', label: 'ATK WR', raw: p => rate(p.atk), higherOut: true, show: p => pctLabel(p.atk), detail: p => countLabel(p.atk) },
   { key: 'def', label: 'DEF WR', raw: p => rate(p.def), higherOut: true, show: p => pctLabel(p.def), detail: p => countLabel(p.def) },
   { key: 'fk', label: 'FK EFF', raw: p => rate(p.fk), higherOut: true, show: p => pctLabel(p.fk), detail: p => countLabel(p.fk) },
+  { key: 'op', label: 'OP USE', raw: p => rate(p.op), higherOut: true, show: p => pctLabel(p.op), detail: p => countLabel(p.op) },
   { key: 'speed', label: 'ATK SPD', raw: p => p.plantMedian, higherOut: false,
     show: p => p.plantMedian === null ? '—' : `${Math.round(p.plantMedian)} s`,
     detail: p => p.plantMedian === null ? '' : `median plant, ${p.plants} plants` },
@@ -61,6 +72,10 @@ const LEGEND = (
       <dd className="text-gray-400">First duels won: first kills over first kills + first deaths.</dd>
     </div>
     <div>
+      <dt className="font-bold text-gray-100">OP USE</dt>
+      <dd className="text-gray-400">Rounds with at least one Operator over eligible rounds (not 1, 2, 13, 14), both sides.</dd>
+    </div>
+    <div>
       <dt className="font-bold text-gray-100">ATK SPD</dt>
       <dd className="text-gray-400">Median plant time of the attack rounds with a plant; faster is further out.</dd>
     </div>
@@ -83,8 +98,8 @@ const LEGEND = (
     <div>
       <dt className="font-bold text-gray-100">Style axes</dt>
       <dd className="text-gray-400">
-        ATK SPD and OFFMETA describe style, not quality: outside = faster plants, picks further
-        from the meta. A bigger area is not a better team.
+        OP USE, ATK SPD and OFFMETA describe style, not quality: outside = more Operator, faster
+        plants, picks further from the meta. A bigger area is not a better team.
       </dd>
     </div>
   </dl>
@@ -107,7 +122,7 @@ function scaleAxes(profiles: Record<string, TeamProfile>, teams: string[]) {
 
 type ChartRow = { axis: string; label: string } & Record<string, number | string>;
 
-export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fixedTeams }: Props) {
+export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fixedTeams, teamRegions = {}, teamSubregions = {} }: Props) {
   const teams = fixedTeams.filter(t => data.teams[t]);
   // slots[i] = team drawn in color i (null = free slot)
   const [slots, setSlots] = useState<(string | null)[]>(() => [teams[0] ?? null, teams[1] ?? null, null]);
@@ -124,6 +139,15 @@ export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fi
   }
 
   const scaled = scaleAxes(data.teams, teams);
+
+  // Subregion first (teams without one last), then tag
+  const bySubregion = (a: string, b: string) =>
+    (teamSubregions[a] ?? '￿').localeCompare(teamSubregions[b] ?? '￿') || a.localeCompare(b);
+  const known = new Set(REGIONS.map(r => r.id));
+  const regionRows = [
+    ...REGIONS.map(r => ({ label: r.label, logo: `/region/${r.label.toLowerCase()}.png` as string | null, teams: teams.filter(t => teamRegions[t] === r.id) })),
+    { label: 'Other', logo: null, teams: teams.filter(t => !known.has(teamRegions[t])) },
+  ].filter(r => r.teams.length > 0).map(r => ({ ...r, teams: [...r.teams].sort(bySubregion) }));
   const shown = picked.map((t, i) => ({ team: t, slot: i })).filter((x): x is { team: string; slot: number } => x.team !== null);
 
   function toggleTeam(team: string) {
@@ -154,6 +178,7 @@ export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fi
 
   return (
     <div className="flex flex-col gap-4">
+      {missing(data.buySeries, 'Buy data (OP USE)', 'round_buy')}
       {missing(data.roundDataSeries, 'Round data (FK EFF, ATK SPD)', 'round_summary / round_events')}
       {teams.some(t => data.teams[t].orbFracture > 0) && (
         <p className="px-1 text-xs text-gray-400">
@@ -166,26 +191,35 @@ export function TeamProfilingSection({ data, teamLogos = {}, hasTour = false, fi
         <span className="px-1 text-[11px] font-bold uppercase tracking-widest text-gray-500">
           Teams <span className="normal-case tracking-normal font-normal text-gray-500">(up to {MAX_TEAMS})</span>
         </span>
-        <div className="flex flex-wrap gap-2 px-1">
-          {teams.map(team => {
-            const slot = picked.indexOf(team);
-            const full = slot < 0 && shown.length >= MAX_TEAMS;
-            return (
-              <button
-                key={team}
-                onClick={() => toggleTeam(team)}
-                disabled={full}
-                className={`flex items-center gap-1.5 h-8 px-2.5 rounded-lg border text-xs font-bold transition-colors ${
-                  slot >= 0 ? 'bg-gray-800 text-gray-100' : full ? 'border-gray-800 text-gray-600 cursor-not-allowed' : 'border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
-                }`}
-                style={slot >= 0 ? { borderColor: SLOT_COLORS[slot] } : undefined}
-              >
-                {teamLogos[team] && <img src={teamLogos[team]} alt="" className="w-4 h-4 object-contain" />}
-                {teamLabel(team)}
-              </button>
-            );
-          })}
-        </div>
+        {regionRows.map(row => (
+          <div key={row.label} className="flex items-start gap-3 px-1">
+            <span className="flex items-center gap-1.5 w-24 shrink-0 h-8 text-[11px] font-bold uppercase tracking-widest text-gray-500">
+              {row.logo && <img src={row.logo} alt="" className="w-4 h-4 object-contain" />}
+              {row.label}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {row.teams.map(team => {
+                const slot = picked.indexOf(team);
+                const full = slot < 0 && shown.length >= MAX_TEAMS;
+                return (
+                  <button
+                    key={team}
+                    onClick={() => toggleTeam(team)}
+                    disabled={full}
+                    title={teamSubregions[team]}
+                    className={`flex items-center gap-1.5 h-8 px-2.5 rounded-lg border text-xs font-bold transition-colors ${
+                      slot >= 0 ? 'bg-gray-800 text-gray-100' : full ? 'border-gray-800 text-gray-600 cursor-not-allowed' : 'border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                    }`}
+                    style={slot >= 0 ? { borderColor: SLOT_COLORS[slot] } : undefined}
+                  >
+                    {teamLogos[team] && <img src={teamLogos[team]} alt="" className="w-4 h-4 object-contain" />}
+                    {teamLabel(team)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
 
       {shown.length === 0 ? (

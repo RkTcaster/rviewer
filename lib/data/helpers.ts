@@ -7,13 +7,56 @@ import { teamLabel } from '../teamKey';
 // Envuelve una función de datos con unstable_cache, invalidando cuando cambia la
 // última actualización (getLastUpdateDate, cacheada 5min). La key combina keyBase +
 // versión + los argumentos serializados de la llamada. revalidate diario como red.
+// Calls already in flight with the same key share one promise: on a cold load several sections
+// ask for the same entry (getFirstRounds above all) before unstable_cache has stored it, and each
+// used to read the database on its own. On globalThis: the server bundles can hold more than one
+// copy of this module, and a module-level Map would not be shared between them.
+const inFlight: Map<string, Promise<unknown>> =
+  ((globalThis as { __rviewerInFlight?: Map<string, Promise<unknown>> }).__rviewerInFlight ??= new Map());
 export function versioned<A extends unknown[], R>(
   keyBase: string,
   fn: (...args: A) => Promise<R>
 ): (...args: A) => Promise<R> {
   return async (...args: A): Promise<R> => {
     const version = (await getLastUpdateDate()) ?? 'none';
-    return unstable_cache(fn, [keyBase, version], { revalidate: 86400, tags: ['vct-data'] })(...args);
+    const key = `${keyBase}|${version}|${JSON.stringify(args)}`;
+    const pending = inFlight.get(key) as Promise<R> | undefined;
+    if (pending) return pending;
+    const p = unstable_cache(fn, [keyBase, version], { revalidate: 86400, tags: ['vct-data'] })(...args)
+      .finally(() => inFlight.delete(key));
+    inFlight.set(key, p);
+    return p;
+  };
+}
+
+// A result too big for one unstable_cache entry (2 MB): stored as `parts` entries, entry i holding
+// slice(result, i). The value is computed once per load (the entries miss together on a cold load
+// and share the computation, kept a minute) and `join` rebuilds it, so callers see the same object.
+// `part(i, …)` reads a single entry. A new keyBase (or version) is needed whenever slice changes.
+const computing: Map<string, Promise<unknown>> =
+  ((globalThis as { __rviewerComputing?: Map<string, Promise<unknown>> }).__rviewerComputing ??= new Map());
+export function versionedParts<A extends unknown[], R, P>(
+  keyBase: string,
+  fn: (...args: A) => Promise<R>,
+  parts: number,
+  slice: (result: R, part: number) => P,
+  join: (slices: P[]) => R
+) {
+  const compute = (args: A): Promise<R> => {
+    const key = `${keyBase}|${JSON.stringify(args)}`;
+    let p = computing.get(key) as Promise<R> | undefined;
+    if (!p) {
+      p = fn(...args);
+      computing.set(key, p);
+      p.then(() => setTimeout(() => computing.delete(key), 60_000), () => computing.delete(key));
+    }
+    return p;
+  };
+  const part = versioned(keyBase, async (i: number, ...args: A): Promise<P> => slice(await compute(args), i));
+  return {
+    all: async (...args: A): Promise<R> =>
+      join(await Promise.all(Array.from({ length: parts }, (_, i) => part(i, ...args)))),
+    part,
   };
 }
 

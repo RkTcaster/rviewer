@@ -326,11 +326,14 @@ export type TeamProfile = {
   metaMaps: number;          // maps the meta distance is averaged over
   orbs: [number, number];    // ultimate orbs taken / orbs there were (2 per round, 4 on Fracture)
   orbFracture: number;       // rounds with orb data on Fracture
+  op: [number, number];      // eligible rounds with an Operator / eligible rounds (Operator Use)
 };
-// `series`: series of the filter; `roundDataSeries`: the ones with round_summary rows (FK and Atk speed)
+// `series`: series of the filter; `buySeries` / `roundDataSeries`: the ones with round_buy /
+// round_summary rows (Op use / FK and Atk speed)
 export type TeamProfilingData = {
   teams: Record<string, TeamProfile>;
   series: number;
+  buySeries: number;
   roundDataSeries: number;
 };
 
